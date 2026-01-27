@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Zumi.io - Evolução</title>
+<style>
+
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#0b1220;
+  font-family:'Segoe UI', Arial, sans-serif;
+  touch-action: none;
+}
+
+canvas{display:block;}
+#overlay, #gameOver {
+  position:fixed; inset:0; background:rgba(0,0,0,0.85);
+  color:white; display:flex; justify-content:center;
+  align-items:center; flex-direction:column;
+  z-index:10; text-align:center; padding: 20px;
+}
+#gameOver { display: none; background: rgba(139, 0, 0, 0.9); }
+#instructions{
+  background: rgba(255,255,255,0.1);
+  padding: 20px;
+  border-radius: 12px;
+  margin: 20px 0;
+  font-size: 16px;
+  line-height: 1.6;
+  max-width: 400px;
+}
+h1{ font-size: 64px; margin: 0; color: #2ecc71; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+button{
+  padding: 15px 40px; font-size: 24px; cursor: pointer;
+  border: none; border-radius: 50px;
+  background: #2ecc71; color: white;
+  transition: transform 0.2s;
+}
+button:hover{ transform: scale(1.1); background: #27ae60; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="overlay">
+  <h1>Zumi.io</h1>
+  <div id="instructions">
+    • Noite com Visibilidade Melhorada<br>
+    • Efeitos de Água ao Nadar<br>
+    • Montanhas Ampliadas em 50%<br>
+    • Ciclo de Dia (2 min) e Noite (1 min)
+  </div>
+  <button id="startBtn">Começar Exploração</button>
+</div>
+
+<div id="gameOver">
+  <h1 style="color:#ff4d4d; font-size:72px;">GAME OVER</h1>
+  <p style="font-size: 24px;">Você sucumbiu à natureza.</p>
+  <button onclick="location.reload()">Reiniciar</button>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function getTouchPos(touch){
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: touch.clientX - rect.left,
+    y: touch.clientY - rect.top
+  };
+}
+
+// ===== MOBILE CONTROLS =====
+let touchMove = { active:false, id:null, startX:0, startY:0, dx:0, dy:0 };
+let touchAim  = { active:false, id:null, startX:0, startY:0, dx:0, dy:0 };
+let touchAttack = false;
+let joystick = {
+  radius: 55,
+  knobRadius: 22
+};
+
+// === CONTROLES MOBILE 100% FUNCIONAIS ===
+if(isMobile){
+  canvas.addEventListener("touchstart", e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches){
+
+    const pos = getTouchPos(t);
+
+    // JOYSTICK — lado esquerdo
+    if(pos.x < canvas.width / 2 && !touchMove.active){
+
+      touchMove.active = true;
+      touchMove.id = t.identifier;
+
+      touchMove.startX = Math.max(
+        joystick.radius + 10,
+        Math.min(canvas.width - joystick.radius - 10, pos.x)
+      );
+
+      touchMove.startY = Math.max(
+        canvas.height * 0.6,
+        Math.min(canvas.height - joystick.radius - 10, pos.y)
+      );
+
+      touchMove.dx = 0;
+      touchMove.dy = 0;
+    }
+
+    // MIRA / ATAQUE — lado direito
+    else if(pos.x >= canvas.width / 2 && !touchAim.active){
+
+      touchAim.active = true;
+      touchAim.id = t.identifier;
+
+      touchAim.startX = pos.x;
+      touchAim.startY = pos.y;
+
+      touchAim.dx = 0;
+      touchAim.dy = 0;
+    }
+
+  }
+}, {passive:false});
+
+  canvas.addEventListener("touchmove", e=>{
+  e.preventDefault();
+
+  for(const t of e.changedTouches){
+
+    if(t.identifier === touchMove.id){
+      const pos = getTouchPos(t);
+      touchMove.dx = pos.x - touchMove.startX;
+      touchMove.dy = pos.y - touchMove.startY;
+    }
+
+    if(t.identifier === touchAim.id){
+      const pos = getTouchPos(t);
+      touchAim.dx = pos.x - touchAim.startX;
+      touchAim.dy = pos.y - touchAim.startY;
+    }
+
+  }
+}, {passive:false});
+
+  canvas.addEventListener("touchend", e => {
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    if(t.identifier === touchAim.id){
+      if(!player.attacking) touchAttack = true; // dispara ataque mesmo sem mover
+      touchAim.active = false;
+      touchAim.dx = 0;
+      touchAim.dy = 0;
+      touchAim.id = null;
+    }
+  }
+});
+}
+const GAME_WIDTH = 1280;
+const GAME_HEIGHT = 720;
+
+function resize(){
+  const screenW = window.innerWidth;
+  const screenH = window.innerHeight;
+
+  if(!isMobile){
+    // PC → tela cheia, sem barras
+    canvas.width = screenW;
+    canvas.height = screenH;
+
+    canvas.style.width = "100vw";
+    canvas.style.height = "100vh";
+    canvas.style.position = "fixed";
+    canvas.style.left = "0";
+    canvas.style.top = "0";
+    canvas.style.transform = "none";
+  } else {
+    // MOBILE → proporcional (como já era)
+    const scale = Math.min(
+      screenW / GAME_WIDTH,
+      screenH / GAME_HEIGHT
+    );
+
+    canvas.width = GAME_WIDTH;
+    canvas.height = GAME_HEIGHT;
+
+    canvas.style.width = (GAME_WIDTH * scale) + "px";
+    canvas.style.height = (GAME_HEIGHT * scale) + "px";
+
+    canvas.style.position = "absolute";
+    canvas.style.left = "50%";
+    canvas.style.top = "50%";
+    canvas.style.transform = "translate(-50%, -50%)";
+  }
+
+  document.body.style.background = "#000";
+}
+
+
+resize();
+window.addEventListener("resize", resize);
+ // chama ao iniciar
+
+const MAP=20000;
+const SAND_COLOR = "#e3d3a3";
+const SAND_WIDTH = 300;
+const MOUNTAIN_COLOR = "#4a4a4a";
+
+// CONFIGURAÇÕES
+const DAY_DURATION = 120 * 60;
+const NIGHT_DURATION = 60 * 60;
+const BERRY_RESPAWN_TIME = 60 * 60;
+const ORE_RESPAWN_TIME = 120 * 60;
+const TREE_RESPAWN_TIME = 120 * 60;
+let worldTime = 0;
+let isDay = true;
+
+const stars = [];
+for(let i=0;i<400;i++){
+  stars.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2, a: Math.random()*0.8});
+}
+const player={
+  x:MAP/2, y:MAP/2-2500, r:20,
+  speed:4, hp:100, maxHp:100,
+  angle:0, hidden:false,
+  attacking:false, atkTimer:0,
+  weapon:0, hitTimer:0,
+  attackProgress:0,
+  stamina:100, maxStamina:100, exhausted: false,
+  food: 100, maxFood: 100,
+  foodCooldown: 0,
+  wood:0, stone:0, gold:0,
+  dead: false
+};
+
+const weapons=[{name:"Mão",range:30,damage:10,speed:12,color:"#d2b48c",style:"hand"}];
+
+let bushes=[], trees=[], rocks=[], particles=[], mountains=[], rivers=[];
+
+function makeRock(x, y, radius, color, type="stone") {
+  const points = [];
+  const n = 6 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < n; i++) {
+    const angle = (Math.PI * 2 / n) * i;
+    const rad = radius * (0.7 + Math.random() * 0.6);
+    points.push({x: Math.cos(angle) * rad, y: Math.sin(angle) * rad});
+  }
+  return {x, y, r:radius, color, points, type, hp: 100, active: true, respawnTimer: 0};
+}
+
+function drawRock(rock, offsetX=0, offsetY=0, scale=1){
+  if(!rock.active) return;
+  ctx.save();
+  if(rock.type === "gold") {
+    let glow = Math.sin(Date.now()/300) * 5;
+    ctx.shadowBlur = 10 + glow;
+    ctx.shadowColor = "#FFD700";
+  }
+  ctx.fillStyle = rock.color;
+  ctx.beginPath();
+  rock.points.forEach((p,i)=>{
+    const px = (rock.x + p.x) * scale - offsetX;
+    const py = (rock.y + p.y) * scale - offsetY;
+    if(i===0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  });
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+rivers.push({type: "rect", x:0, y:MAP/2-300, w:MAP, h:600, color:"#3498db"});
+const circularRiver = {type: "circle", x: MAP/2, y: MAP/2, r: 1500, color: "#3498db"};
+
+function isInRiver(x,y){
+  if(x > rivers[0].x && x < rivers[0].x+rivers[0].w && y > rivers[0].y && y < rivers[0].y+rivers[0].h) return true;
+  if(Math.hypot(x-circularRiver.x, y-circularRiver.y) < circularRiver.r) return true;
+  return false;
+}
+
+function isInSand(x,y){
+  if(isInRiver(x,y)) return false; 
+  if(y > (rivers[0].y - SAND_WIDTH) && y < (rivers[0].y + rivers[0].h + SAND_WIDTH)) return true;
+  const dist = Math.hypot(x-circularRiver.x, y-circularRiver.y);
+  if(dist < circularRiver.r + SAND_WIDTH) return true;
+  return false;
+}
+
+// MONTANHAS AMPLIADAS EM 50% (1250 -> 1875)
+const M_RADIUS = 1875;
+const mPos=[{x:M_RADIUS, y:M_RADIUS}, {x:MAP-M_RADIUS, y:M_RADIUS}, {x:M_RADIUS, y:MAP-M_RADIUS}, {x:MAP-M_RADIUS, y:MAP-M_RADIUS}];
+mPos.forEach(pos=>{
+  const m = {x:pos.x, y:pos.y, r:M_RADIUS, color:MOUNTAIN_COLOR, goldRocks:[], stoneRocks:[]};
+  for(let i=0;i<25;i++){
+    const a=Math.random()*Math.PI*2, d=Math.random()*m.r*0.8;
+    m.goldRocks.push(makeRock(m.x+Math.cos(a)*d, m.y+Math.sin(a)*d, 25, "#FFD700", "gold"));
+    const a2=Math.random()*Math.PI*2, d2=Math.random()*m.r*0.8;
+    m.stoneRocks.push(makeRock(m.x+Math.cos(a2)*d2, m.y+Math.sin(a2)*d2, 30, "#7f8c8d", "stone"));
+  }
+  mountains.push(m);
+});
+
+for(let i=0;i<10000;i++){
+  let x=Math.random()*MAP, y=Math.random()*MAP;
+  let inMountain = mountains.some(m => Math.hypot(x-m.x, y-m.y) < m.r);
+  let tooClose = trees.some(t => Math.hypot(x-t.x, y-t.y) < 150) || bushes.some(b => Math.hypot(x-b.x, y-b.y) < 150);
+
+  if(!isInRiver(x,y) && !isInSand(x,y) && !inMountain && !tooClose) {
+      if(Math.random() < 0.525) {
+          trees.push({x,y,r:54,color:"#2ecc71", hp: 100, maxHp: 100, active: true, respawnTimer: 0});
+      } else {
+          bushes.push({x,y,r:40, hasFruit: Math.random() < 0.5, respawnTimer: 0});
+      }
+  }
+}
+
+const keys={},mouse={x:0,y:0,down:false};
+onkeydown = e => {
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+
+  if (e.code === "ShiftLeft" || e.code === "ShiftRight") {
+    keys.shift = true;
+  }
+};
+
+onkeyup = e => {
+  const k = e.key.toLowerCase();
+  keys[k] = false;
+
+  if (e.code === "ShiftLeft" || e.code === "ShiftRight") {
+    keys.shift = false;
+  }
+};
+window.addEventListener("blur", () => {
+  for (let k in keys) keys[k] = false;
+});
+
+
+if(!isMobile){
+  onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; }
+  onmousedown = () => mouse.down = true;
+  onmouseup = () => mouse.down = false;
+}
+
+const camX=()=>player.x-canvas.width/2;
+const camY=()=>player.y-canvas.height/2;
+
+function createParticles(x,y,color,count=6, speedMult=1){
+  for(let i=0;i<count;i++){
+    const angle=Math.random()*Math.PI*2;
+    const speed=(Math.random()*3+1) * speedMult;
+    if(particles.length < 800)
+    particles.push({x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,r:Math.random()*3+2,life:20+Math.random()*10,color});
+  }
+}
+function resolveCircleCollision(player, obj){
+  const dx = player.x - obj.x;
+  const dy = player.y - obj.y;
+  const dist = Math.hypot(dx, dy);
+
+  if(dist < player.r + obj.r){
+    const angle = Math.atan2(dy, dx);
+    const overlap = (player.r + obj.r) - dist;
+    player.x += Math.cos(angle) * overlap;
+    player.y += Math.sin(angle) * overlap;
+  }
+}
+
+function update(){
+  if(player.dead){
+  player.attacking = false;
+  player.attackProgress = 0;
+  return;
+}
+  worldTime++;
+  if(isDay && worldTime >= DAY_DURATION) { isDay = false; worldTime = 0; }
+  else if(!isDay && worldTime >= NIGHT_DURATION) { isDay = true; worldTime = 0; }
+
+  // RESPAWNS
+  bushes.forEach(b => { if(!b.hasFruit) { b.respawnTimer++; if(b.respawnTimer >= BERRY_RESPAWN_TIME) { b.hasFruit = true; b.respawnTimer = 0; } } });
+  trees.forEach(t => { if(!t.active) { t.respawnTimer++; if(t.respawnTimer >= TREE_RESPAWN_TIME) { t.active = true; t.hp = 100; t.respawnTimer = 0; } } });
+  mountains.forEach(m => {
+    [...m.goldRocks, ...m.stoneRocks].forEach(r => {
+      if(!r.active) { r.respawnTimer++; if(r.respawnTimer >= ORE_RESPAWN_TIME) { r.active = true; r.hp = 100; r.respawnTimer = 0; } }
+    });
+  });
+
+  let inWater = isInRiver(player.x, player.y);
+  let isMoving =
+  keys.w || keys.s || keys.a || keys.d ||
+  (isMobile && touchMove.active);
+  
+  // EFEITO DE ÁGUA AO NADAR
+  if(inWater && isMoving && Math.random() < 0.3) {
+    createParticles(player.x, player.y, "rgba(255,255,255,0.6)", 1, 0.5);
+    createParticles(player.x, player.y, "#a0d8ef", 1, 0.3);
+  }
+
+  let isSprinting =
+  (!isMobile && keys.shift && !player.exhausted && player.stamina > 0) ||
+  (isMobile && touchMove.active && Math.hypot(touchMove.dx, touchMove.dy) > joystick.radius * 0.8
+ && !player.exhausted);
+
+  let foodDrain = isSprinting ? 0.03 : 0.02;
+  if(player.foodCooldown > 0){
+  player.foodCooldown--;
+} else {
+  player.food -= foodDrain;
+}
+if (player.stamina <= 0) {
+  player.stamina = 0;
+  player.exhausted = true;
+}
+
+if (player.exhausted && player.stamina >= player.maxStamina - 0.1) {
+  player.stamina = player.maxStamina;
+  player.exhausted = false;
+}
+  if(player.food <= 0) { player.food = 0; player.hp -= 0.15; }
+  if(player.hp <= 0 && !player.dead) {
+  player.hp = 0;
+  player.dead = true;
+  document.getElementById("gameOver").style.display = "flex";
+}
+// === CONTROLE DE STAMINA (APÓS UPDATE) ===
+if (player.stamina <= 0) {
+  player.stamina = 0;
+  player.exhausted = true;
+}
+
+if (player.exhausted && player.stamina >= player.maxStamina - 0.1) {
+  player.stamina = player.maxStamina;
+  player.exhausted = false;
+}
+
+  if(isSprinting) player.stamina -= 0.8;
+  else if(player.stamina < player.maxStamina) player.stamina = Math.min(player.stamina + 0.4, player.maxStamina);
+
+ let moveSpeed = isSprinting ? player.speed*1.8 : player.speed;
+  if(inWater) moveSpeed /= 2;
+
+  if(keys.w) player.y-=moveSpeed;
+  if(keys.s) player.y+=moveSpeed;
+  if(keys.a) player.x-=moveSpeed;
+  if(keys.d) player.x+=moveSpeed;
+if(isMobile && touchMove.active){
+  const len = Math.hypot(touchMove.dx, touchMove.dy) || 1;
+  const nx = touchMove.dx / len;
+  const ny = touchMove.dy / len;
+  const speedFactor = Math.min(len / joystick.radius, 1);
+player.x += nx * moveSpeed * speedFactor;
+player.y += ny * moveSpeed * speedFactor;
+}
+
+  player.x = Math.max(player.r, Math.min(MAP - player.r, player.x));
+  player.y = Math.max(player.r, Math.min(MAP - player.r, player.y));
+trees.forEach(t=>{
+  if(!t.active) return;
+  resolveCircleCollision(player, t);
+});
+
+// COLISÃO COM PEDRAS E OURO (IGUAL ÁRVORES)
+mountains.forEach(m=>{
+  [...m.goldRocks, ...m.stoneRocks].forEach(r=>{
+    if(!r.active) return;
+    resolveCircleCollision(player, r);
+  });
+});
+ if(isMobile){
+  if(touchAim.active && Math.hypot(touchAim.dx, touchAim.dy) > 5){
+  player.angle = Math.atan2(touchAim.dy, touchAim.dx);
+}
+
+  // se não estiver mirando, mantém o último ângulo (não faz nada)
+}
+else{
+  player.angle = Math.atan2(
+    mouse.y - canvas.height/2,
+    mouse.x - canvas.width/2
+  );
+}
+
+  player.hidden=false;
+  bushes.forEach(b=>{ if(Math.hypot(player.x-b.x,player.y-b.y)<b.r*1.1) player.hidden=true; });
+
+  if (
+  (!isMobile && mouse.down && !player.attacking) ||
+  (isMobile && touchAttack && !player.attacking)
+) {
+  touchAttack = false;
+  player.attacking = true;
+  player.atkTimer = weapons[player.weapon].speed;
+  player.attackProgress = 1;
+const w = weapons[player.weapon];
+const hx = player.x + Math.cos(player.angle) * w.range;
+const hy = player.y + Math.sin(player.angle) * w.range;
+
+bushes.forEach(b => {
+  if (b.hasFruit && Math.hypot(hx - b.x, hy - b.y) < b.r + 20) {
+    b.hasFruit = false;
+    player.food = Math.min(player.maxFood, player.food + 20);
+player.foodCooldown = 180; // 3 segundos sem perder fome
+    createParticles(hx, hy, "#ff4d4d", 8);
+  }
+});
+
+trees.forEach(t => {
+  if (t.active && Math.hypot(hx - t.x, hy - t.y) < t.r + 15) {
+    t.hp -= 20;
+    player.wood += 1;
+    createParticles(hx, hy, "#2ecc71", 5);
+    if (t.hp <= 0) t.active = false;
+  }
+});
+if(player.attacking){
+  const hx = player.x + Math.cos(player.angle) * weapons[player.weapon].range;
+  const hy = player.y + Math.sin(player.angle) * weapons[player.weapon].range;
+
+  mountains.forEach(m => {
+    [...m.goldRocks, ...m.stoneRocks].forEach(r => {
+      const dx = hx - r.x;
+      const dy = hy - r.y;
+      const dist = Math.hypot(dx, dy);
+      if(r.active && dist < r.r + 15){ 
+        r.hp -= 20;
+        createParticles(hx, hy, r.color, 5);
+        if(r.hp <= 0){
+          r.active = false;
+          if(r.type === "gold") player.gold += 5;
+          else player.stone += 5;
+        }
+      }
+    });
+  });
+}
+}
+  if(player.attacking){ player.atkTimer--; if(player.atkTimer<=0) player.attacking=false; }
+  if(player.attackProgress>0){ player.attackProgress-=0.15; if(player.attackProgress<0) player.attackProgress=0; }
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life--;
+   if(p.life<=0) particles.splice(i,1);
+  }
+  }
+function drawPlayer(ctxRef, x, y, angle, hidden){
+  ctxRef.save();
+  ctxRef.translate(x, y); ctxRef.rotate(angle);
+  ctxRef.globalAlpha = hidden ? 0.3 : 1;
+  ctxRef.fillStyle = "#d2b48c"; ctxRef.beginPath(); ctxRef.arc(0, 0, player.r, 0, Math.PI*2); ctxRef.fill();
+  const hands = [{x: player.r, y: -14}, {x: player.r, y: 14}];
+  hands.forEach(h => {
+    const off = player.attackProgress * 12;
+    ctxRef.save(); ctxRef.translate(h.x + off, h.y);
+    ctxRef.fillStyle = "#d2b48c"; ctxRef.beginPath(); ctxRef.arc(0, 0, 7, 0, Math.PI*2); ctxRef.fill();
+    ctxRef.restore();
+  });
+  ctxRef.restore();
+}
+function drawJoystick(){
+
+  if(!isMobile || !touchMove.active) return;
+
+  const baseX = touchMove.startX;
+  const baseY = touchMove.startY;
+  let dx = touchMove.dx;
+  let dy = touchMove.dy;
+
+  // limite do knob
+  const dist = Math.hypot(dx, dy);
+  if(dist > joystick.radius){
+    dx = dx / dist * joystick.radius;
+    dy = dy / dist * joystick.radius;
+  }
+
+  // base do joystick
+  ctx.beginPath();
+  ctx.arc(baseX, baseY, joystick.radius, 0, Math.PI*2);
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  ctx.fill();
+
+  // knob
+  ctx.beginPath();
+  ctx.arc(baseX + dx, baseY + dy, joystick.knobRadius, 0, Math.PI*2);
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.fill();
+}
+function drawAimJoystick(){
+  if(!isMobile || !touchAim.active) return;
+
+  const baseX = touchAim.startX;
+  const baseY = touchAim.startY;
+  let dx = touchAim.dx;
+  let dy = touchAim.dy;
+
+  const maxDist = 60;
+  const dist = Math.hypot(dx, dy);
+  if(dist > maxDist){
+    dx = dx / dist * maxDist;
+    dy = dy / dist * maxDist;
+  }
+
+  ctx.beginPath();
+  ctx.arc(baseX, baseY, 45, 0, Math.PI*2);
+  ctx.fillStyle = "rgba(255,255,255,0.12)";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(baseX + dx, baseY + dy, 18, 0, Math.PI*2);
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.fill();
+}
+function drawMobileHUD(){
+    // barras adaptáveis
+const barWidth = Math.min(160, canvas.width * 0.4);
+const barHeight = 8;
+const barX = 20;
+const barY = 20; // ajuste para mobile se quiser mais baixo
+    const x = 20;
+    let y = 20;
+
+    ctx.font = `${Math.floor(barHeight*1.2)}px Arial`;
+    ctx.textBaseline = "middle";
+
+    // ❤️ VIDA
+    ctx.fillText("❤️", x, y);
+    ctx.fillStyle="rgba(0,0,0,0.4)";
+    ctx.fillRect(x+30, y-7, barWidth, barHeight);
+    ctx.fillStyle="#e74c3c";
+    ctx.fillRect(x+30, y-7, barWidth*(player.hp/player.maxHp), barHeight);
+    y += barHeight + 14;
+
+    // ⚡ STAMINA
+    ctx.fillText("⚡", x, y);
+    ctx.fillStyle="rgba(0,0,0,0.4)";
+    ctx.fillRect(x+30, y-7, barWidth, barHeight);
+    ctx.fillStyle=player.exhausted ? "#95a5a6" : "#f1c40f";
+    ctx.fillRect(x+30, y-7, barWidth*(player.stamina/player.maxStamina), barHeight);
+    y += 30;
+
+    // 🍗 FOME
+    ctx.fillText("🍗", x, y);
+    ctx.fillStyle="rgba(0,0,0,0.4)";
+    ctx.fillRect(x+30, y-7, barWidth, barHeight);
+    ctx.fillStyle="#ff9800";
+    ctx.fillRect(x+30, y-7, barWidth*(player.food/player.maxFood), barHeight);
+ }   
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="#3f8f4d"; ctx.fillRect(-camX(),-camY(),MAP,MAP);
+
+  ctx.fillStyle = SAND_COLOR; 
+  ctx.fillRect(rivers[0].x-camX(), rivers[0].y-SAND_WIDTH-camY(), rivers[0].w, rivers[0].h + (SAND_WIDTH*2));
+  ctx.beginPath(); ctx.arc(circularRiver.x-camX(), circularRiver.y-camY(), circularRiver.r + SAND_WIDTH, 0, Math.PI*2); ctx.fill();
+
+  ctx.fillStyle=rivers[0].color;
+  ctx.fillRect(rivers[0].x-camX(), rivers[0].y-camY(), rivers[0].w, rivers[0].h);
+  ctx.beginPath(); ctx.arc(circularRiver.x-camX(), circularRiver.y-camY(), circularRiver.r, 0, Math.PI*2); ctx.fill();
+
+  mountains.forEach(m=>{
+    ctx.fillStyle=m.color; ctx.beginPath(); ctx.arc(m.x-camX(), m.y-camY(), m.r, 0, Math.PI*2); ctx.fill();
+    m.goldRocks.forEach(gr=>drawRock(gr, camX(), camY()));
+    m.stoneRocks.forEach(sr=>drawRock(sr, camX(), camY()));
+  });
+
+  const viewMargin = 120;
+  const all = [
+      ...bushes.filter(b => b.x > camX()-viewMargin && b.x < camX()+canvas.width+viewMargin && b.y > camY()-viewMargin && b.y < camY()+canvas.height+viewMargin).map(b=>({...b,t:'b'})),
+      ...trees.filter(t => t.active && t.x > camX()-viewMargin && t.x < camX()+canvas.width+viewMargin && t.y > camY()-viewMargin && t.y < camY()+canvas.height+viewMargin).map(t=>({...t,t:'t'})),
+      {x:player.x, y:player.y, t:'p'}
+  ].sort((a,b)=>a.y-b.y);
+
+  all.forEach(obj => {
+    if(obj.t==='b'){
+      ctx.fillStyle="#1f7a3a"; ctx.beginPath(); ctx.arc(obj.x-camX(),obj.y-camY(),obj.r,0,Math.PI*2); ctx.fill();
+      if(obj.hasFruit) {
+          ctx.fillStyle = "#ff4d4d";
+          for(let i=0; i<3; i++){ ctx.beginPath(); ctx.arc(obj.x-camX() + Math.cos(i*2)*15, obj.y-camY() + Math.sin(i*2)*15, 6, 0, Math.PI*2); ctx.fill(); }
+      }
+    } else if(obj.t==='t'){
+      ctx.fillStyle="#8b5a2b"; ctx.fillRect(obj.x-8-camX(), obj.y + 10-camY(), 16, 30); 
+      ctx.fillStyle=obj.color; ctx.beginPath(); ctx.arc(obj.x-camX(), obj.y-camY(), obj.r, 0, Math.PI*2); ctx.fill();
+    } else if(obj.t==='p') drawPlayer(ctx, player.x-camX(), player.y-camY(), player.angle, player.hidden);
+  });
+
+  particles.forEach(p=>{ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x-camX(), p.y-camY(), p.r, 0, Math.PI*2); ctx.fill();});
+
+  // 🌙 NOITE — JOGADOR MAIS ILUMINADO, BORDAS MAIS ESCURAS
+if(!isDay) {
+  // estrelas (opcional manter)
+  ctx.fillStyle = "white";
+ ctx.globalAlpha = 1; // ou 1 se não quiser piscar
+stars.forEach(s => {
+  ctx.globalAlpha = s.a;
+  ctx.fillStyle = "white";
+  ctx.fillRect(
+  ((s.x - camX()*0.1) + canvas.width) % canvas.width
+,
+  ((s.y - camY()*0.1) + canvas.height) % canvas.height
+
+,
+  s.s, s.s
+);
+});
+ctx.globalAlpha = 1;
+
+
+  // camada escura forte
+  ctx.save();
+  ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // recorte de luz no jogador
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+
+  const lightRadius = 800; // luz próxima
+  const fadeRadius  = 1200; // transição
+
+ const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, fadeRadius);
+grad.addColorStop(0, "rgba(0,0,0,0)");
+grad.addColorStop(0.5, "rgba(0,0,0,0.3)");
+grad.addColorStop(1, "rgba(0,0,0,0.85)");
+
+ctx.fillStyle = grad;
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.beginPath();
+  ctx.arc(cx, cy, fadeRadius, 0, Math.PI * 2);
+
+  ctx.fill();
+  ctx.restore();
+  ctx.globalCompositeOperation = "source-over";
+}
+
+
+  // UI
+  if(!player.dead && !isMobile) {
+    ctx.fillStyle="#fff"; ctx.font="bold 16px Arial";
+    ctx.fillText(`MADEIRA: ${player.wood} | PEDRA: ${player.stone} | OURO: ${player.gold}`, 20, 30);
+    ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 50, 200, 10);
+    ctx.fillStyle="#e74c3c"; ctx.fillRect(20, 50, 200*(player.hp/player.maxHp), 10);
+    ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 65, 200, 10);
+    ctx.fillStyle=player.exhausted ? "#95a5a6" : "#f1c40f"; ctx.fillRect(20, 65, 200*(player.stamina/player.maxStamina), 10);
+    ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 80, 200, 10);
+    ctx.fillStyle="#ff9800"; ctx.fillRect(20, 80, 200*(player.food/player.maxFood), 10);
+
+    // MINIMAPA
+    const sz=150, p=6, mx=canvas.width-sz-p, my=p, sc=sz/MAP;
+    ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillRect(mx, my, sz, sz);
+    ctx.fillStyle=SAND_COLOR; ctx.beginPath(); 
+    ctx.fillRect(mx + rivers[0].x*sc, my + (rivers[0].y-SAND_WIDTH)*sc, rivers[0].w*sc, (rivers[0].h+SAND_WIDTH*2)*sc);
+    ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, (circularRiver.r+SAND_WIDTH)*sc, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle="#3498db"; 
+    ctx.fillRect(mx + rivers[0].x*sc, my + rivers[0].y*sc, rivers[0].w*sc, rivers[0].h*sc);
+    ctx.beginPath(); ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, circularRiver.r*sc, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle=MOUNTAIN_COLOR;
+    mountains.forEach(m => { ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, m.r*sc, 0, Math.PI*2); ctx.fill(); });
+    ctx.fillStyle="#fff";
+    ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
+  }
+if(isMobile && !player.dead) drawMobileHUD();
+drawJoystick();
+drawAimJoystick();
+
+}
+
+let running=false;
+function loop(){if(!running) return; update(); draw(); requestAnimationFrame(loop);}
+document.getElementById("startBtn").onclick=()=>{document.getElementById("overlay").style.display="none"; running=true; loop();};
+</script>
+</body>
+</html>
