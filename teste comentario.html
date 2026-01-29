@@ -67,6 +67,14 @@ const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function getTouchPos(touch){
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: touch.clientX - rect.left,
+    y: touch.clientY - rect.top
+  };
+}
+
 // ===== MOBILE CONTROLS =====
 let touchMove = { active:false, id:null, startX:0, startY:0, dx:0, dy:0 };
 let touchAim  = { active:false, id:null, startX:0, startY:0, dx:0, dy:0 };
@@ -79,79 +87,121 @@ let joystick = {
 // === CONTROLES MOBILE 100% FUNCIONAIS ===
 if(isMobile){
   canvas.addEventListener("touchstart", e=>{
-    e.preventDefault();
-    for(const t of e.changedTouches){
-      // joystick - lado esquerdo
-      if(t.clientX < canvas.width / 2 && !touchMove.active && t.clientY > 80){
-        touchMove.active = true;
-        touchMove.id = t.identifier;
-        touchMove.startX = Math.max(joystick.radius+10, Math.min(canvas.width - joystick.radius - 10, t.clientX));
-        touchMove.startY = Math.max(
-  canvas.height * 0.6,
-  Math.min(canvas.height - joystick.radius - 10, t.clientY)
-);
+  e.preventDefault();
+  for(const t of e.changedTouches){
 
-        touchMove.dx = 0;
-        touchMove.dy = 0;
-      }
-      // ataque - lado direito
-      else if(t.clientX >= canvas.width / 2 && !touchAim.active){
-        touchAim.active = true;
-        touchAim.id = t.identifier;
-        touchAim.startX = t.clientX;
-        touchAim.startY = t.clientY;
-        touchAim.dx = 0;
-        touchAim.dy = 0;
-          } 
+    const pos = getTouchPos(t);
+
+    // JOYSTICK — lado esquerdo
+    if(pos.x < canvas.width / 2 && !touchMove.active){
+
+      touchMove.active = true;
+      touchMove.id = t.identifier;
+
+      touchMove.startX = Math.max(
+        joystick.radius + 10,
+        Math.min(canvas.width - joystick.radius - 10, pos.x)
+      );
+
+      touchMove.startY = Math.max(
+        canvas.height * 0.6,
+        Math.min(canvas.height - joystick.radius - 10, pos.y)
+      );
+
+      touchMove.dx = 0;
+      touchMove.dy = 0;
     }
-  }, {passive:false});
+
+    // MIRA / ATAQUE — lado direito
+    else if(pos.x >= canvas.width / 2 && !touchAim.active){
+
+      touchAim.active = true;
+      touchAim.id = t.identifier;
+
+      touchAim.startX = pos.x;
+      touchAim.startY = pos.y;
+
+      touchAim.dx = 0;
+      touchAim.dy = 0;
+    }
+
+  }
+}, {passive:false});
 
   canvas.addEventListener("touchmove", e=>{
-    e.preventDefault();
-    for(const t of e.changedTouches){
-      if(t.identifier === touchMove.id){
-        touchMove.dx = t.clientX - touchMove.startX;
-        touchMove.dy = t.clientY - touchMove.startY;
-        const dist = Math.hypot(touchMove.dx, touchMove.dy);
-        if(dist > joystick.radius){
-          touchMove.dx = touchMove.dx / dist * joystick.radius;
-          touchMove.dy = touchMove.dy / dist * joystick.radius;
-        }
-      }
-      else if(t.identifier === touchAim.id){
-        touchAim.dx = t.clientX - touchAim.startX;
-        touchAim.dy = t.clientY - touchAim.startY;
-      }
-    }
-  }, {passive:false});
-
-  canvas.addEventListener("touchend", e=>{
   e.preventDefault();
 
-    for(const t of e.changedTouches){
-      if(t.identifier === touchMove.id){
-        touchMove.active = false;
-        touchMove.dx = 0;
-        touchMove.dy = 0;
-        touchMove.id = null;
-      }
-      if(t.identifier === touchAim.id){
-        // toque curto = ataque
-        if(Math.hypot(touchAim.dx, touchAim.dy) < 10 && !player.attacking) {
-  touchAttack = true;
-}
-        touchAim.active = false;
-        touchAim.dx = 0;
-        touchAim.dy = 0;
-        touchAim.id = null;
-      }
+  for(const t of e.changedTouches){
+
+    if(t.identifier === touchMove.id){
+      const pos = getTouchPos(t);
+      touchMove.dx = pos.x - touchMove.startX;
+      touchMove.dy = pos.y - touchMove.startY;
     }
-  });
+
+    if(t.identifier === touchAim.id){
+      const pos = getTouchPos(t);
+      touchAim.dx = pos.x - touchAim.startX;
+      touchAim.dy = pos.y - touchAim.startY;
+    }
+
+  }
+}, {passive:false});
+
+  canvas.addEventListener("touchend", e => {
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    if(t.identifier === touchAim.id){
+      if(!player.attacking) touchAttack = true; // dispara ataque mesmo sem mover
+      touchAim.active = false;
+      touchAim.dx = 0;
+      touchAim.dy = 0;
+      touchAim.id = null;
+    }
+  }
+});
 }
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+const GAME_WIDTH = 1280;
+const GAME_HEIGHT = 720;
+
+function resize(){
+  const screenW = window.innerWidth;
+  const screenH = window.innerHeight;
+
+  if(!isMobile){
+    // PC → tela cheia, sem barras
+    canvas.width = screenW;
+    canvas.height = screenH;
+
+    canvas.style.width = "100vw";
+    canvas.style.height = "100vh";
+    canvas.style.position = "fixed";
+    canvas.style.left = "0";
+    canvas.style.top = "0";
+    canvas.style.transform = "none";
+  } else {
+    // MOBILE → proporcional (como já era)
+    const scale = Math.min(
+      screenW / GAME_WIDTH,
+      screenH / GAME_HEIGHT
+    );
+
+    canvas.width = GAME_WIDTH;
+    canvas.height = GAME_HEIGHT;
+
+    canvas.style.width = (GAME_WIDTH * scale) + "px";
+    canvas.style.height = (GAME_HEIGHT * scale) + "px";
+
+    canvas.style.position = "absolute";
+    canvas.style.left = "50%";
+    canvas.style.top = "50%";
+    canvas.style.transform = "translate(-50%, -50%)";
+  }
+
+  document.body.style.background = "#000";
 }
+
+
 resize();
 window.addEventListener("resize", resize);
  // chama ao iniciar
@@ -160,15 +210,24 @@ const MAP=20000;
 const SAND_COLOR = "#e3d3a3";
 const SAND_WIDTH = 300;
 const MOUNTAIN_COLOR = "#4a4a4a";
+const SAFE_SPAWN_DIST = 1200;
+const ZOMBIE_SPREAD_DIST = 150;
 
 // CONFIGURAÇÕES
-const DAY_DURATION = 120 * 60;
-const NIGHT_DURATION = 60 * 60;
+const DAY_DURATION = 360 * 60;
+const NIGHT_DURATION = 240 * 60; 
 const BERRY_RESPAWN_TIME = 60 * 60;
 const ORE_RESPAWN_TIME = 120 * 60;
 const TREE_RESPAWN_TIME = 120 * 60;
+let zombieSpawnTimer = 0;
 let worldTime = 0;
 let isDay = true;
+let isBloodMoon = false;
+let bloodMoonTimer = 0;
+
+const BLOOD_MOON_DURATION = 480 * 60; // 8 minutos
+const BLOOD_MOON_CHANCE = 0.10; // 10%
+let dayCount = 1;
 
 const stars = [];
 for(let i=0;i<400;i++){
@@ -183,13 +242,14 @@ const player={
   attackProgress:0,
   stamina:100, maxStamina:100, exhausted: false,
   food: 100, maxFood: 100,
+  foodCooldown: 0,
   wood:0, stone:0, gold:0,
   dead: false
 };
 
 const weapons=[{name:"Mão",range:30,damage:10,speed:12,color:"#d2b48c",style:"hand"}];
 
-let bushes=[], trees=[], rocks=[], particles=[], mountains=[], rivers=[];
+let bushes=[], trees=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], sticks=[];
 
 function makeRock(x, y, radius, color, type="stone") {
   const points = [];
@@ -201,7 +261,40 @@ function makeRock(x, y, radius, color, type="stone") {
   }
   return {x, y, r:radius, color, points, type, hp: 100, active: true, respawnTimer: 0};
 }
+function spawnZombie(type = "normal") {
+  let x, y;
+  let attempts = 0;
 
+  do {
+    x = Math.random() * MAP;
+    y = Math.random() * MAP;
+    attempts++;
+    if (attempts > 50) return;
+  } while (
+    Math.hypot(x - player.x, y - player.y) < SAFE_SPAWN_DIST ||
+    zombies.some(z => Math.hypot(x - z.x, y - z.y) < ZOMBIE_SPREAD_DIST)
+  );
+
+  if(type === "blood"){
+    zombies.push({
+      x, y,
+      r: 66,
+      hp: 300,
+      speed: 0.6,
+      active: true,
+      type: "blood"
+    });
+  } else {
+    zombies.push({
+      x, y,
+      r: 22,
+      hp: isBloodMoon ? 200 : 100,
+      speed: isBloodMoon ? 1.8 : 1.2,
+      active: true,
+      type: "normal"
+    });
+  }
+}
 function drawRock(rock, offsetX=0, offsetY=0, scale=1){
   if(!rock.active) return;
   ctx.save();
@@ -246,10 +339,30 @@ const mPos=[{x:M_RADIUS, y:M_RADIUS}, {x:MAP-M_RADIUS, y:M_RADIUS}, {x:M_RADIUS,
 mPos.forEach(pos=>{
   const m = {x:pos.x, y:pos.y, r:M_RADIUS, color:MOUNTAIN_COLOR, goldRocks:[], stoneRocks:[]};
   for(let i=0;i<25;i++){
-    const a=Math.random()*Math.PI*2, d=Math.random()*m.r*0.8;
-    m.goldRocks.push(makeRock(m.x+Math.cos(a)*d, m.y+Math.sin(a)*d, 25, "#FFD700", "gold"));
-    const a2=Math.random()*Math.PI*2, d2=Math.random()*m.r*0.8;
-    m.stoneRocks.push(makeRock(m.x+Math.cos(a2)*d2, m.y+Math.sin(a2)*d2, 30, "#7f8c8d", "stone"));
+  const a = Math.random() * Math.PI * 2;
+const d = m.r * (0.4 + Math.random() * 0.5); // MAIS ESPALHADO
+m.goldRocks.push(
+  makeRock(
+    m.x + Math.cos(a) * d,
+    m.y + Math.sin(a) * d,
+    25,
+    "#FFD700",
+    "gold"
+  )
+);
+
+const a2 = Math.random() * Math.PI * 2;
+const d2 = m.r * (0.4 + Math.random() * 0.5);
+m.stoneRocks.push(
+  makeRock(
+    m.x + Math.cos(a2) * d2,
+    m.y + Math.sin(a2) * d2,
+    30,
+    "#7f8c8d",
+    "stone"
+  )
+);
+
   }
   mountains.push(m);
 });
@@ -267,7 +380,24 @@ for(let i=0;i<10000;i++){
       }
   }
 }
+// 🌿 SPAWN INICIAL DE GRAVETOS (UMA VEZ)
+for(let i = 0; i < 600; i++){
+  let x = Math.random() * MAP;
+  let y = Math.random() * MAP;
 
+  if(
+    !isInRiver(x,y) &&
+    !isInSand(x,y) &&
+    !mountains.some(m => Math.hypot(x-m.x,y-m.y) < m.r)
+  ){
+    sticks.push({
+      x, y,
+      w: 20,
+      h: 6,
+      active: true
+    });
+  }
+}
 const keys={},mouse={x:0,y:0,down:false};
 onkeydown = e => {
   const k = e.key.toLowerCase();
@@ -310,11 +440,75 @@ function createParticles(x,y,color,count=6, speedMult=1){
 }
 
 function update(){
-  if(player.dead) return;
-  worldTime++;
-  if(isDay && worldTime >= DAY_DURATION) { isDay = false; worldTime = 0; }
-  else if(!isDay && worldTime >= NIGHT_DURATION) { isDay = true; worldTime = 0; }
+  if(player.dead){
+  player.attacking = false;
+  player.attackProgress = 0;
+  return;
+}
+if(!isDay && dayCount >= 3){
+  zombieSpawnTimer++;
 
+  if(zombieSpawnTimer >= 120 * 60){
+  for(let i = 0; i < 10; i++){
+    spawnZombie("normal");
+  }
+
+  if(isBloodMoon){
+    for(let i = 0; i < 3; i++){
+      spawnZombie("blood");
+    }
+  }
+
+  zombieSpawnTimer = 0;
+}
+}
+zombies.forEach(z => {
+  if(!z.active) return;
+
+  const dx = player.x - z.x;
+  const dy = player.y - z.y;
+  const dist = Math.hypot(dx, dy) || 1;
+
+  z.x += (dx / dist) * z.speed;
+  z.y += (dy / dist) * z.speed;
+});
+zombies.forEach(z => {
+  if(!z.active) return;
+
+  const dist = Math.hypot(player.x - z.x, player.y - z.y);
+  if(dist < player.r + z.r){
+    player.hp -= 0.2; // dano contínuo
+  }
+});
+  worldTime++;
+ if(isDay && worldTime >= DAY_DURATION){
+  isDay = false;
+  worldTime = 0;
+
+  // 🌕 chance de Lua de Sangue após a 5ª noite
+  if(dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE){
+    isBloodMoon = true;
+    bloodMoonTimer = 0;
+  } else {
+    isBloodMoon = false;
+  }
+}
+if(isBloodMoon){
+  bloodMoonTimer++;
+
+  if(bloodMoonTimer >= BLOOD_MOON_DURATION){
+    isBloodMoon = false;
+  }
+}
+else if(!isDay && worldTime >= NIGHT_DURATION) {
+  isDay = true;
+  worldTime = 0;
+  dayCount++;
+
+  // 🌅 amanheceu → remove zumbis
+  zombies.length = 0;
+  zombieSpawnTimer = 0;
+}
   // RESPAWNS
   bushes.forEach(b => { if(!b.hasFruit) { b.respawnTimer++; if(b.respawnTimer >= BERRY_RESPAWN_TIME) { b.hasFruit = true; b.respawnTimer = 0; } } });
   trees.forEach(t => { if(!t.active) { t.respawnTimer++; if(t.respawnTimer >= TREE_RESPAWN_TIME) { t.active = true; t.hp = 100; t.respawnTimer = 0; } } });
@@ -328,7 +522,6 @@ function update(){
   let isMoving =
   keys.w || keys.s || keys.a || keys.d ||
   (isMobile && touchMove.active);
-  
   // EFEITO DE ÁGUA AO NADAR
   if(inWater && isMoving && Math.random() < 0.3) {
     createParticles(player.x, player.y, "rgba(255,255,255,0.6)", 1, 0.5);
@@ -341,11 +534,38 @@ function update(){
  && !player.exhausted);
 
   let foodDrain = isSprinting ? 0.03 : 0.02;
+  if(player.foodCooldown > 0){
+  player.foodCooldown--;
+} else {
   player.food -= foodDrain;
+}
+if (player.stamina <= 0) {
+  player.stamina = 0;
+  player.exhausted = true;
+}
 
-  if(player.food <= 0) { player.food = 0; player.hp -= 0.15; }
-  if(player.hp <= 0) { player.hp = 0; player.dead = true; document.getElementById("gameOver").style.display = "flex"; return; }
+if (player.exhausted && player.stamina >= player.maxStamina - 0.1) {
+  player.stamina = player.maxStamina;
+  player.exhausted = false;
+}
+  // 🍗 FOME → DANO OU REGENERAÇÃO
 
+// dano por fome (2x mais lento)
+if(player.food <= 0){
+  player.food = 0;
+  player.hp -= 0.075; // antes era 0.15
+}
+
+// regeneração se estiver bem alimentado
+if(player.food > player.maxFood * 0.75 && player.hp < player.maxHp){
+  player.hp += 0.04; // regeneração lenta
+}
+
+  if(player.hp <= 0 && !player.dead) {
+  player.hp = 0;
+  player.dead = true;
+  document.getElementById("gameOver").style.display = "flex";
+}
 // === CONTROLE DE STAMINA (APÓS UPDATE) ===
 if (player.stamina <= 0) {
   player.stamina = 0;
@@ -371,22 +591,38 @@ if(isMobile && touchMove.active){
   const len = Math.hypot(touchMove.dx, touchMove.dy) || 1;
   const nx = touchMove.dx / len;
   const ny = touchMove.dy / len;
-  player.x += nx * moveSpeed;
-  player.y += ny * moveSpeed;
+  const speedFactor = Math.min(len / joystick.radius, 1);
+player.x += nx * moveSpeed * speedFactor;
+player.y += ny * moveSpeed * speedFactor;
 }
 
   player.x = Math.max(player.r, Math.min(MAP - player.r, player.x));
   player.y = Math.max(player.r, Math.min(MAP - player.r, player.y));
+trees.forEach(o=>{
+  if(!o.active) return;
+  const dx=player.x-o.x, dy=player.y-o.y, dist=Math.hypot(dx,dy);
+  if(dist < player.r+o.r){
+    const angle=Math.atan2(dy,dx), overlap=(player.r+o.r)-dist;
+    player.x+=Math.cos(angle)*overlap; player.y+=Math.sin(angle)*overlap;
+  }
+});
+// COLISÃO COM PEDRAS E OURO (IGUAL ÁRVORES)
+mountains.forEach(m => {
+  [...m.goldRocks, ...m.stoneRocks].forEach(r => {
+    if(!r.active) return;
 
-  trees.forEach(o=>{
-    if(!o.active) return;
-    const dx=player.x-o.x, dy=player.y-o.y, dist=Math.hypot(dx,dy);
-    if(dist < player.r+o.r){
-      const angle=Math.atan2(dy,dx), overlap=(player.r+o.r)-dist;
-      player.x+=Math.cos(angle)*overlap; player.y+=Math.sin(angle)*overlap;
+    const dx = player.x - r.x;
+    const dy = player.y - r.y;
+    const dist = Math.hypot(dx, dy);
+
+    if(dist < player.r + r.r){
+      const angle = Math.atan2(dy, dx);
+      const overlap = (player.r + r.r) - dist;
+      player.x += Math.cos(angle) * overlap;
+      player.y += Math.sin(angle) * overlap;
     }
   });
-
+});
  if(isMobile){
   if(touchAim.active && Math.hypot(touchAim.dx, touchAim.dy) > 5){
   player.angle = Math.atan2(touchAim.dy, touchAim.dx);
@@ -419,33 +655,62 @@ const hy = player.y + Math.sin(player.angle) * w.range;
 bushes.forEach(b => {
   if (b.hasFruit && Math.hypot(hx - b.x, hy - b.y) < b.r + 20) {
     b.hasFruit = false;
-    player.food = Math.min(player.maxFood, player.food + 10);
+    player.food = Math.min(player.maxFood, player.food + 20);
+player.foodCooldown = 180; // 3 segundos sem perder fome
     createParticles(hx, hy, "#ff4d4d", 8);
   }
 });
 
 trees.forEach(t => {
   if (t.active && Math.hypot(hx - t.x, hy - t.y) < t.r + 15) {
+
     t.hp -= 20;
-    player.wood += 1;
     createParticles(hx, hy, "#2ecc71", 5);
-    if (t.hp <= 0) t.active = false;
+
+    // 🌲 SÓ GANHA MADEIRA QUANDO A ÁRVORE CAI
+    if (t.hp <= 0){
+      t.active = false;
+      player.wood += 1;
+    }
   }
 });
+if(player.attacking){
+  const hx = player.x + Math.cos(player.angle) * weapons[player.weapon].range;
+  const hy = player.y + Math.sin(player.angle) * weapons[player.weapon].range;
+  
+zombies.forEach(z => {
+  if(!z.active) return;
 
-mountains.forEach(m => {
-  [...m.goldRocks, ...m.stoneRocks].forEach(r => {
-    if (r.active && Math.hypot(hx - r.x, hy - r.y) < r.r + 15) {
-      r.hp -= 20;
-      createParticles(hx, hy, r.color, 5);
-      if (r.hp <= 0) {
-        r.active = false;
-        if (r.type === "gold") player.gold += 5;
-        else player.stone += 5;
-      }
+  if(Math.hypot(hx - z.x, hy - z.y) < z.r + 15){
+    z.hp -= 20;
+    createParticles(hx, hy, "#6aff6a", 6);
+    if(z.hp <= 0){
+      z.active = false;
     }
-  });
+  }
 });
+// ❌ MÃO NÃO QUEBRA PEDRA / OURO
+if(player.weapon !== 0){
+  mountains.forEach(m => {
+    [...m.goldRocks, ...m.stoneRocks].forEach(r => {
+      const dx = hx - r.x;
+      const dy = hy - r.y;
+      const dist = Math.hypot(dx, dy);
+
+      if(r.active && dist < r.r + 15){
+        r.hp -= 20;
+        createParticles(hx, hy, r.color, 5);
+
+        if(r.hp <= 0){
+          r.active = false;
+          if(r.type === "gold") player.gold += 5;
+          else player.stone += 5;
+        }
+      }
+    });
+  });
+}
+}
 }
   if(player.attacking){ player.atkTimer--; if(player.atkTimer<=0) player.attacking=false; }
   if(player.attackProgress>0){ player.attackProgress-=0.15; if(player.attackProgress<0) player.attackProgress=0; }
@@ -528,7 +793,7 @@ const barHeight = 8;
 const barX = 20;
 const barY = 20; // ajuste para mobile se quiser mais baixo
     const x = 20;
-    let y = Math.max(canvas.height - barHeight*6, 20); // distancia do fundo proporcional
+    let y = 20;
 
     ctx.font = `${Math.floor(barHeight*1.2)}px Arial`;
     ctx.textBaseline = "middle";
@@ -539,7 +804,7 @@ const barY = 20; // ajuste para mobile se quiser mais baixo
     ctx.fillRect(x+30, y-7, barWidth, barHeight);
     ctx.fillStyle="#e74c3c";
     ctx.fillRect(x+30, y-7, barWidth*(player.hp/player.maxHp), barHeight);
-    y += 30;
+    y += barHeight + 14;
 
     // ⚡ STAMINA
     ctx.fillText("⚡", x, y);
@@ -568,13 +833,38 @@ function draw(){
   ctx.fillStyle=rivers[0].color;
   ctx.fillRect(rivers[0].x-camX(), rivers[0].y-camY(), rivers[0].w, rivers[0].h);
   ctx.beginPath(); ctx.arc(circularRiver.x-camX(), circularRiver.y-camY(), circularRiver.r, 0, Math.PI*2); ctx.fill();
+sticks.forEach(s => {
+  if(!s.active) return;
 
+  ctx.fillStyle = "#8b5a2b";
+  ctx.fillRect(
+    s.x - s.w/2 - camX(),
+    s.y - s.h/2 - camY(),
+    s.w,
+    s.h
+  );
+});
   mountains.forEach(m=>{
     ctx.fillStyle=m.color; ctx.beginPath(); ctx.arc(m.x-camX(), m.y-camY(), m.r, 0, Math.PI*2); ctx.fill();
     m.goldRocks.forEach(gr=>drawRock(gr, camX(), camY()));
     m.stoneRocks.forEach(sr=>drawRock(sr, camX(), camY()));
   });
+zombies.forEach(z => {
+  if(!z.active) return;
 
+  ctx.beginPath();
+  ctx.arc(z.x - camX(), z.y - camY(), z.r, 0, Math.PI * 2);
+
+  if(z.type === "blood"){
+    ctx.fillStyle = "#b30000";
+  } else if(isBloodMoon){
+    ctx.fillStyle = "#ff6666";
+  } else {
+    ctx.fillStyle = "#2ecc71";
+  }
+
+  ctx.fill();
+});
   const viewMargin = 120;
   const all = [
       ...bushes.filter(b => b.x > camX()-viewMargin && b.x < camX()+canvas.width+viewMargin && b.y > camY()-viewMargin && b.y < camY()+canvas.height+viewMargin).map(b=>({...b,t:'b'})),
@@ -623,32 +913,47 @@ ctx.globalAlpha = 1;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // recorte de luz no jogador
-  ctx.globalCompositeOperation = "destination-out";
 
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
 
-  const lightRadius = 420; // luz próxima
-  const fadeRadius  = 650; // transição
+  const lightRadius = 800; // luz próxima
+  const fadeRadius  = 1200; // transição
 
-  const grad = ctx.createRadialGradient(
-    cx, cy, 0,
-    cx, cy, fadeRadius
-  );
+ const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, fadeRadius);
+grad.addColorStop(0, "rgba(0,0,0,0)");
+grad.addColorStop(0.5, "rgba(0,0,0,0.3)");
+grad.addColorStop(1, "rgba(0,0,0,0.85)");
 
-  grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(lightRadius / fadeRadius, "rgba(255,255,255,0.85)");
-  grad.addColorStop(1, "rgba(255,255,255,0)");
-
-  ctx.fillStyle = grad;
+ctx.fillStyle = grad;
+ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.beginPath();
   ctx.arc(cx, cy, fadeRadius, 0, Math.PI * 2);
-  ctx.fill();
 
+  ctx.fill();
   ctx.restore();
+  ctx.globalCompositeOperation = "source-over";
 }
 
+if(isBloodMoon){
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(
+    canvas.width/2 - 180,
+    40,
+    360,
+    60
+  );
 
+  ctx.fillStyle = "#ff2a2a";
+  ctx.font = "bold 36px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "LUA DE SANGUE",
+    canvas.width/2,
+    82
+  );
+  ctx.textAlign = "left";
+}
   // UI
   if(!player.dead && !isMobile) {
     ctx.fillStyle="#fff"; ctx.font="bold 16px Arial";
@@ -659,9 +964,8 @@ ctx.globalAlpha = 1;
     ctx.fillStyle=player.exhausted ? "#95a5a6" : "#f1c40f"; ctx.fillRect(20, 65, 200*(player.stamina/player.maxStamina), 10);
     ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 80, 200, 10);
     ctx.fillStyle="#ff9800"; ctx.fillRect(20, 80, 200*(player.food/player.maxFood), 10);
-
     // MINIMAPA
-    const sz=200, p=20, mx=canvas.width-sz-p, my=p, sc=sz/MAP;
+    const sz=150, p=6, mx=canvas.width-sz-p, my=p, sc=sz/MAP;
     ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillRect(mx, my, sz, sz);
     ctx.fillStyle=SAND_COLOR; ctx.beginPath(); 
     ctx.fillRect(mx + rivers[0].x*sc, my + (rivers[0].y-SAND_WIDTH)*sc, rivers[0].w*sc, (rivers[0].h+SAND_WIDTH*2)*sc);
