@@ -972,55 +972,53 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
   ctxRef.save();
   ctxRef.translate(x, y); ctxRef.rotate(angle);
   ctxRef.globalAlpha = hidden ? 0.3 : 1;
-  ctxRef.fillStyle = "#d2b48c"; ctxRef.beginPath(); ctxRef.arc(0, 0, player.r, 0, Math.PI*2); ctxRef.fill();
-  const hands = [{x: player.r, y: -14}, {x: player.r, y: 14}];
-  hands.forEach(h => {
-    const off = player.attackProgress * 12;
-    ctxRef.save(); ctxRef.translate(h.x + off, h.y);
-    ctxRef.fillStyle = "#d2b48c"; ctxRef.beginPath(); ctxRef.arc(0, 0, 7, 0, Math.PI*2); ctxRef.fill();
-    ctxRef.restore();
-  });
-  ctxRef.restore();
-    // 🛠️ DESENHO DA FERRAMENTA
+
+  // Ferramenta atual e o valor do empurrão (off)
   const w = weapons[player.weapon];
+  const off = player.attackProgress * 20; // Aumentei para 20 para o golpe aparecer mais
 
-  if(w.style !== "hand"){
-    ctxRef.save();
-    ctxRef.translate(player.r + 10, 0);
+  if(w.style !== "hand") {
+    // 1. CABO (Agora com + off no X para ir para frente)
+    ctxRef.fillStyle = "#5d4037";
+    ctxRef.fillRect(player.r + off, -3, 30, 6);
 
-    if(w.style === "axe"){
-      // cabo
-      ctxRef.fillStyle = "#8b5a2b";
-      ctxRef.fillRect(-4, -22, 8, 44);
-
-      // lâmina
+    if(w.style === "axe") {
+      // 2. MACHADO (Agora com + off em todos os pontos X)
       ctxRef.fillStyle = "#bdc3c7";
       ctxRef.beginPath();
-      ctxRef.moveTo(4, -16);
-      ctxRef.lineTo(22, -6);
-      ctxRef.lineTo(22, 6);
-      ctxRef.lineTo(4, 16);
-      ctxRef.closePath();
+      ctxRef.moveTo(player.r + 20 + off, -15);
+      ctxRef.lineTo(player.r + 35 + off, -20);
+      ctxRef.lineTo(player.r + 35 + off, 20);
+      ctxRef.lineTo(player.r + 20 + off, 15);
       ctxRef.fill();
-    }
-
-    if(w.style === "pickaxe"){
-      // cabo
-      ctxRef.fillStyle = "#8b5a2b";
-      ctxRef.fillRect(-3, -24, 6, 48);
-
-      // ponta esquerda
-      ctxRef.strokeStyle = "#bdc3c7";
-      ctxRef.lineWidth = 5;
+    } 
+    else if(w.style === "pickaxe") {
+      // 3. PICARETA (Agora com + off no centro do arco)
+      ctxRef.strokeStyle = "#7f8c8d";
+      ctxRef.lineWidth = 6;
+      ctxRef.lineCap = "round";
       ctxRef.beginPath();
-      ctxRef.moveTo(-26, -6);
-      ctxRef.lineTo(0, 0);
-      ctxRef.lineTo(26, -6);
+      ctxRef.arc(player.r + 15 + off, 0, 20, -Math.PI/2, Math.PI/2);
       ctxRef.stroke();
     }
-
-    ctxRef.restore();
   }
+
+  // CORPO DO PLAYER
+  ctxRef.fillStyle = "#d2b48c"; ctxRef.beginPath(); ctxRef.arc(0, 0, player.r, 0, Math.PI*2); ctxRef.fill();
+
+  // MÃOS (Mantendo o movimento que você já tinha)
+  const hands = [{x: player.r, y: -14}, {x: player.r, y: 14}];
+  hands.forEach(h => {
+    ctxRef.save(); 
+    ctxRef.translate(h.x + off, h.y);
+    ctxRef.fillStyle = "#d2b48c"; 
+    ctxRef.beginPath(); 
+    ctxRef.arc(0, 0, 7, 0, Math.PI*2); 
+    ctxRef.fill();
+    ctxRef.restore();
+  });
+  
+  ctxRef.restore();
 }
 function drawJoystick(){
 
@@ -1370,13 +1368,13 @@ function drawInventory(){
   ctx.fillStyle = "rgba(0,0,0,0.6)";
   ctx.fillRect(startX - 20, y - 20, width + 40, slotSize + 40);
 
-  const items = [
+ const items = [
     {name:"Madeira", qty: player.wood},
     {name:"Pedra", qty: player.stone},
     {name:"Ouro", qty: player.gold},
-    {name:"Machado", owned: player.weapon === 1},
-    {name:"Picareta", owned: player.weapon === 2},
-    {name:"Mão", owned: player.weapon === 0}
+    {name: player.weapon === 1 ? "✔" : "", owned: player.weapon === 1}, // Machado
+    {name: player.weapon === 2 ? "✔" : "", owned: player.weapon === 2}, // Picareta
+    {name: player.weapon === 0 ? "✔" : "", owned: player.weapon === 0}  // Mão
   ];
 
  inventorySlots = [];
