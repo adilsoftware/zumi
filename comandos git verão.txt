@@ -1,0 +1,7 @@
+comando para copiar projeto jogo para git update de versão
+
+git add .
+git commit -m "Mensagem clara do que mudou"
+git push
+
+
