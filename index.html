@@ -286,7 +286,7 @@ const weapons = [
   }
 ];
 
-let bushes=[], trees=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[];
+let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[];
 
 function makeRock(x, y, radius, color, type="stone") {
   const points = [];
@@ -788,15 +788,9 @@ else if(!isDay && worldTime >= NIGHT_DURATION) {
 } else {
   player.food -= foodDrain;
 }
-if (player.stamina <= 0) {
-  player.stamina = 0;
-  player.exhausted = true;
-}
 
-if (player.exhausted && player.stamina >= player.maxStamina - 0.1) {
-  player.stamina = player.maxStamina;
-  player.exhausted = false;
-}
+
+
   // 🍗 FOME → DANO OU REGENERAÇÃO
 
 // dano por fome (2x mais lento)
@@ -946,7 +940,7 @@ resources.forEach(res => {
     if(weapons[player.weapon].style !== "axe") return;
 
     res.hp -= weapons[player.weapon].damage;
-    createParticles(hx, hy, "#2ecc71", 6);
+    createParticles(hx, hy, res.color, 6);
 
 if(res.hp <= 0){
   res.alive = false;
@@ -1284,40 +1278,24 @@ zombies.forEach(z => {
 
   ctx.fill();
 });
-resources.forEach(res => {
-  if(!res.alive) return;
 
-  if(res.type === "tree"){
-    // Desenho do tronco e copa (seu código original)
-    ctx.fillStyle = "#8b5a2b";
-    ctx.fillRect(res.x-8-camX(), res.y+10-camY(), 16, 30);
-    ctx.fillStyle = res.color;
-    ctx.beginPath();
-    ctx.arc(res.x-camX(), res.y-camY(), res.r, 0, Math.PI*2);
-    ctx.fill();
+ const viewMargin = 120;
+const all = [
+  ...resources
+    .filter(r => r.alive && r.type === "tree")
+    .map(r => ({...r, t:'t'})),
 
-    // BARRA DE VIDA DA ÁRVORE (Igual à da pedra, mas com a cor da árvore)
-    const hpPct = res.hp / res.maxHp;
-    if(hpPct < 1) { // Só mostra se tiver levado dano
-      const barW = 40;
-      const barH = 6;
-      const x = res.x - barW/2 - camX();
-      const y = res.y - res.r - 15 - camY();
+  ...bushes
+    .filter(b =>
+      b.x > camX()-viewMargin &&
+      b.x < camX()+canvas.width+viewMargin &&
+      b.y > camY()-viewMargin &&
+      b.y < camY()+canvas.height+viewMargin
+    )
+    .map(b => ({...b, t:'b'})),
 
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(x, y, barW, barH);
-
-      ctx.fillStyle = res.color; // Usa a mesma cor da copa da árvore
-      ctx.fillRect(x, y, barW * hpPct, barH);
-    }
-  }
-});
-  const viewMargin = 120;
-  const all = [
-      ...bushes.filter(b => b.x > camX()-viewMargin && b.x < camX()+canvas.width+viewMargin && b.y > camY()-viewMargin && b.y < camY()+canvas.height+viewMargin).map(b=>({...b,t:'b'})),
-      ...trees.filter(t => t.active && t.x > camX()-viewMargin && t.x < camX()+canvas.width+viewMargin && t.y > camY()-viewMargin && t.y < camY()+canvas.height+viewMargin).map(t=>({...t,t:'t'})),
-      {x:player.x, y:player.y, t:'p'}
-  ].sort((a,b)=>a.y-b.y);
+  { x: player.x, y: player.y, t:'p' }
+].sort((a,b)=>a.y-b.y);
 
   all.forEach(obj => {
     if(obj.t==='b'){
@@ -1329,7 +1307,22 @@ resources.forEach(res => {
     } else if(obj.t==='t'){
       ctx.fillStyle="#8b5a2b"; ctx.fillRect(obj.x-8-camX(), obj.y + 10-camY(), 16, 30); 
       ctx.fillStyle=obj.color; ctx.beginPath(); ctx.arc(obj.x-camX(), obj.y-camY(), obj.r, 0, Math.PI*2); ctx.fill();
-    } else if(obj.t==='p') drawPlayer(ctx, player.x-camX(), player.y-camY(), player.angle, player.hidden);
+   // ❤️ VIDA DA ÁRVORE (SÓ VISUAL)
+if(obj.hp < obj.maxHp){
+  const hpPct = obj.hp / obj.maxHp;
+  const barW = 34;
+  const barH = 5;
+
+  const bx = obj.x - barW/2 - camX();
+  const by = obj.y - obj.r - 14 - camY();
+
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(bx, by, barW, barH);
+
+  ctx.fillStyle = obj.color;
+  ctx.fillRect(bx, by, barW * hpPct, barH);
+}
+ } else if(obj.t==='p') drawPlayer(ctx, player.x-camX(), player.y-camY(), player.angle, player.hidden);
   });
 
   particles.forEach(p=>{ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x-camX(), p.y-camY(), p.r, 0, Math.PI*2); ctx.fill();});
@@ -1569,4 +1562,3 @@ document.getElementById("startBtn").onclick=()=>{document.getElementById("overla
 </body>
 </html>
 
-<!-- Isso é um comentário em HTML -->

@@ -710,42 +710,35 @@ zombies.forEach(z => {
     player.hp -= 0.2; // dano contínuo
   }
 });
-worldTime++;
+  worldTime++;
+ if(isDay && worldTime >= DAY_DURATION){
+  isDay = false;
+  worldTime = 0;
 
-  // --- MUDANÇA: DIA PARA NOITE ---
-  if(isDay && worldTime >= DAY_DURATION){
-    isDay = false;
-    worldTime = 0;
-
-    // 🌕 chance de Lua de Sangue após a 5ª noite
-    if(dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE){
-      isBloodMoon = true;
-      bloodMoonTimer = 0;
-    } else {
-      isBloodMoon = false;
-    }
+  // 🌕 chance de Lua de Sangue após a 5ª noite
+  if(dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE){
+    isBloodMoon = true;
+    bloodMoonTimer = 0;
+  } else {
+    isBloodMoon = false;
   }
-  // --- MUDANÇA: NOITE PARA DIA (RESET DOS BURACOS) ---
-  else if(!isDay && worldTime >= NIGHT_DURATION) {
-    isDay = true;
-    worldTime = 0;
-    dayCount++;
+}
+if(isBloodMoon){
+  bloodMoonTimer++;
 
-    // 🧹 Limpeza matinal dos buracos e reset dos coelhos
-    rabbitHoles = []; 
-    animals.forEach(a => {
-        a.myHole = null; // Coelho esquece o buraco antigo
-        if (a.hidden) {
-            a.hidden = false; // Se estava escondido, ele sai do chão
-            // Efeito de terra subindo quando ele sai
-            createParticles(a.x, a.y, "#4e342e", 5, 0.5);
-        }
-    });
-
-    // 🌅 amanheceu → remove zumbis
-    zombies.length = 0;
-    zombieSpawnTimer = 0;
+  if(bloodMoonTimer >= BLOOD_MOON_DURATION){
+    isBloodMoon = false;
   }
+}
+else if(!isDay && worldTime >= NIGHT_DURATION) {
+  isDay = true;
+  worldTime = 0;
+  dayCount++;
+
+  // 🌅 amanheceu → remove zumbis
+  zombies.length = 0;
+  zombieSpawnTimer = 0;
+}
 // 🌿 RESPAWN DE FRUTAS (Baseado em segundos reais)
     bushes.forEach(b => {
         if (b.isBerryBush && !b.hasFruit) {
@@ -1027,88 +1020,78 @@ zombies.forEach(z => {
   for(let i=particles.length-1;i>=0;i--){
     const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life--;
    if(p.life<=0) particles.splice(i,1);
-  }
- // --- IA DOS COELHOS (COM EFEITOS, TIMER DE 3s E COOLDOWN DE 2 MIN) ---
+  }// --- IA DOS COELHOS COM ANTI-ENCALHE E TOCAS ---
   animals.forEach(a => {
-    // Inicializa o cooldown se não existir
-    if (a.digCooldown === undefined) a.digCooldown = 0;
-    if (passouUmSegundo && a.digCooldown > 0) a.digCooldown--;
-
-    if (a.hidden) {
-      const distParaPlayer = Math.hypot(player.x - a.x, player.y - a.y);
-      if (isDay && distParaPlayer > 400) {
-        a.hidden = false;
-        createParticles(a.x, a.y, "#4e342e", 5, 0.5); // Poeira ao sair
-      }
-      return; 
-    }
-
     const dx = player.x - a.x;
     const dy = player.y - a.y;
     const dist = Math.hypot(dx, dy);
+
     let currentSpeed = 0;
     let inWaterAnimal = isInRiver(a.x, a.y);
 
-    // 2. ENTRADA NA TOCA (Com delay de 3 segundos e partículas)
-    if (dist < 300 && a.myHole) {
-      const dHole = Math.hypot(a.myHole.x - a.x, a.myHole.y - a.y);
-      if (dHole < 20) {
-        if (a.enteringTimer === undefined) a.enteringTimer = 180;
-        if (a.enteringTimer > 0) {
-          a.enteringTimer--;
-          // EFEITO: Poeira de escavação enquanto entra
-          if (Math.random() < 0.2) createParticles(a.x, a.y, "#4e342e", 2, 0.2);
-          currentSpeed = 0; 
-        } else {
-          a.hidden = true; 
-          a.enteringTimer = undefined;
-          createParticles(a.x, a.y, "#4e342e", 10); // Poeira final
-          return;
+    // 1. MOVIMENTAÇÃO
+    if (dist < 300) {
+        a.angle = Math.atan2(-dy, -dx);
+        currentSpeed = player.speed * 1.25;
+        if (Math.random() < 0.15) {
+            createParticles(a.x, a.y, inWaterAnimal ? "#a0d8ef" : "#d2b48c", 1, 0.3);
         }
-      } else {
-        a.angle = Math.atan2(a.myHole.y - a.y, a.myHole.x - a.x);
-        currentSpeed = player.speed * 1.4;
-        a.enteringTimer = undefined;
-      }
-    } 
-    // 3. FUGA NORMAL (Com partículas de movimento)
-    else if (dist < 300) {
-      a.angle = Math.atan2(-dy, -dx);
-      currentSpeed = player.speed * 1.25;
-      // EFEITO: Partículas de fuga (água ou terra)
-      if (Math.random() < 0.15) {
-        createParticles(a.x, a.y, inWaterAnimal ? "#a0d8ef" : "#d2b48c", 1, 0.3);
-      }
     } else {
-      // PASSEIO
-      if (passouUmSegundo) a.timer--;
-      if (a.timer <= 0) {
-        a.angle = Math.random() * Math.PI * 2;
-        a.timer = 3 + Math.random() * 4;
-      }
-      currentSpeed = player.speed * 0.90;
+        if (passouUmSegundo) a.timer--;
+        if (a.timer <= 0) {
+            a.angle = Math.random() * Math.PI * 2;
+            a.timer = 3 + Math.random() * 4;
+        }
+        currentSpeed = player.speed * 0.90;
     }
 
     if (inWaterAnimal) currentSpeed /= 2;
 
-    // 4. APLICA POSIÇÃO E COLISÃO
+    // APLICA MOVIMENTO BASE
     a.x += Math.cos(a.angle) * currentSpeed;
     a.y += Math.sin(a.angle) * currentSpeed;
 
-    // 5. CRIAR NOVA TOCA (Limite de 10 e Cooldown de 2 min / 120s)
-    if (passouUmSegundo && !a.myHole && rabbitHoles.length < 10 && !inWaterAnimal) {
-      if (a.digCooldown <= 0 && Math.random() < 0.01) {
-        let novaToca = { x: a.x, y: a.y, r: 12 };
-        rabbitHoles.push(novaToca);
-        a.myHole = novaToca;
-        a.digCooldown = 120; // SÓ PODE CAVAR DE NOVO EM 2 MINUTOS
-        createParticles(a.x, a.y, "#4e342e", 8); // Poeira ao criar toca
-      }
+    // 2. ANTI-ENCALHE (EMPURA O COELHO PARA FORA)
+    resources.forEach(res => {
+        if (!res.alive || res.type === "stick") return;
+        if (res.type === "tree" || res.type === "stone" || res.type === "gold") {
+            const rDx = a.x - res.x;
+            const rDy = a.y - res.y;
+            const rDist = Math.hypot(rDx, rDy);
+            const minDist = a.r + res.r + 2; // Margem de segurança
+
+            if (rDist < minDist) {
+                const angle = Math.atan2(rDy, rDx);
+                const overlap = minDist - rDist;
+                // Empurra ele para fora imediatamente
+                a.x += Math.cos(angle) * overlap;
+                a.y += Math.sin(angle) * overlap;
+                // Faz ele mudar de direção para não insistir no erro
+                a.angle = angle + (Math.random() - 0.5);
+            }
+        }
+    });
+
+    // 3. CRIAR TOCA (A cada 2 coelhos, 1 faz um buraco a cada 2 min aprox)
+    if (passouUmSegundo && Math.random() < 0.005) { // Chance baixa por segundo
+        if (rabbitHoles.length < animals.length / 2) { // Limite de 1 buraco para cada 2 coelhos
+            if (!inWaterAnimal) {
+                rabbitHoles.push({ x: a.x, y: a.y, r: 12, life: 120 }); // Dura 2 min
+            }
+        }
     }
 
     a.x = Math.max(a.r, Math.min(MAP - a.r, a.x));
     a.y = Math.max(a.r, Math.min(MAP - a.r, a.y));
   });
+
+  // Gerenciar tempo das tocas
+  if (passouUmSegundo) {
+      rabbitHoles.forEach((h, i) => {
+          h.life--;
+          if (h.life <= 0) rabbitHoles.splice(i, 1);
+      });
+  }
   }
 function drawPlayer(ctxRef, x, y, angle, hidden){
   ctxRef.save();
@@ -1251,283 +1234,293 @@ const barY = 20; // ajuste para mobile se quiser mais baixo
     ctx.fillRect(x+30, y-7, barWidth*(player.food/player.maxFood), barHeight);
  }   
 
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="#3f8f4d"; ctx.fillRect(-camX(),-camY(),MAP,MAP);
 
-  // 1. CHÃO BASE
-  ctx.fillStyle = "#3f8f4d";
-  ctx.fillRect(-camX(), -camY(), MAP, MAP);
+  ctx.fillStyle = SAND_COLOR; 
+  ctx.fillRect(rivers[0].x-camX(), rivers[0].y-SAND_WIDTH-camY(), rivers[0].w, rivers[0].h + (SAND_WIDTH*2));
+  ctx.beginPath(); ctx.arc(circularRiver.x-camX(), circularRiver.y-camY(), circularRiver.r + SAND_WIDTH, 0, Math.PI*2); ctx.fill();
 
-  // 2. AREIA (Sempre abaixo da água)
-  ctx.fillStyle = SAND_COLOR;
-  ctx.fillRect(rivers[0].x - camX(), rivers[0].y - SAND_WIDTH - camY(), rivers[0].w, rivers[0].h + (SAND_WIDTH * 2));
-  ctx.beginPath();
-  ctx.arc(circularRiver.x - camX(), circularRiver.y - camY(), circularRiver.r + SAND_WIDTH, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 3. ÁGUA
-  ctx.fillStyle = rivers[0].color;
-  ctx.fillRect(rivers[0].x - camX(), rivers[0].y - camY(), rivers[0].w, rivers[0].h);
-  ctx.beginPath();
-  ctx.arc(circularRiver.x - camX(), circularRiver.y - camY(), circularRiver.r, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 4. TOCAS DE COELHO (Desenhadas no chão, abaixo de recursos e players)
-// 1. Controle do Cooldown (2 minutos = 120 segundos)
-if (a.digCooldown === undefined) a.digCooldown = 0;
-if (passouUmSegundo && a.digCooldown > 0) a.digCooldown--;
-
-// 2. Condição para Criar Toca
-if (passouUmSegundo && !a.myHole && rabbitHoles.length < 10 && !inWaterAnimal) {
-    // Só tenta criar se o tempo de espera (2 min) acabou
-    if (a.digCooldown <= 0 && Math.random() < 0.01) {
-        let novaToca = { x: a.x, y: a.y, r: 12 };
-        rabbitHoles.push(novaToca);
-        a.myHole = novaToca;
-        
-        a.digCooldown = 120; // Ativa o descanso de 2 minutos
-        createParticles(a.x, a.y, "#4e342e", 8); // Efeito de terra voando
-    }
-}
-  // 5. GRAVETOS (Itens no chão)
+  ctx.fillStyle=rivers[0].color;
+  ctx.fillRect(rivers[0].x-camX(), rivers[0].y-camY(), rivers[0].w, rivers[0].h);
+  ctx.beginPath(); ctx.arc(circularRiver.x-camX(), circularRiver.y-camY(), circularRiver.r, 0, Math.PI*2); ctx.fill();
   resources.forEach(res => {
-    if (!res.alive) return;
-    if (res.type === "stick") {
-      ctx.fillStyle = "#8b5a2b";
-      ctx.fillRect(res.x - 12 - camX(), res.y - 3 - camY(), 24, 6);
-    }
-  });
+  if(!res.alive) return;
 
-  // 6. MONTANHAS E PEDRAS/OURO
-  mountains.forEach(m => {
-    ctx.fillStyle = m.color;
+  if(res.type === "stick"){
+    ctx.fillStyle = "#8b5a2b";
+    ctx.fillRect(
+      res.x - 12 - camX(),
+      res.y - 3 - camY(),
+      24,
+      6
+    );
+  }
+});
+  mountains.forEach(m=>{
+    ctx.fillStyle=m.color; ctx.beginPath(); ctx.arc(m.x-camX(), m.y-camY(), m.r, 0, Math.PI*2); ctx.fill();
+    m.goldRocks.forEach(gr=>drawRock(gr, camX(), camY()));
+    m.stoneRocks.forEach(sr=>drawRock(sr, camX(), camY()));
+    resources.forEach(res => {
+  if(!res.alive) return;
+  if(res.type !== "stone" && res.type !== "gold") return;
+
+  const hpPct = res.hp / res.maxHp;
+  if(hpPct >= 1) return; // só mostra se sofreu dano
+
+  const barW = 26;
+  const barH = 4;
+  const x = res.x - barW/2 - camX();
+  const y = res.y - res.r - 12 - camY();
+
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(x, y, barW, barH);
+
+  ctx.fillStyle = res.type === "gold" ? "#FFD700" : "#bdc3c7";
+  ctx.fillRect(x, y, barW * hpPct, barH);
+});
+  });
+zombies.forEach(z => {
+  if(!z.active) return;
+
+  ctx.beginPath();
+  ctx.arc(z.x - camX(), z.y - camY(), z.r, 0, Math.PI * 2);
+
+  if(z.type === "blood"){
+    ctx.fillStyle = "#b30000";
+  } else if(isBloodMoon){
+    ctx.fillStyle = "#ff6666";
+  } else {
+    ctx.fillStyle = "#2ecc71";
+  }
+
+  ctx.fill();
+});
+resources.forEach(res => {
+  if(!res.alive) return;
+
+  if(res.type === "tree"){
+    // Desenho do tronco e copa (seu código original)
+    ctx.fillStyle = "#8b5a2b";
+    ctx.fillRect(res.x-8-camX(), res.y+10-camY(), 16, 30);
+    ctx.fillStyle = res.color;
     ctx.beginPath();
-    ctx.arc(m.x - camX(), m.y - camY(), m.r, 0, Math.PI * 2);
+    ctx.arc(res.x-camX(), res.y-camY(), res.r, 0, Math.PI*2);
     ctx.fill();
 
-    m.goldRocks.forEach(gr => drawRock(gr, camX(), camY()));
-    m.stoneRocks.forEach(sr => drawRock(sr, camX(), camY()));
-  });
-
-  // Barras de vida das pedras/ouro
-  resources.forEach(res => {
-    if (!res.alive) return;
-    if (res.type !== "stone" && res.type !== "gold") return;
+    // BARRA DE VIDA DA ÁRVORE (Igual à da pedra, mas com a cor da árvore)
     const hpPct = res.hp / res.maxHp;
-    if (hpPct >= 1) return;
-    const barW = 26;
-    const barH = 4;
-    const x = res.x - barW / 2 - camX();
-    const y = res.y - res.r - 12 - camY();
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(x, y, barW, barH);
-    ctx.fillStyle = res.type === "gold" ? "#FFD700" : "#bdc3c7";
-    ctx.fillRect(x, y, barW * hpPct, barH);
-  });
+    if(hpPct < 1) { // Só mostra se tiver levado dano
+      const barW = 40;
+      const barH = 6;
+      const x = res.x - barW/2 - camX();
+      const y = res.y - res.r - 15 - camY();
 
-  // 7. ZUMBIS
-  zombies.forEach(z => {
-    if (!z.active) return;
-    ctx.beginPath();
-    ctx.arc(z.x - camX(), z.y - camY(), z.r, 0, Math.PI * 2);
-    if (z.type === "blood") ctx.fillStyle = "#b30000";
-    else if (isBloodMoon) ctx.fillStyle = "#ff6666";
-    else ctx.fillStyle = "#2ecc71";
-    ctx.fill();
-  });
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(x, y, barW, barH);
 
-  // 8. ÁRVORES (Sistema Unificado)
-  resources.forEach(res => {
-    if (!res.alive) return;
-    if (res.type === "tree") {
-      ctx.fillStyle = "#8b5a2b";
-      ctx.fillRect(res.x - 8 - camX(), res.y + 10 - camY(), 16, 30);
-      ctx.fillStyle = res.color;
-      ctx.beginPath();
-      ctx.arc(res.x - camX(), res.y - camY(), res.r, 0, Math.PI * 2);
-      ctx.fill();
-
-      const hpPct = res.hp / res.maxHp;
-      if (hpPct < 1) {
-        const barW = 40;
-        const barH = 6;
-        const x = res.x - barW / 2 - camX();
-        const y = res.y - res.r - 15 - camY();
-        ctx.fillStyle = "rgba(0,0,0,0.6)";
-        ctx.fillRect(x, y, barW, barH);
-        ctx.fillStyle = res.color;
-        ctx.fillRect(x, y, barW * hpPct, barH);
-      }
+      ctx.fillStyle = res.color; // Usa a mesma cor da copa da árvore
+      ctx.fillRect(x, y, barW * hpPct, barH);
     }
-  });
-
-  // 9. ORDENAÇÃO Y (Bushes, Árvores pequenas e Player)
+  }
+});
   const viewMargin = 120;
   const all = [
-    ...bushes.filter(b => b.x > camX() - viewMargin && b.x < camX() + canvas.width + viewMargin && b.y > camY() - viewMargin && b.y < camY() + canvas.height + viewMargin).map(b => ({ ...b, t: 'b' })),
-    ...trees.filter(t => t.active && t.x > camX() - viewMargin && t.x < camX() + canvas.width + viewMargin && t.y > camY() - viewMargin && t.y < camY() + canvas.height + viewMargin).map(t => ({ ...t, t: 't' })),
-    { x: player.x, y: player.y, t: 'p' }
-  ].sort((a, b) => a.y - b.y);
+      ...bushes.filter(b => b.x > camX()-viewMargin && b.x < camX()+canvas.width+viewMargin && b.y > camY()-viewMargin && b.y < camY()+canvas.height+viewMargin).map(b=>({...b,t:'b'})),
+      ...trees.filter(t => t.active && t.x > camX()-viewMargin && t.x < camX()+canvas.width+viewMargin && t.y > camY()-viewMargin && t.y < camY()+canvas.height+viewMargin).map(t=>({...t,t:'t'})),
+      {x:player.x, y:player.y, t:'p'}
+  ].sort((a,b)=>a.y-b.y);
 
   all.forEach(obj => {
-    if (obj.t === 'b') {
-      ctx.fillStyle = "#1f7a3a";
-      ctx.beginPath();
-      ctx.arc(obj.x - camX(), obj.y - camY(), obj.r, 0, Math.PI * 2);
-      ctx.fill();
-      if (obj.hasFruit) {
-        ctx.fillStyle = "#ff4d4d";
-        for (let i = 0; i < 3; i++) {
-          ctx.beginPath();
-          ctx.arc(obj.x - camX() + Math.cos(i * 2) * 15, obj.y - camY() + Math.sin(i * 2) * 15, 6, 0, Math.PI * 2);
-          ctx.fill();
-        }
+    if(obj.t==='b'){
+      ctx.fillStyle="#1f7a3a"; ctx.beginPath(); ctx.arc(obj.x-camX(),obj.y-camY(),obj.r,0,Math.PI*2); ctx.fill();
+      if(obj.hasFruit) {
+          ctx.fillStyle = "#ff4d4d";
+          for(let i=0; i<3; i++){ ctx.beginPath(); ctx.arc(obj.x-camX() + Math.cos(i*2)*15, obj.y-camY() + Math.sin(i*2)*15, 6, 0, Math.PI*2); ctx.fill(); }
       }
-    } else if (obj.t === 't') {
-      ctx.fillStyle = "#8b5a2b";
-      ctx.fillRect(obj.x - 8 - camX(), obj.y + 10 - camY(), 16, 30);
-      ctx.fillStyle = obj.color;
-      ctx.beginPath();
-      ctx.arc(obj.x - camX(), obj.y - camY(), obj.r, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (obj.t === 'p') {
-      drawPlayer(ctx, player.x - camX(), player.y - camY(), player.angle, player.hidden);
-    }
+    } else if(obj.t==='t'){
+      ctx.fillStyle="#8b5a2b"; ctx.fillRect(obj.x-8-camX(), obj.y + 10-camY(), 16, 30); 
+      ctx.fillStyle=obj.color; ctx.beginPath(); ctx.arc(obj.x-camX(), obj.y-camY(), obj.r, 0, Math.PI*2); ctx.fill();
+    } else if(obj.t==='p') drawPlayer(ctx, player.x-camX(), player.y-camY(), player.angle, player.hidden);
   });
 
-  // 10. PARTÍCULAS
-  particles.forEach(p => {
-    ctx.fillStyle = p.color;
+  particles.forEach(p=>{ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x-camX(), p.y-camY(), p.r, 0, Math.PI*2); ctx.fill();});
+// --- DESENHO DAS TOCAS ---
+rabbitHoles.forEach(h => {
+    ctx.fillStyle = "#4e342e"; // Marrom bem escuro
     ctx.beginPath();
-    ctx.arc(p.x - camX(), p.y - camY(), p.r, 0, Math.PI * 2);
+    ctx.ellipse(h.x - camX(), h.y - camY() + 5, h.r, h.r * 0.6, 0, 0, Math.PI * 2);
     ctx.fill();
-  });
-
-  // 11. ANIMAIS (Coelhos)
-animals.forEach(a => {
-    if (a.hidden) return; // Isso garante a invisibilidade na toca
-
+    
+    // Borda de terra em volta
+    ctx.strokeStyle = "#3e2723";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+});
+  animals.forEach(a => {
     ctx.save();
     ctx.translate(a.x - camX(), a.y - camY());
     ctx.rotate(a.angle);
-    
-    // Desenho do Corpo
+
+    // Corpo (bolinha marrom)
     ctx.fillStyle = "#8d6e63";
     ctx.beginPath();
     ctx.arc(0, 0, a.r, 0, Math.PI * 2);
     ctx.fill();
 
-    // Desenho dos Olhos
+    // Olhinhos (na frente)
     ctx.fillStyle = "black";
     ctx.beginPath();
     ctx.arc(a.r * 0.5, -3, 2, 0, Math.PI * 2);
     ctx.arc(a.r * 0.5, 3, 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Desenho das Orelhas
+    // Orelhinhas atrás
     ctx.fillStyle = "#8d6e63";
     ctx.beginPath();
+    // Orelha 1
     ctx.ellipse(-5, -5, 8, 3, 0, 0, Math.PI * 2);
+    // Orelha 2
     ctx.ellipse(-5, 5, 8, 3, 0, 0, Math.PI * 2);
     ctx.fill();
-    
+
     ctx.restore();
 });
-  // 12. SISTEMA DE NOITE E LUA DE SANGUE
-  if (!isDay) {
-    ctx.fillStyle = "white";
-    stars.forEach(s => {
-      ctx.globalAlpha = s.a;
-      ctx.fillRect(((s.x - camX() * 0.1) + canvas.width) % canvas.width, ((s.y - camY() * 0.1) + canvas.height) % canvas.height, s.s, s.s);
-    });
-    ctx.globalAlpha = 1;
+  // 🌙 NOITE — JOGADOR MAIS ILUMINADO, BORDAS MAIS ESCURAS
+if(!isDay) {
+  // estrelas (opcional manter)
+  ctx.fillStyle = "white";
+ ctx.globalAlpha = 1; // ou 1 se não quiser piscar
+stars.forEach(s => {
+  ctx.globalAlpha = s.a;
+  ctx.fillStyle = "white";
+  ctx.fillRect(
+  ((s.x - camX()*0.1) + canvas.width) % canvas.width
+,
+  ((s.y - camY()*0.1) + canvas.height) % canvas.height
 
-    ctx.save();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+,
+  s.s, s.s
+);
+});
+ctx.globalAlpha = 1;
 
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const fadeRadius = 1200;
 
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, fadeRadius);
-    grad.addColorStop(0, "rgba(0,0,0,0)");
-    grad.addColorStop(0.5, "rgba(0,0,0,0.3)");
-    grad.addColorStop(1, "rgba(0,0,0,0.85)");
+  // camada escura forte
+  ctx.save();
+  ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-  }
+  // recorte de luz no jogador
 
-  if (isBloodMoon) {
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(canvas.width / 2 - 180, 40, 360, 60);
-    ctx.fillStyle = "#ff2a2a";
-    ctx.font = "bold 36px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("LUA DE SANGUE", canvas.width / 2, 82);
-    ctx.textAlign = "left";
-  }
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
 
-  // 13. INTERFACE (UI)
-  if (!player.dead && !isMobile) {
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 16px Arial";
+  const lightRadius = 800; // luz próxima
+  const fadeRadius  = 1200; // transição
+
+ const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, fadeRadius);
+grad.addColorStop(0, "rgba(0,0,0,0)");
+grad.addColorStop(0.5, "rgba(0,0,0,0.3)");
+grad.addColorStop(1, "rgba(0,0,0,0.85)");
+
+ctx.fillStyle = grad;
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.beginPath();
+  ctx.arc(cx, cy, fadeRadius, 0, Math.PI * 2);
+
+  ctx.fill();
+  ctx.restore();
+  ctx.globalCompositeOperation = "source-over";
+}
+
+if(isBloodMoon){
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(
+    canvas.width/2 - 180,
+    40,
+    360,
+    60
+  );
+
+  ctx.fillStyle = "#ff2a2a";
+  ctx.font = "bold 36px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "LUA DE SANGUE",
+    canvas.width/2,
+    82
+  );
+  ctx.textAlign = "left";
+}
+  // UI
+  if(!player.dead && !isMobile) {
+    ctx.fillStyle="#fff"; ctx.font="bold 16px Arial";
     ctx.fillText(`MADEIRA: ${player.wood} | GRAVETOS: ${player.sticks}| PEDRA: ${player.stone} | OURO: ${player.gold}`, 20, 30);
-    ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(20, 50, 200, 10);
-    ctx.fillStyle = "#e74c3c"; ctx.fillRect(20, 50, 200 * (player.hp / player.maxHp), 10);
-    ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(20, 65, 200, 10);
-    ctx.fillStyle = player.exhausted ? "#95a5a6" : "#f1c40f"; ctx.fillRect(20, 65, 200 * (player.stamina / player.maxStamina), 10);
-    ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(20, 80, 200, 10);
-    ctx.fillStyle = "#ff9800"; ctx.fillRect(20, 80, 200 * (player.food / player.maxFood), 10);
-
+    ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 50, 200, 10);
+    ctx.fillStyle="#e74c3c"; ctx.fillRect(20, 50, 200*(player.hp/player.maxHp), 10);
+    ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 65, 200, 10);
+    ctx.fillStyle=player.exhausted ? "#95a5a6" : "#f1c40f"; ctx.fillRect(20, 65, 200*(player.stamina/player.maxStamina), 10);
+    ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 80, 200, 10);
+    ctx.fillStyle="#ff9800"; ctx.fillRect(20, 80, 200*(player.food/player.maxFood), 10);
     // MINIMAPA
-    const sz = 150, p = 6, mx = canvas.width - sz - p, my = p, sc = sz / MAP;
-    ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(mx, my, sz, sz);
-    ctx.fillStyle = SAND_COLOR;
-    ctx.fillRect(mx + rivers[0].x * sc, my + (rivers[0].y - SAND_WIDTH) * sc, rivers[0].w * sc, (rivers[0].h + SAND_WIDTH * 2) * sc);
-    ctx.beginPath(); ctx.arc(mx + circularRiver.x * sc, my + circularRiver.y * sc, (circularRiver.r + SAND_WIDTH) * sc, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#3498db";
-    ctx.fillRect(mx + rivers[0].x * sc, my + rivers[0].y * sc, rivers[0].w * sc, rivers[0].h * sc);
-    ctx.beginPath(); ctx.arc(mx + circularRiver.x * sc, my + circularRiver.y * sc, circularRiver.r * sc, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = MOUNTAIN_COLOR;
-    mountains.forEach(m => { ctx.beginPath(); ctx.arc(mx + m.x * sc, my + m.y * sc, m.r * sc, 0, Math.PI * 2); ctx.fill(); });
-    ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(mx + player.x * sc, my + player.y * sc, 3, 0, Math.PI * 2); ctx.fill();
+    const sz=150, p=6, mx=canvas.width-sz-p, my=p, sc=sz/MAP;
+    ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillRect(mx, my, sz, sz);
+    ctx.fillStyle=SAND_COLOR; ctx.beginPath(); 
+    ctx.fillRect(mx + rivers[0].x*sc, my + (rivers[0].y-SAND_WIDTH)*sc, rivers[0].w*sc, (rivers[0].h+SAND_WIDTH*2)*sc);
+    ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, (circularRiver.r+SAND_WIDTH)*sc, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle="#3498db"; 
+    ctx.fillRect(mx + rivers[0].x*sc, my + rivers[0].y*sc, rivers[0].w*sc, rivers[0].h*sc);
+    ctx.beginPath(); ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, circularRiver.r*sc, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle=MOUNTAIN_COLOR;
+    mountains.forEach(m => { ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, m.r*sc, 0, Math.PI*2); ctx.fill(); });
+    ctx.fillStyle="#fff";
+    ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
   }
+  if(craftingOpen){
+  ctx.fillStyle = "rgba(0,0,0,0.75)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // 14. CRAFTING E INVENTÁRIO
-  if (craftingOpen) {
-    ctx.fillStyle = "rgba(0,0,0,0.75)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 28px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("CRAFT", canvas.width / 2, canvas.height / 2 - 120);
-    ctx.font = "20px Arial";
-    ctx.fillStyle = "rgba(255,255,255,0.1)";
-    ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 80, 300, 40);
-    ctx.fillStyle = "#fff";
-    ctx.fillText("Machado (3 Madeira, 1 Pedra)", canvas.width / 2, canvas.height / 2 - 50);
-    ctx.fillStyle = "rgba(255,255,255,0.1)";
-    ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 30, 300, 40);
-    ctx.fillStyle = "#fff";
-    ctx.fillText("Picareta (2 Madeira, 3 Pedra)", canvas.width / 2, canvas.height / 2);
-    ctx.font = "14px Arial";
-    ctx.fillText("Pressione C para fechar", canvas.width / 2, canvas.height / 2 + 60);
-    ctx.textAlign = "left";
-  }
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 28px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("CRAFT", canvas.width/2, canvas.height/2 - 120);
 
-  if (!player.dead && !craftingOpen) {
-    drawInventory();
-  }
+  ctx.font = "20px Arial";
 
-  if (isMobile && !player.dead) {
-    drawMobileHUD();
-    drawJoystick();
-    drawAimJoystick();
-  }
+  // Caixa Machado
+  ctx.fillStyle = "rgba(255,255,255,0.1)";
+  ctx.fillRect(canvas.width/2 - 150, canvas.height/2 - 80, 300, 40);
+  ctx.fillStyle = "#fff";
+  ctx.fillText(
+    "Machado (3 Madeira, 1 Pedra)",
+    canvas.width/2,
+    canvas.height/2 - 50
+  );
+
+  // Caixa Picareta
+  ctx.fillStyle = "rgba(255,255,255,0.1)";
+  ctx.fillRect(canvas.width/2 - 150, canvas.height/2 - 30, 300, 40);
+  ctx.fillStyle = "#fff";
+  ctx.fillText(
+    "Picareta (2 Madeira, 3 Pedra)",
+    canvas.width/2,
+    canvas.height/2
+  );
+
+  ctx.font = "14px Arial";
+  ctx.fillText("Pressione C para fechar", canvas.width/2, canvas.height/2 + 60);
+
+  ctx.textAlign = "left";
+}
+if(!player.dead && !craftingOpen){
+  drawInventory();
+}
+if(isMobile && !player.dead) drawMobileHUD();
+drawJoystick();
+drawAimJoystick();
+
 }
 function drawInventory(){
   const slotSize = 64;
