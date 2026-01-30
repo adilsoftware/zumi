@@ -448,20 +448,28 @@ function findSafeSpawn() {
   let safe = false;
   let attempts = 0;
 
-  while (!safe && attempts < 100) {
+  while (!safe && attempts < 200) { // aumenta tentativas
     attempts++;
     spawnX = Math.random() * MAP;
     spawnY = Math.random() * MAP;
 
-    // Verifica se NÃO está na água, NÃO está na areia e NÃO está dentro de montanhas
+    
     const inRiver = isInRiver(spawnX, spawnY);
     const inSand = isInSand(spawnX, spawnY);
     const inMountain = mountains.some(m => Math.hypot(spawnX - m.x, spawnY - m.y) < m.r + 60);
+    const inTree = resources.some(r => r.type === "tree" && Math.hypot(spawnX - r.x, spawnY - r.y) < r.r + 20);
 
-    if (!inRiver && !inSand && !inMountain) {
+    if (!inRiver && !inSand && !inMountain && !inTree) {
       safe = true;
     }
   }
+
+  // fallback: se não achou posição segura, spawna no centro do mapa
+  if (!safe) {
+    spawnX = MAP / 2;
+    spawnY = MAP / 2;
+  }
+
   return { x: spawnX, y: spawnY };
 }
 
@@ -1542,7 +1550,7 @@ items.forEach((item, i)=>{
   ctx.strokeRect(x, y, slotSize, slotSize);
 
   ctx.fillStyle = "#fff";
-  ctx.font = "12px Arial";
+  ctx.font = "12px Arial";findSafeSpawn()
   ctx.textAlign = "center";
 
   if(item.qty !== undefined){
