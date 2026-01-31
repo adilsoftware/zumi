@@ -670,7 +670,9 @@ const agora = Date.now();
         passouUmSegundo = true;
         ultimoTickGlobal = agora;
     }
-
+    if(passouUmSegundo){
+    worldTime++;
+}
     if (player.dead) {
         player.attacking = false;
         player.attackProgress = 0;
@@ -722,25 +724,23 @@ if(isBloodMoon && passouUmSegundo){
 }
 
 // ===== SPAWN DE ZUMBIS AJUSTADO COM LUA DE SANGUE =====
-if(!isDay){
-    zombieSpawnTimer += 1;
+if(!isDay && passouUmSegundo){
+    zombieSpawnTimer++;
+}
+if(zombieSpawnTimer >= 120){
+    let normalCount = (dayCount >= 3) ? 10 : 0;
+    let bloodCount = isBloodMoon ? 3 : 0;
 
-    if(zombieSpawnTimer >= 120){
-        let normalCount = (dayCount >= 3) ? 10 : 0;
-        let bloodCount = isBloodMoon ? 3 : 0;
-
-        for(let i = 0; i < normalCount; i++){
-            spawnZombie("normal");
-        }
-        for(let i = 0; i < bloodCount; i++){
-            spawnZombie("blood");
-        }
-
-        zombieSpawnTimer = 0;
+    for(let i = 0; i < normalCount; i++){
+        spawnZombie("normal");
     }
-} else {
+    for(let i = 0; i < bloodCount; i++){
+        spawnZombie("blood");
+    }
+
     zombieSpawnTimer = 0;
 }
+
 zombies.forEach(z => {
   if(!z.active) return;
 
@@ -756,7 +756,9 @@ zombies.forEach(z => {
 
   const dist = Math.hypot(player.x - z.x, player.y - z.y);
   if(dist < player.r + z.r){
-    player.hp -= 0.2; // dano contínuo
+    if(dist < player.r + z.r && passouUmSegundo){
+    player.hp -= 1; // 1 HP por segundo
+}
   }
 });
 
@@ -1007,7 +1009,7 @@ zombies.forEach(z => {
   if(!z.active) return;
 
   if(Math.hypot(hx - z.x, hy - z.y) < z.r + 15){
-    z.hp -= 20;
+    z.hp -= weapons[player.weapon].damage;
     createParticles(hx, hy, "#6aff6a", 6);
     if(z.hp <= 0){
       z.active = false;
@@ -1092,9 +1094,10 @@ zombies.forEach(z => {
       rabbitHoles.forEach((h, i) => {
           h.life--;
           if (h.life <= 0) rabbitHoles.splice(i, 1);
-      });
+        });
   }
-  }
+  zombies = zombies.filter(z => z.active);
+}
 function drawBloodMoonText(){
     if(showBloodMoonText > 0){
         ctx.save();

@@ -224,8 +224,8 @@ let worldTime = 0;
 let isDay = true;
 let isBloodMoon = false;
 let bloodMoonTimer = 0;
-
-const BLOOD_MOON_DURATION = 480 * 60; // 8 minutos
+let showBloodMoonText = 0;
+const BLOOD_MOON_DURATION = 8 * 60; // 8 minutos
 const BLOOD_MOON_CHANCE = 0.10; // 10%
 let dayCount = 1;
 
@@ -679,27 +679,66 @@ const agora = Date.now();
 
     if (craftingOpen) return;
     
-if(!isDay && dayCount >= 3){
-  // ⏱️ Só aumenta o timer UMA vez por segundo real
-  if(passouUmSegundo) {
-    zombieSpawnTimer++;
-  }
+// ===== CICLO DIA/NOITE AJUSTADO COM LUA DE SANGUE =====
+if(isDay && worldTime >= DAY_DURATION){
+    isDay = false;
+    worldTime = 0;
+    zombieSpawnTimer = 0;
 
-  // 120 segundos = 2 minutos reais
-  if(zombieSpawnTimer >= 120){ 
-    for(let i = 0; i < 10; i++){
-      spawnZombie("normal");
+    // 🌕 Chance de Lua de Sangue a partir da 5ª noite
+    if(dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE){
+        isBloodMoon = true;
+        bloodMoonTimer = 0;
+
+        // Mostra "LUA DE SANGUE" na tela
+        showBloodMoonText = 180; // duração do texto em frames (3s a 60fps)
+
+        // Spawn de 3 zumbis fortes vermelhos imediatamente
+        for(let i=0;i<3;i++){
+            spawnZombie("blood"); 
+        }
+    } else {
+        isBloodMoon = false;
     }
+} 
+else if(!isDay && worldTime >= NIGHT_DURATION){
+    isDay = true;
+    worldTime = 0;
+    dayCount++;
 
-    if(isBloodMoon){
-      for(let i = 0; i < 3; i++){
-        spawnZombie("blood");
-      }
-    }
-
-    zombieSpawnTimer = 0; // Reseta para a próxima horda
-  }
+    // Amanheceu → remove zumbis e reseta timers
+    zombies.length = 0;
+    zombieSpawnTimer = 0;
+    isBloodMoon = false;
 }
+
+// Atualiza timer da Lua de Sangue
+if(isBloodMoon && passouUmSegundo){
+    bloodMoonTimer++;
+
+    if(bloodMoonTimer >= BLOOD_MOON_DURATION){
+        isBloodMoon = false;
+    }
+}
+
+// ===== SPAWN DE ZUMBIS AJUSTADO COM LUA DE SANGUE =====
+if(!isDay && passouUmSegundo){
+    zombieSpawnTimer++;
+}
+if(zombieSpawnTimer >= 120){
+    let normalCount = (dayCount >= 3) ? 10 : 0;
+    let bloodCount = isBloodMoon ? 3 : 0;
+
+    for(let i = 0; i < normalCount; i++){
+        spawnZombie("normal");
+    }
+    for(let i = 0; i < bloodCount; i++){
+        spawnZombie("blood");
+    }
+
+    zombieSpawnTimer = 0;
+}
+
 zombies.forEach(z => {
   if(!z.active) return;
 
@@ -715,38 +754,12 @@ zombies.forEach(z => {
 
   const dist = Math.hypot(player.x - z.x, player.y - z.y);
   if(dist < player.r + z.r){
-    player.hp -= 0.2; // dano contínuo
+    if(dist < player.r + z.r && passouUmSegundo){
+    player.hp -= 1; // 1 HP por segundo
+}
   }
 });
-  worldTime++;
- if(isDay && worldTime >= DAY_DURATION){
-  isDay = false;
-  worldTime = 0;
 
-  // 🌕 chance de Lua de Sangue após a 5ª noite
-  if(dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE){
-    isBloodMoon = true;
-    bloodMoonTimer = 0;
-  } else {
-    isBloodMoon = false;
-  }
-}
-if(isBloodMoon){
-  bloodMoonTimer++;
-
-  if(bloodMoonTimer >= BLOOD_MOON_DURATION){
-    isBloodMoon = false;
-  }
-}
-else if(!isDay && worldTime >= NIGHT_DURATION) {
-  isDay = true;
-  worldTime = 0;
-  dayCount++;
-
-  // 🌅 amanheceu → remove zumbis
-  zombies.length = 0;
-  zombieSpawnTimer = 0;
-}
 // 🌿 RESPAWN DE FRUTAS (Baseado em segundos reais)
     bushes.forEach(b => {
         if (b.isBerryBush && !b.hasFruit) {
@@ -1082,6 +1095,18 @@ zombies.forEach(z => {
       });
   }
   }
+function drawBloodMoonText(){
+    if(showBloodMoonText > 0){
+        ctx.save();
+        ctx.font = "64px Arial Black";
+        ctx.fillStyle = "red";
+        ctx.textAlign = "center";
+        ctx.fillText("LUA DE SANGUE", canvas.width/2, canvas.height/2);
+        ctx.restore();
+        showBloodMoonText--;
+    }
+}
+
 function drawPlayer(ctxRef, x, y, angle, hidden){
   ctxRef.save();
   ctxRef.translate(x, y); ctxRef.rotate(angle);
@@ -1286,7 +1311,7 @@ zombies.forEach(z => {
 
   ctx.fill();
 });
-
+drawBloodMoonText();
  const viewMargin = 120;
 const all = [
   ...resources
