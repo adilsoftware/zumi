@@ -208,17 +208,14 @@ window.addEventListener("resize", resize);
 
 const MAP=20000;
 const SAND_COLOR = "#e3d3a3";
-const SAND_WIDTH = 300;
+const SAND_WIDTH = 450;
 const MOUNTAIN_COLOR = "#4a4a4a";
 const SAFE_SPAWN_DIST = 1200;
 const ZOMBIE_SPREAD_DIST = 150;
 
 // CONFIGURAÇÕES
-const DAY_DURATION = 360 * 60;
-const NIGHT_DURATION = 240 * 60; 
-const BERRY_RESPAWN_TIME = 60 * 60;
-const ORE_RESPAWN_TIME = 120 * 60;
-const TREE_RESPAWN_TIME = 120 * 60;
+const DAY_DURATION = 5 * 60;
+const NIGHT_DURATION = 4 * 60; 
 let zombieSpawnTimer = 0;
 let worldTime = 0;
 let isDay = true;
@@ -251,14 +248,14 @@ let ultimoTickGlobal = Date.now();
 const recipes = {
   axe: {
     name: "Machado",
-    wood: 3,
-    stone: 1,
+    wood: 3,     // Mudamos para 3
+    sticks: 2,   // Adicionamos 2 gravetos
     weaponIndex: 1
   },
   pickaxe: {
     name: "Picareta",
-    wood: 2,
-    stone: 3,
+    wood: 3,     // Mudamos para 3
+    sticks: 3,   // Adicionamos 3 gravetos
     weaponIndex: 2
   }
 };
@@ -506,6 +503,29 @@ for(let i=0;i<10000;i++){
 }
  }
 }
+// 🌴 SPAWN DE COQUEIROS (Nas Praias/Areia)
+for(let i = 0; i < 2400; i++) {
+  let x = Math.random() * MAP;
+  let y = Math.random() * MAP;
+
+  if(isInSand(x, y)) {
+    // Checa se já tem outro coqueiro muito perto (distância de 80)
+    let muitoPerto = resources.some(r => r.type === "palm" && Math.hypot(x-r.x, y-r.y) < 80);
+    
+    if(!muitoPerto) {
+      resources.push({
+        type: "palm",
+        x, y,
+        r: 35,
+        trunkColor: "#6d4c41", // Cor nova aqui
+        hp: 200,
+        maxHp: 200,
+        alive: true,
+        respawnTimer: 0
+      });
+    }
+  }
+}
 // 🌿 SPAWN INICIAL DE GRAVETOS (Versão Ajustada)
 for(let i = 0; i < 600; i++){ // Aumentei de 600 para 1200 (2x mais)
   let x = Math.random() * MAP;
@@ -582,19 +602,23 @@ function createParticles(x,y,color,count=6, speedMult=1){
 canvas.addEventListener("click", e => {
   if(!craftingOpen) return;
 
-  const x = e.clientX;
-  const y = e.clientY;
+  // Isso aqui corrige o erro de clicar "fora" do botão
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
 
-  const cx = canvas.width / 2 - 150;
-  const cy = canvas.height / 2 - 80;
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
 
-  // Machado
-  if(x > cx && x < cx + 300 && y > cy && y < cy + 40){
+  // Botão do Machado (centerX - 130 até +130, centerY - 40 até +5)
+  if(mx > centerX - 130 && mx < centerX + 130 && 
+     my > centerY - 40 && my < centerY + 5){
     tryCraft("axe");
   }
 
-  // Picareta
-  if(x > cx && x < cx + 300 && y > cy + 50 && y < cy + 90){
+  // Botão da Picareta (centerX - 130 até +130, centerY + 25 até +70)
+  if(mx > centerX - 130 && mx < centerX + 130 && 
+     my > centerY + 25 && my < centerY + 70){
     tryCraft("pickaxe");
   }
 });
@@ -620,15 +644,18 @@ canvas.addEventListener("mousedown", e => {
 });
 
 function tryCraft(type){
-  const r = recipes[type];
+  const r = recipes[type]; // Olha a receita no objeto que já atualizamos
 
-  if(player.wood < r.wood) return;
-  if(player.stone < r.stone) return;
-
-  player.wood -= r.wood;
-  player.stone -= r.stone;
-
-  player.weapon = r.weaponIndex;
+  // AGORA: Verifica se você tem madeira E gravetos suficientes
+  if(player.wood >= r.wood && player.sticks >= r.sticks){
+    player.wood -= r.wood;     // Tira a madeira
+    player.sticks -= r.sticks; // Tira os gravetos (novo!)
+    player.weapon = r.weaponIndex; // Te dá a ferramenta certa
+    
+    craftingOpen = false; // Fecha o menu
+  } else {
+    alert("Você precisa de mais materiais! (Madeira e Gravetos)");
+  }
 }
 function spawnAnimal() {
   let pos = findSafeSpawn();
@@ -641,6 +668,11 @@ function spawnAnimal() {
     x: pos.x,
     y: pos.y,
     r: 15, 
+    hp: 80,       // Adicionado: Vida do coelho
+    maxHp: 80,    // Adicionado: Vida máxima
+    alive: true,  // Adicionado: Estado de vida
+    stamina: 100,
+    isExhausted: false,
     color: "#8d6e63",
     angle: Math.random() * Math.PI * 2,
     timer: 0
@@ -648,12 +680,12 @@ function spawnAnimal() {
 }
 
 animals = []; 
-for(let i = 0; i < 20; i++) {
+for(let i = 0; i < 30; i++) {
     spawnAnimal();
 }
 
 console.log("Coelhos criados: " + animals.length);
-for(let i = 0; i < 20; i++) spawnAnimal();
+
 function update(){
 const agora = Date.now();
     let passouUmSegundo = false;
@@ -731,16 +763,7 @@ if(zombieSpawnTimer >= 120){
     zombieSpawnTimer = 0;
 }
 
-zombies.forEach(z => {
-  if(!z.active) return;
 
-  const dx = player.x - z.x;
-  const dy = player.y - z.y;
-  const dist = Math.hypot(dx, dy) || 1;
-
-  z.x += (dx / dist) * z.speed;
-  z.y += (dy / dist) * z.speed;
-});
 zombies.forEach(z => {
   if(!z.active) return;
 
@@ -795,7 +818,7 @@ zombies.forEach(z => {
   (isMobile && touchMove.active && Math.hypot(touchMove.dx, touchMove.dy) > joystick.radius * 0.8
  && !player.exhausted);
 
-  let foodDrain = isSprinting ? 0.03 : 0.02;
+  let foodDrain = isSprinting ? 0.018 : 0.009;
   if(player.foodCooldown > 0){
   player.foodCooldown--;
 } else {
@@ -854,18 +877,22 @@ player.y += ny * moveSpeed * speedFactor;
 
   player.x = Math.max(player.r, Math.min(MAP - player.r, player.x));
   player.y = Math.max(player.r, Math.min(MAP - player.r, player.y));
-// 🌳 COLISÃO COM ÁRVORES (resources[])
+// 🌳 COLISÃO AJUSTADA PARA O NOVO TRONCO
 resources.forEach(res => {
   if(!res.alive) return;
-  if(res.type !== "tree") return;
+  if(res.type !== "tree" && res.type !== "palm") return;
 
   const dx = player.x - res.x;
-  const dy = player.y - res.y;
+  // Ajustamos o Y da colisão para o centro do novo tronco (mais para baixo)
+  const dy = player.y - (res.type === "palm" ? res.y + 10 : res.y);
   const dist = Math.hypot(dx, dy);
+  
+  // Raio um pouco maior (8) para o tronco que engrossou para 16
+  const colRadius = (res.type === "palm") ? 20 : res.r;
 
-  if(dist < player.r + res.r){
+  if(dist < player.r + colRadius){
     const angle = Math.atan2(dy, dx);
-    const overlap = (player.r + res.r) - dist;
+    const overlap = (player.r + colRadius) - dist;
     player.x += Math.cos(angle) * overlap;
     player.y += Math.sin(angle) * overlap;
   }
@@ -886,7 +913,21 @@ resources.forEach(res => {
     player.y += Math.sin(angle) * overlap;
   }
 });
+// 🐇 COLISÃO FÍSICA COM COELHOS
+animals.forEach(ani => {
+    if (!ani.alive) return; // Só colide se estiver vivo
 
+    const dx = player.x - ani.x;
+    const dy = player.y - ani.y;
+    const dist = Math.hypot(dx, dy);
+    
+    if (dist < player.r + ani.r) {
+        const angle = Math.atan2(dy, dx);
+        const overlap = (player.r + ani.r) - dist;
+        player.x += Math.cos(angle) * overlap;
+        player.y += Math.sin(angle) * overlap;
+    }
+});
 resources.forEach(res => {
   if(!res.alive) return;
 
@@ -935,7 +976,7 @@ const hy = player.y + Math.sin(player.angle) * w.range;
 bushes.forEach(b => {
   if (b.hasFruit && Math.hypot(hx - b.x, hy - b.y) < b.r + 20) {
     b.hasFruit = false;
-    player.food = Math.min(player.maxFood, player.food + 20);
+    player.food = Math.min(player.maxFood, player.food + 10);
 player.foodCooldown = 180; // 3 segundos sem perder fome
     createParticles(hx, hy, "#ff4d4d", 8);
   }
@@ -953,12 +994,40 @@ resources.forEach(res => {
     if(weapons[player.weapon].style !== "axe") return;
 
     res.hp -= weapons[player.weapon].damage;
-    createParticles(hx, hy, res.color, 6);
+   createParticles(hx, hy, "#6d4c41", 6);
 
 if(res.hp <= 0){
   res.alive = false;
   player.wood += (res.yield || 1); // Ganha 1 se for pequena, 3 se for grande
-}
+player.sticks += 2;}
+  }
+});
+// 🥥 COLETA DO COQUEIRO
+resources.forEach(res => {
+  if(!res.alive || res.type !== "palm") return;
+
+  // hx e hy já estão definidos lá no topo do seu sistema de ataque
+  const dist = Math.hypot(hx - res.x, hy - res.y);
+  
+  if(dist < res.r + 15){
+    // Só o machado corta!
+    if(weapons[player.weapon].style !== "axe") return;
+
+    res.hp -= weapons[player.weapon].damage;
+    createParticles(hx, hy, "#27ae60", 6); // Partículas de folhas
+
+    if(res.hp <= 0){
+      res.alive = false;
+      res.respawnTimer = 0;
+      
+      // RECOMPENSA QUE VOCÊ PEDIU:
+      player.wood += 2;      // +2 Madeiras
+      player.sticks += 1; // +1 Galho (Stick)
+      player.food = Math.min(player.maxFood, player.food + 20); // +20 de Comida (Coco)
+      
+      // Partículas brancas para o coco
+      createParticles(res.x, res.y, "#ffffff", 12, 1.5);
+    }
   }
 });
 // ⛏️ ATAQUE EM PEDRA / OURO (UNIFICADO)
@@ -1007,15 +1076,30 @@ zombies.forEach(z => {
   }
 });
 
+animals.forEach(ani => {
+    if(!ani.alive) return; // Só bate se estiver vivo
+
+    if(Math.hypot(hx - ani.x, hy - ani.y) < ani.r + 15){
+      ani.hp -= weapons[player.weapon].damage; // Tira vida do coelho
+      createParticles(hx, hy, "#fce4ec", 6); // Partícula de "pelo"
+      
+      if(ani.hp <= 0){
+        ani.alive = false; // Mata o coelho
+        player.food = Math.min(player.maxFood, player.food + 50); // Dá comida!
+      }
+    }
+  });
 }
 }
+
   if(player.attacking){ player.atkTimer--; if(player.atkTimer<=0) player.attacking=false; }
   if(player.attackProgress>0){ player.attackProgress-=0.15; if(player.attackProgress<0) player.attackProgress=0; }
   for(let i=particles.length-1;i>=0;i--){
     const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life--;
    if(p.life<=0) particles.splice(i,1);
-  }// --- IA DOS COELHOS COM ANTI-ENCALHE E TOCAS ---
-  animals.forEach(a => {
+  }// --- IA DOS COELHOS ATUALIZADA (STAMINA + TOCAS + ANTI-ENCALHE) ---
+animals.forEach(a => {
+    if (!a.alive) return;
     const dx = player.x - a.x;
     const dy = player.y - a.y;
     const dist = Math.hypot(dx, dy);
@@ -1023,32 +1107,63 @@ zombies.forEach(z => {
     let currentSpeed = 0;
     let inWaterAnimal = isInRiver(a.x, a.y);
 
-    // 1. MOVIMENTAÇÃO
+    // 1. LÓGICA DE MOVIMENTAÇÃO E STAMINA
     if (dist < 300) {
-        a.angle = Math.atan2(-dy, -dx);
-        currentSpeed = player.speed * 1.25;
-        if (Math.random() < 0.15) {
-            createParticles(a.x, a.y, inWaterAnimal ? "#a0d8ef" : "#d2b48c", 1, 0.3);
+      if (a.stamina < 100) a.stamina += 0.2;
+      if (a.stamina >= 50) a.isExhausted = false;
+        // --- NOVO: TENTA ACHAR A TOCA MAIS PRÓXIMA ---
+        let minhaToca = rabbitHoles.find(h => Math.hypot(a.x - h.x, a.y - h.y) < 400);
+
+        if (minhaToca) {
+            // Se tem toca perto, o ângulo aponta para ela
+            a.angle = Math.atan2(minhaToca.y - a.y, minhaToca.x - a.x);
+            
+            // Se ele encostar na toca (distância < 10), ele entra
+            if (Math.hypot(a.x - minhaToca.x, a.y - minhaToca.y) < 10) {
+                a.isInHole = true; 
+            }
+        } else {
+            // Se não tem toca, foge do player como antes
+            a.angle = Math.atan2(-dy, -dx); 
+        }
+
+        // Só corre se tiver stamina e não estiver exausto
+        if (a.stamina > 0 && !a.isExhausted) {
+            currentSpeed = player.speed * 1.5; // Corre 1.5x mais rápido
+            a.stamina -= 1.6; // Cansa rápido (o dobro do player)
+            if (a.stamina <= 0) a.isExhausted = true;
+
+            // Partículas de poeira/água ao correr
+            if (Math.random() < 0.15) {
+                createParticles(a.x, a.y, inWaterAnimal ? "#a0d8ef" : "#d2b48c", 1, 0.3);
+            }
+        } else {
+            // FICOU CANSADO: Velocidade cai pela metade do andar normal
+            currentSpeed = (player.speed * 0.90) * 0.5;
         }
     } else {
+        // PLAYER LONGE: Recupera stamina e anda normal
+        if (a.stamina < 100) a.stamina += 0.4; 
+        if (a.stamina >= 50) a.isExhausted = false;
+
         if (passouUmSegundo) a.timer--;
         if (a.timer <= 0) {
             a.angle = Math.random() * Math.PI * 2;
             a.timer = 3 + Math.random() * 4;
         }
-        currentSpeed = player.speed * 0.90;
+        currentSpeed = player.speed * 0.60;
     }
 
     if (inWaterAnimal) currentSpeed /= 2;
 
-    // APLICA MOVIMENTO BASE
+    
     a.x += Math.cos(a.angle) * currentSpeed;
     a.y += Math.sin(a.angle) * currentSpeed;
 
     // 2. ANTI-ENCALHE (EMPURA O COELHO PARA FORA)
     resources.forEach(res => {
         if (!res.alive || res.type === "stick") return;
-        if (res.type === "tree" || res.type === "stone" || res.type === "gold") {
+        if (res.type === "tree" || res.type === "stone" || res.type === "gold" || res.type === "palm") {
             const rDx = a.x - res.x;
             const rDy = a.y - res.y;
             const rDist = Math.hypot(rDx, rDy);
@@ -1066,27 +1181,66 @@ zombies.forEach(z => {
         }
     });
 
-    // 3. CRIAR TOCA (A cada 2 coelhos, 1 faz um buraco a cada 2 min aprox)
-    if (passouUmSegundo && Math.random() < 0.005) { // Chance baixa por segundo
-        if (rabbitHoles.length < animals.length / 2) { // Limite de 1 buraco para cada 2 coelhos
-            if (!inWaterAnimal) {
-                rabbitHoles.push({ x: a.x, y: a.y, r: 12, life: 120 }); // Dura 2 min
-            }
+    // --- NOVO 3. LÓGICA DE CONSTRUÇÃO (10 SEGUNDOS) ---
+    let cooldown = (animals.filter(ani => ani.alive).length < 10) ? 60 : 300;
+    let gTime = typeof worldTime !== 'undefined' ? worldTime : 0;
+    let jaPodeCavar = (gTime - (a.lastBuildTime || 0)) > cooldown;
+
+    // Se ele não está fugindo, não tem casa e o tempo permitiu...
+    if (!a.isBuilding && !a.myHole && jaPodeCavar && !inWaterAnimal && dist > 500) {
+        if (Math.random() < 0.001) {
+            a.isBuilding = true;
+            a.buildTimer = 0;
         }
     }
 
+    if (a.isBuilding) {
+        a.buildTimer++;
+        // Partículas quadradas de terra subindo
+        if (Math.random() < 0.2) {
+            createParticles(a.x, a.y, "#d2b48c", 2, 0.5, true); 
+        }
+
+        if (a.buildTimer >= 600) { // 10 segundos
+            let t = { x: a.x, y: a.y, r: 12, life: 300, owner: a };
+            rabbitHoles.push(t);
+            a.myHole = t;
+            a.isBuilding = false;
+            a.lastBuildTime = gTime;
+        }
+        return; // IMPORTANTE: Ele fica parado enquanto constrói
+    }
     a.x = Math.max(a.r, Math.min(MAP - a.r, a.x));
     a.y = Math.max(a.r, Math.min(MAP - a.r, a.y));
   });
 
-  // Gerenciar tempo das tocas
+  // --- 4. GERENCIAR TOCAS, RESPAWN E PROTEÇÃO ---
   if (passouUmSegundo) {
+      // Avança o tempo global do jogo
+      if (typeof worldTime !== 'undefined') worldTime++;
+
       rabbitHoles.forEach((h, i) => {
+          // Se o dono da toca estiver escondido nela, ela não some
+          if (h.owner && h.owner.isInHole) return;
+
           h.life--;
-          if (h.life <= 0) rabbitHoles.splice(i, 1);
+          
+          // Se a toca acabar, o coelho perde a referência dela
+          if (h.life <= 0) {
+              if (h.owner) h.owner.myHole = null;
+              rabbitHoles.splice(i, 1);
+          }
+
+          // RESPAWN: Se tiver menos de 20 vivos, chance de nascer um novo
+          let vivos = animals.filter(ani => ani.alive).length;
+          if (vivos < 20) {
+              if (Math.random() < 0.05) { 
+                  spawnAnimal(); 
+              }
+          }
       });
   }
-  }
+}
 function drawBloodMoonText(){
     if(showBloodMoonText > 0){
         ctx.save();
@@ -1098,7 +1252,29 @@ function drawBloodMoonText(){
         showBloodMoonText--;
     }
 }
+let flowers = [];
+const flowerColors = ["#ff4d4d", "#a29bfe", "#fdcb6e", "#e84393"];
 
+function semearFlores() {
+    for(let i = 0; i < 1000; i++){
+        let x = Math.random() * MAP;
+        let y = Math.random() * MAP;
+
+        // Agora sim, as montanhas e rios já foram criados e o código pode checar
+        let inMountain = mountains.some(m => Math.hypot(x-m.x, y-m.y) < m.r);
+        let inWater = isInRiver(x,y) || isInSand(x,y);
+        let inTree = resources.some(r => r.type === "tree" && Math.hypot(x - r.x, y - r.y) < 80);
+
+        if(!inWater && !inMountain && !inTree){
+            flowers.push({
+                x: x, y: y,
+                color: flowerColors[Math.floor(Math.random() * flowerColors.length)],
+                size: 3 + Math.random() * 3
+            });
+        }
+    }
+}
+semearFlores();
 function drawPlayer(ctxRef, x, y, angle, hidden){
   ctxRef.save();
   ctxRef.translate(x, y); ctxRef.rotate(angle);
@@ -1243,7 +1419,32 @@ const barY = 20; // ajuste para mobile se quiser mais baixo
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle="#3f8f4d"; ctx.fillRect(-camX(),-camY(),MAP,MAP);
-
+  
+flowers.forEach(f => {
+    // Aumentamos a margem de visualização para 50 para não sumir do nada
+    if(f.x > camX() - 50 && f.x < camX() + canvas.width + 50 &&
+       f.y > camY() - 50 && f.y < camY() + canvas.height + 50) {
+        
+        ctx.save();
+        ctx.translate(f.x - camX(), f.y - camY());
+        
+        // Tamanho 3x maior
+        const s = f.size * 3; 
+        const thick = 4; // Deixa as pétalas mais gordinhas
+        
+        ctx.fillStyle = f.color;
+        
+        // Pétalas em formato de cruz mais grossa
+        ctx.fillRect(-s/2, -thick/2, s, thick);
+        ctx.fillRect(-thick/2, -s/2, thick, s);
+        
+        // Miolo maior e mais destacado
+        ctx.fillStyle = "#f1c40f"; 
+        ctx.fillRect(-thick/2, -thick/2, thick, thick);
+        
+        ctx.restore();
+    }
+});
   ctx.fillStyle = SAND_COLOR; 
   ctx.fillRect(rivers[0].x-camX(), rivers[0].y-SAND_WIDTH-camY(), rivers[0].w, rivers[0].h + (SAND_WIDTH*2));
   ctx.beginPath(); ctx.arc(circularRiver.x-camX(), circularRiver.y-camY(), circularRiver.r + SAND_WIDTH, 0, Math.PI*2); ctx.fill();
@@ -1263,6 +1464,46 @@ function draw(){
       6
     );
   }
+// 🌴 DESENHO DO COQUEIRO (Tronco Visível e Comprido)
+if(res.type === "palm") {
+  const camXVal = camX();
+  const camYVal = camY();
+
+  // 1. Tronco (Desenhado um pouco mais grosso e longo para baixo)
+  ctx.fillStyle = "#6d4c41"; 
+  // O tronco agora desce 55 pixels a partir do topo, ficando bem visível
+  ctx.fillRect(res.x - 8 - camXVal, res.y - 15 - camYVal, 16, 55);
+
+  // 2. Folhas (Subimos o ponto de origem das folhas para o topo do tronco)
+  ctx.fillStyle = "#27ae60";
+  for(let i = 0; i < 4; i++) {
+      ctx.save();
+      // Deslocamos o "centro" das folhas 15 pixels para cima (-15)
+      ctx.translate(res.x - camXVal, res.y - 15 - camYVal);
+      ctx.rotate((Math.PI / 2) * i + Math.sin(Date.now() / 600) * 0.1); 
+      ctx.beginPath();
+      // Elipse da folha
+      ctx.ellipse(25, 0, 32, 10, 0, 0, Math.PI * 2); 
+      ctx.fill();
+      ctx.restore();
+  }
+
+  // 3. Centro das folhas (O coco/topo no novo lugar)
+  ctx.fillStyle = "#1e8449";
+  ctx.beginPath();
+  ctx.arc(res.x - camXVal, res.y - 15 - camYVal, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. Barra de Vida (Cor do tronco, lá em cima de tudo)
+  const hpPct = res.hp / res.maxHp;
+  if(hpPct < 1) {
+    const barW = 35;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(res.x - barW/2 - camXVal, res.y - 80 - camYVal, barW, 5);
+    ctx.fillStyle = "#6d4c41"; 
+    ctx.fillRect(res.x - barW/2 - camXVal, res.y - 80 - camYVal, barW * hpPct, 5);
+  }
+}
 });
   mountains.forEach(m=>{
     ctx.fillStyle=m.color; ctx.beginPath(); ctx.arc(m.x-camX(), m.y-camY(), m.r, 0, Math.PI*2); ctx.fill();
@@ -1364,8 +1605,34 @@ rabbitHoles.forEach(h => {
     ctx.stroke();
 });
   animals.forEach(a => {
+    if (!a.alive) return;
+    // --- NOVO: SE ESTIVER NA TOCA, FICA ESCONDIDO ---
+    if (a.isInHole) {
+        // Checa se é dia e se o player está longe para poder sair
+        const distPlayer = Math.hypot(player.x - a.x, player.y - a.y);
+        
+        // Se amanhecer E o player estiver longe (> 400), ele sai
+        if (isDay && distPlayer > 400) {
+            a.isInHole = false;
+        }
+        return; // Enquanto estiver na toca, não executa o resto do código (IA/Movimento)
+    }
     ctx.save();
     ctx.translate(a.x - camX(), a.y - camY());
+    // --- BARRA DE VIDA (VERDE CLARO) ---
+    if (a.hp < a.maxHp) {
+        const barW = 30; // largura da barra
+        const barH = 5;  // altura da barra
+        
+        // Fundo da barra (cinza escuro)
+        ctx.fillStyle = "#444";
+        ctx.fillRect(-barW/2, -a.r - 15, barW, barH);
+        
+        // Vida atual (verde claro)
+        ctx.fillStyle = "#90ee90"; // LightGreen
+        const currentBarW = (a.hp / a.maxHp) * barW;
+        ctx.fillRect(-barW/2, -a.r - 15, currentBarW, barH);
+    }
     ctx.rotate(a.angle);
 
     // Corpo (bolinha marrom)
@@ -1483,49 +1750,42 @@ if(isBloodMoon){
     ctx.fillStyle="#fff";
     ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
   }
-  if(craftingOpen){
-  ctx.fillStyle = "rgba(0,0,0,0.75)";
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 28px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText("CRAFT", canvas.width/2, canvas.height/2 - 120);
-
-  ctx.font = "20px Arial";
-
-  // Caixa Machado
-  ctx.fillStyle = "rgba(255,255,255,0.1)";
-  ctx.fillRect(canvas.width/2 - 150, canvas.height/2 - 80, 300, 40);
-  ctx.fillStyle = "#fff";
-  ctx.fillText(
-    "Machado (3 Madeira, 1 Pedra)",
-    canvas.width/2,
-    canvas.height/2 - 50
-  );
-
-  // Caixa Picareta
-  ctx.fillStyle = "rgba(255,255,255,0.1)";
-  ctx.fillRect(canvas.width/2 - 150, canvas.height/2 - 30, 300, 40);
-  ctx.fillStyle = "#fff";
-  ctx.fillText(
-    "Picareta (2 Madeira, 3 Pedra)",
-    canvas.width/2,
-    canvas.height/2
-  );
-
-  ctx.font = "14px Arial";
-  ctx.fillText("Pressione C para fechar", canvas.width/2, canvas.height/2 + 60);
-
-  ctx.textAlign = "left";
-}
 if(!player.dead && !craftingOpen){
   drawInventory();
 }
 if(isMobile && !player.dead) drawMobileHUD();
 drawJoystick();
 drawAimJoystick();
+// Substitua o bloco do título dentro do if(craftingOpen)
+if(craftingOpen){
+  // Fundo do menu
+  ctx.fillStyle = "rgba(0,0,0,0.85)";
+  ctx.fillRect(canvas.width/2 - 150, canvas.height/2 - 120, 300, 220); // Aumentei um pouco o fundo
 
+  // TÍTULO CRAFT VERDE E GRANDE
+  ctx.save();
+  ctx.fillStyle = "#2ecc71"; // Verde esmeralda
+  ctx.font = "bold 40px Arial Black"; // Bem maior e em negrito
+  ctx.textAlign = "center";
+  // Desenhado mais alto (subi de -70 para -85)
+  ctx.fillText("CRAFT", canvas.width/2, canvas.height/2 - 85);
+  ctx.restore();
+
+  // Botão do Machado
+  ctx.fillStyle = "#444";
+  ctx.fillRect(canvas.width/2 - 130, canvas.height/2 - 40, 260, 45);
+  ctx.fillStyle = "white";
+  ctx.font = "18px Arial";
+  // ATUALIZADO: 3 Mad / 2 Grav
+  ctx.fillText("Machado (3 Mad / 2 Grav)", canvas.width/2 - 110, canvas.height/2 - 12);
+
+  // Botão da Picareta
+  ctx.fillStyle = "#444";
+  ctx.fillRect(canvas.width/2 - 130, canvas.height/2 + 25, 260, 45);
+  ctx.fillStyle = "white";
+  // ATUALIZADO: 3 Mad / 3 Grav
+  ctx.fillText("Picareta (3 Mad / 3 Grav)", canvas.width/2 - 110, canvas.height/2 + 53);
+}
 }
 function drawInventory(){
   const slotSize = 64;
