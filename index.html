@@ -122,7 +122,7 @@ function getTouchPos(touch){
   };
 }
 
-// ===== MOBILE CONTROLS teste  =====
+// ===== MOBILE CONTROLS =====
 let touchMove = { active:false, id:null, startX:0, startY:0, dx:0, dy:0 };
 let touchAim  = { active:false, id:null, startX:0, startY:0, dx:0, dy:0 };
 let touchAttack = false;
@@ -148,9 +148,25 @@ const bx = (canvas.width / 2) - (bw / 2);
 const by = 15;
 
 if (tx > bx && tx < bx + bw && ty > by && ty < by + bh) {
-    craftingOpen = !craftingOpen;
-    if (craftingOpen) inventoryOpen = false;
-    continue; // ISSO faz o clique parar aqui e não tentar andar
+    if (!craftingOpen) { // Só abre se estiver fechado
+        craftingOpen = true;
+        inventoryOpen = false;
+    }
+    continue;
+}
+
+// --- DENTRO DO SEU LOOP DE TOUCHSTART ---
+if (craftingOpen) {
+    const bw = 160;
+    const bx = (canvas.width / 2) - (bw / 2);
+    const sx_sair = bx + bw + 10; 
+    const sw = 100, sh = 50, by = 15;
+
+    // Detecta clique no botão VERMELHO de sair
+    if (tx > sx_sair && tx < sx_sair + sw && ty > by + 5 && ty < by + 5 + sh) {
+        craftingOpen = false;
+        continue;
+    }
 }
         // --- B) SE O CRAFT ESTIVER ABERTO ---
         if (craftingOpen) {
@@ -170,14 +186,14 @@ if (tx > bx && tx < bx + bw && ty > by && ty < by + bh) {
             continue;
         }
 
-        // --- 2. BOTÃO DE ATAQUE (PRIORIDADE) ---
+    // --- 2. BOTÃO DE ATAQUE (PRIORIDADE) ---
     const atkW = 140, atkH = 90;
     const atkX = canvas.width - atkW - 20;
     const atkY = (canvas.height / 2) - (atkH / 2);
     
     if (tx > atkX && tx < atkX + atkW && ty > atkY && ty < atkY + atkH) {
         player.attacking = true;
-        continue; // ISSO impede de girar a câmera ao bater!
+        continue; // Impede que a câmera gire enquanto você bate
     }
 
         // --- D) JOYSTICK (LADO ESQUERDO) ---
@@ -1648,10 +1664,14 @@ function drawAimJoystick(){
 function drawMobileHUD() {
     if (!isMobile) return;
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // Trava tudo na tela
+    ctx.setTransform(1, 0, 0, 1, 0, 0); 
 
-    // --- 📊 BARRAS COM ÍCONES (IGUAL PC) ---
-    let barY = 25; 
+    // --- 📊 BARRAS MAIORES E MAIS PARA A DIREITA ---
+    // Aumentei de 150 para 200 e puxei sx de 20 para 40
+    let barY = 25;
+    const barW = 200; 
+    const sx = 40; 
+    
     const bars = [
         { name: "HP", color: "#e74c3c", val: player.hp, max: player.maxHp, icon: "❤️" },
         { name: "STAMINA", color: player.exhausted ? "#95a5a6" : "#f1c40f", val: player.stamina, max: player.maxStamina, icon: "⚡" },
@@ -1659,77 +1679,86 @@ function drawMobileHUD() {
     ];
 
     bars.forEach(bar => {
+        ctx.fillStyle = "#fff"; ctx.font = "bold 16px Arial"; // Fonte maior
+        ctx.fillText(`${bar.icon} ${bar.name}`, sx - 10, barY + 12);
+        
+        ctx.fillStyle = "rgba(0,0,0,0.5)"; 
+        ctx.fillRect(sx + 90, barY, barW, 15); // Barra mais alta (15px)
+        
+        ctx.fillStyle = bar.color; 
+        ctx.fillRect(sx + 90, barY, barW * (bar.val / bar.max), 15);
+        barY += 30;
+    });
+    // --- 🟢 BOTÃO DE CRAFTING (CENTRO) ---
+    const bw = 160, bh = 60, bx = (canvas.width / 2) - (bw / 2), by = 15;
+    ctx.fillStyle = "#2ecc71"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3;
+    ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 18px Arial"; ctx.textAlign = "center";
+    ctx.fillText("CRAFTING", bx + bw/2, by + bh/2 + 7);
+
+    // --- 🔴 BOTÃO DE SAIR (AGORA VAI APARECER!) ---
+    // Coloquei ele um pouco mais para baixo se o craft estiver aberto para dar destaque
+    if (craftingOpen) {
+        const sw = 100, sh = 50;
+        const sx_sair = (canvas.width / 2) + (bw / 2) + 10; // Ao lado do botão verde
+        ctx.fillStyle = "#e74c3c"; 
+        ctx.fillRect(sx_sair, by + 5, sw, sh);
+        ctx.strokeStyle = "#fff"; 
+        ctx.strokeRect(sx_sair, by + 5, sw, sh);
         ctx.fillStyle = "#fff";
-        ctx.font = "bold 14px Arial";
-        ctx.fillText(`${bar.icon} ${bar.name}`, 20, barY + 10);
-        
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(100, barY, 150, 12); // Barra deslocada para o lado do ícone
-        
-        ctx.fillStyle = bar.color;
-        ctx.fillRect(100, barY, 150 * (bar.val / bar.max), 12);
-        barY += 25;
-    });
-   // --- 🟢 BOTÃO DE CRAFT (MAIS ALTO E SEMPRE VISÍVEL) ---
-    const bw = 160, bh = 70; // Mais alto como você pediu
-    const bx = (canvas.width / 2) - (bw / 2);
-    const by = 15; // Mais perto do topo
-
-    ctx.fillStyle = "#2c3e50"; 
-    ctx.strokeStyle = "#ecf0f1";
-    ctx.lineWidth = 3;
-    ctx.fillRect(bx, by, bw, bh);
-    ctx.strokeRect(bx, by, bw, bh);
-
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 18px Arial";
-    ctx.textAlign = "center";
-    // O texto muda, mas o botão continua lá!
-    ctx.fillText(craftingOpen ? "FECHAR [X]" : "CRAFTING [C]", bx + bw/2, by + bh/2 + 7);
-    
-  // --- 🗺️ MINIMAPA COMPLETO (Rios, Florestas e Jogador) ---
-    const sz = 160, p = 10;
-    const mx = canvas.width - sz - p;
-    const my = p;
-    const sc = sz / MAP; // MAP deve ser o tamanho do seu mundo (ex: 5000)
-
-    ctx.fillStyle = "rgba(0,0,0,0.8)"; 
-    ctx.fillRect(mx, my, sz, sz);
-    ctx.strokeStyle = "#fff";
-    ctx.strokeRect(mx, my, sz, sz);
-
-    // 1. Rios (Azul)
-    ctx.fillStyle = "#3498db";
-    rivers.forEach(r => {
-        ctx.fillRect(mx + r.x * sc, my + r.y * sc, r.w * sc, r.h * sc);
-    });
-
-    // 2. Florestas (Verde Escuro)
-    ctx.fillStyle = "#1b5e20";
-    if(typeof forests !== 'undefined') {
-        forests.forEach(f => {
-            ctx.beginPath();
-            ctx.arc(mx + f.x * sc, my + f.y * sc, f.r * sc, 0, Math.PI * 2);
-            ctx.fill();
-        });
+        ctx.font = "bold 16px Arial";
+        ctx.fillText("SAIR [X]", sx_sair + sw/2, by + 5 + sh/2 + 6);
     }
+    // --- 🔴 BOTÃO DE ATAQUE (DIREITA) ---
+    const atkW = 140, atkH = 90;
+    const atkX = canvas.width - atkW - 20;
+    const atkY = (canvas.height / 2) - (atkH / 2);
 
-    // 3. Montanhas (Cinza)
-    ctx.fillStyle = "#7f8c8d";
+    ctx.fillStyle = player.attacking ? "#c0392b" : "#e74c3c"; 
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 3;
+    ctx.fillRect(atkX, atkY, atkW, atkH);
+    ctx.strokeRect(atkX, atkY, atkW, atkH);
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 20px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("ATAQUE", atkX + atkW/2, atkY + atkH/2 + 7);
+
+    // --- 🗺️ MINIMAPA IGUAL AO PC (Areia e Rio Circular) ---
+    const sz = 150, p = 10;
+    const mx = canvas.width - sz - p, my = p;
+    const sc = sz / MAP; 
+
+    ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(mx, my, sz, sz);
+
+    // 1. Areia do Rio Linear
+    ctx.fillStyle = SAND_COLOR;
+    ctx.fillRect(mx + rivers[0].x*sc, my + (rivers[0].y-SAND_WIDTH)*sc, rivers[0].w*sc, (rivers[0].h+SAND_WIDTH*2)*sc);
+    
+    // 2. Areia do Rio Circular
+    ctx.beginPath();
+    ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, (circularRiver.r+SAND_WIDTH)*sc, 0, Math.PI*2);
+    ctx.fill();
+
+    // 3. Rio Linear (Azul)
+    ctx.fillStyle = "#3498db";
+    ctx.fillRect(mx + rivers[0].x*sc, my + rivers[0].y*sc, rivers[0].w*sc, rivers[0].h*sc);
+
+    // 4. Rio Circular (Azul)
+    ctx.beginPath();
+    ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, circularRiver.r*sc, 0, Math.PI*2);
+    ctx.fill();
+
+    // 5. Montanhas
+    ctx.fillStyle = MOUNTAIN_COLOR;
     mountains.forEach(m => {
-        ctx.beginPath();
-        ctx.arc(mx + m.x * sc, my + m.y * sc, m.r * sc, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, m.r*sc, 0, Math.PI*2); ctx.fill();
     });
 
-    // 4. JOGADOR (Ponto Branco Maior e Brilhante)
-    ctx.fillStyle = "#fff";
-    ctx.shadowBlur = 5;
-    ctx.shadowColor = "white";
-    ctx.beginPath();
-    ctx.arc(mx + player.x * sc, my + player.y * sc, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0; // Reseta brilho para não bugar o resto
+    // 6. Jogador
+    ctx.fillStyle = "#fff"; ctx.beginPath();
+    ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
 
     ctx.restore();
 }
