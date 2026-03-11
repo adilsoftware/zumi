@@ -133,80 +133,160 @@ let joystick = {
 
 // === CONTROLES MOBILE 100% FUNCIONAIS ===
 if(isMobile){
-  canvas.addEventListener("touchstart", e=>{
-  e.preventDefault();
-  for(const t of e.changedTouches){
+  canvas.addEventListener("touchstart", e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
 
-    const pos = getTouchPos(t);
+   for (const t of e.changedTouches) {
+    const tx = (t.clientX - rect.left) * scaleX;
+    const ty = (t.clientY - rect.top) * scaleY;
 
-    // JOYSTICK — lado esquerdo
-    if(pos.x < canvas.width / 2 && !touchMove.active){
+// --- 1. SE O INVENTÁRIO ESTIVER ABERTO (Prioridade) ---
+        if (inventoryOpen) {
+            // A) Botão FECHAR do Inventário (aquele vermelho que você adicionou)
+            const sw = 150, sh = 60;
+            const sx = (canvas.width / 2) - (sw / 2);
+            const sy = canvas.height - 100;
+            if (tx > sx && tx < sx + sw && ty > sy && ty < sy + sh) {
+                inventoryOpen = false;
+                continue;
+            }
 
-      touchMove.active = true;
-      touchMove.id = t.identifier;
+           // --- 1. SE O INVENTÁRIO ESTIVER ABERTO (Prioridade) ---
+if (inventoryOpen) {
+    // Botão FECHAR (Meio Esquerda para facilitar o polegar)
+    const sw = 140, sh = 80;
+    const sx = 20; 
+    const sy = canvas.height / 2 - 40;
 
-      touchMove.startX = Math.max(
-        joystick.radius + 10,
-        Math.min(canvas.width - joystick.radius - 10, pos.x)
-      );
+    if (tx > sx && tx < sx + sw && ty > sy && ty < sy + sh) {
+        inventoryOpen = false;
+        continue;
+    }
+            }
+            continue; // Bloqueia toques no jogo enquanto inventário está aberto
+        }
+        
+    // --- A) SE O CRAFT ESTIVER ABERTO (Prioridade Total) ---
+    if (craftingOpen) {
+        // 1. Botão FECHAR (Vermelho no topo direito)
+        const sw = 140, sh = 70;
+        const sx = canvas.width - sw - 20, sy = 20;
+        if (tx > sx && tx < sx + sw && ty > sy && ty < sy + sh) {
+            craftingOpen = false;
+            continue;
+        }
 
-      touchMove.startY = Math.max(
-        canvas.height * 0.6,
-        Math.min(canvas.height - joystick.radius - 10, pos.y)
-      );
-
-      touchMove.dx = 0;
-      touchMove.dy = 0;
+        // 2. Itens da Lista (Botões Gigantes)
+        const bW = 450, bH = 60, startY = 120;
+        const options = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "campfire"];
+        
+        for (let i = 0; i < options.length; i++) {
+            const x = (canvas.width / 2) - (bW / 2);
+            const y = startY + (i * (bH + 15));
+            if (tx > x && tx < x + bW && ty > y && ty < y + bH) {
+                tryCraft(options[i]);
+                continue;
+            }
+        }
+        continue; // Bloqueia toques no resto do jogo enquanto o craft está aberto
     }
 
-    // MIRA / ATAQUE — lado direito
-    else if(pos.x >= canvas.width / 2 && !touchAim.active){
+    // --- B) SE O CRAFT ESTIVER FECHADO ---
 
-      touchAim.active = true;
-      touchAim.id = t.identifier;
-
-      touchAim.startX = pos.x;
-      touchAim.startY = pos.y;
-
-      touchAim.dx = 0;
-      touchAim.dy = 0;
+    // 1. Botão de Abrir Crafting (Verde no topo)
+    const bw = 160, bh = 70, bx = (canvas.width / 2) - (bw / 2), by = 15;
+    if (tx > bx && tx < bx + bw && ty > by && ty < by + bh) {
+        craftingOpen = true;
+        continue;
     }
-
-  }
-}, {passive:false});
-
-  canvas.addEventListener("touchmove", e=>{
-  e.preventDefault();
-
-  for(const t of e.changedTouches){
-
-    if(t.identifier === touchMove.id){
-      const pos = getTouchPos(t);
-      touchMove.dx = pos.x - touchMove.startX;
-      touchMove.dy = pos.y - touchMove.startY;
+     //novo lado tocou bateu 
+    if (tx >= canvas.width / 2) {
+        // Mudamos para touchAttack (a variável que o jogo espera)
+        touchAttack = true; 
+        
+        if (!touchAim.active) {
+            touchAim.active = true;
+            touchAim.id = t.identifier;
+            touchAim.startX = tx;
+            touchAim.startY = ty;
+        }
     }
-
-    if(t.identifier === touchAim.id){
-      const pos = getTouchPos(t);
-      touchAim.dx = pos.x - touchAim.startX;
-      touchAim.dy = pos.y - touchAim.startY;
+// NOVO: Botão de Abrir ITENS (Azul no meio esquerda)
+        const bw_i = 140, bh_i = 70, bx_i = 20, by_i = canvas.height / 2 - 35;
+        if (tx > bx_i && tx < bx_i + bw_i && ty > by_i && ty < by_i + bh_i) {
+            inventoryOpen = true;
+            continue;
+        }
+        // --- D) JOYSTICK (LADO ESQUERDO) ---
+        // Se tocar no lado esquerdo da tela, o jogador ANDA
+        if (tx < canvas.width / 2 && !touchMove.active) {
+            touchMove.active = true;
+            touchMove.id = t.identifier;
+            touchMove.startX = tx;
+            touchMove.startY = ty;
+        } 
+        // --- E) MIRA (LADO DIREITO) ---
+        // Se tocar no lado direito (fora do botão de ataque), ele GIRA
+        else if (tx >= canvas.width / 2 && !touchAim.active) {
+            touchAim.active = true;
+            touchAim.id = t.identifier;
+            touchAim.startX = tx;
+            touchAim.startY = ty;
+        }
     }
+}, { passive: false });
+ canvas.addEventListener("touchmove", e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
 
-  }
-}, {passive:false});
+    for (const t of e.changedTouches) {
+        const tx = (t.clientX - rect.left) * scaleX;
+        const ty = (t.clientY - rect.top) * scaleY;
+
+        if (t.identifier === touchMove.id) {
+            touchMove.dx = tx - touchMove.startX;
+            touchMove.dy = ty - touchMove.startY;
+        }
+
+        if (t.identifier === touchAim.id) {
+            touchAim.dx = tx - touchAim.startX;
+            touchAim.dy = ty - touchAim.startY;
+        }
+    }
+}, { passive: false });
 
   canvas.addEventListener("touchend", e => {
-  e.preventDefault();
-  for(const t of e.changedTouches){
-    if(t.identifier === touchAim.id){
-      if(!player.attacking) touchAttack = true; // dispara ataque mesmo sem mover
-      touchAim.active = false;
-      touchAim.dx = 0;
-      touchAim.dy = 0;
-      touchAim.id = null;
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+        // Se soltou o lado esquerdo, para de andar
+        if (t.identifier === touchMove.id) {
+            touchMove.active = false;
+            touchMove.id = null;
+            touchMove.dx = 0; touchMove.dy = 0;
+            touchAttack = false;
+        }
+        
+        // Se soltou o lado direito
+        if (t.identifier === touchAim.id) {
+            touchAim.active = false;
+            touchAim.id = null;
+            touchAim.dx = 0; touchAim.dy = 0;
+        }
+
+        // SEMPRE que soltar qualquer dedo no lado direito, cancelamos o ataque
+        const rect = canvas.getBoundingClientRect();
+        const tx = (t.clientX - rect.left) * (canvas.width / rect.width);
+        if (tx >= canvas.width / 2) {
+            touchAttack = false; // Resetamos a variável de toque
+            player.attacking = false;
+          }
     }
-  }
-});
+  },  { passive: false });
 }
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 720;
@@ -277,17 +357,39 @@ const stars = [];
 for(let i=0;i<400;i++){
   stars.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2, a: Math.random()*0.8});
 }
-const player={
-  x:MAP/2, y:MAP/2-2500, r:20,
-  speed:4, hp:100, maxHp:100,
-  angle:0, hidden:false,
-  attacking:false, atkTimer:0,
-  weapon:0, hitTimer:0,
-  attackProgress:0,
-  stamina:100, maxStamina:100, exhausted: false,
-  food: 100, maxFood: 100,
+const MENU_CRAFT = {
+    itemHeight: 45,
+    startY: 0.25, // Começa em 25% da altura da tela
+    width: 300
+};
+const LIMITES = {
+  recursos: 50,    // Valor que você alterou
+  ferramentas: 1
+};
+const player = {
+  x: MAP / 2, 
+  y: MAP / 2 - 2500, 
+  r: 20,
+  speed: 4, 
+  hp: 100, 
+  maxHp: 100,
+  angle: 0, 
+  hidden: false,
+  attacking: false, 
+  atkTimer: 0,
+  weapon: 0, // 0 é a "Mão" na sua lista de weapons
+  hitTimer: 0,
+  attackProgress: 0,
+  stamina: 100, 
+  maxStamina: 100, 
+  exhausted: false,
+  food: 100, 
+  maxFood: 100,
   foodCooldown: 0,
-  wood:0, stone:0, gold:0, sticks:0,
+  wood: 0, 
+  stone: 0, 
+  gold: 0, 
+  sticks: 0,
   dead: false,
   inventory: {
     axe_wood: 0,
@@ -309,7 +411,8 @@ const recipes = {
   axe_stone: { name: "Machado de Pedra", wood: 3, stone: 3, sticks: 3, weaponIndex: 3 },
   pickaxe_stone: { name: "Picareta de Pedra", wood: 3, stone: 4, sticks: 2, weaponIndex: 4 },
   campfire: { name: "Fogueira", wood: 2, sticks: 10, isPlaceable: true },
-  spear: { name: "Lança", wood: 4, sticks: 2, weaponIndex: 5 }
+  spear: { name: "Lança", wood: 4, sticks: 2, weaponIndex: 5 },
+  wood_convert: { name: "Refinar Madeira", wood: 0, sticks: 2, yield: 1 } 
 };
 const weapons = [
   { name: "Mão", range: 30, damage: 5, speed: 12, style: "hand" },
@@ -683,100 +786,175 @@ function createParticles(x,y,color,count=6, speedMult=1){
   }
 }
 
-canvas.addEventListener("click", e => {
-  if(!craftingOpen) return;
-
-  const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
-
-  // Lista dos IDs na mesma ordem do desenho do menu
-  const listaIds = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "campfire"];
-
-  // Loop para verificar cada um dos 6 botões
-  listaIds.forEach((id, i) => {
-    const yPos = centerY - 100 + (i * 45); // Mesma fórmula do desenho (draw)
-    
-    // Verifica se o clique foi dentro do retângulo do botão atual
-    if(mx > centerX - 140 && mx < centerX + 140 && 
-       my > yPos && my < yPos + 35) {
-        
-       tryCraft(id); // Chama a fabricação para o item clicado
-    }
-  });
-});
 canvas.addEventListener("mousedown", e => {
-  if(craftingOpen) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
 
-  const mx = e.clientX;
-  const my = e.clientY;
+    if (craftingOpen) {
+        const centerX = canvas.width / 2;
+        
+        // --- O AJUSTE ESTÁ AQUI ---
+        // Se o clique está "baixo demais", subtraímos pixels para a caixa SUBIR.
+        // Tente mudar o -20 para -30 se ainda estiver baixo, ou -10 se subir demais.
+        const startY = (canvas.height * MENU_CRAFT.startY) - 20;
+        const craftOptions = [
+            { id: "axe_wood" },
+            { id: "pickaxe_wood" },
+            { id: "axe_stone" },
+            { id: "pickaxe_stone" },
+            { id: "spear" },
+            { id: "campfire" },
+            { id: "wood_convert" }
+        ];
 
-  inventorySlots.forEach(slot => {
-    if(
-      mx >= slot.x &&
-      mx <= slot.x + slot.w &&
-      my >= slot.y &&
-      my <= slot.y + slot.h
-    ){
-      // slots de ferramentas
-      if(slot.index === 3) player.weapon = 1; // machado
-      if(slot.index === 4) player.weapon = 2; // picareta
-      if(slot.index === 5) player.weapon = 0; // mão
+        craftOptions.forEach((item, i) => {
+            const btnW = MENU_CRAFT.width;
+            const btnH = MENU_CRAFT.itemHeight;
+            const btnX = centerX - (btnW / 2);
+            
+            // ATENÇÃO: Se no seu DRAW você usa (btnH + 5), mantenha 5 aqui.
+            // Se usa (btnH + 10), mude para 10 aqui. Devem ser iguais!
+            const yPos = startY + (i * (btnH + 5)); 
+
+            if (mx >= btnX && mx <= btnX + btnW && my >= yPos && my <= yPos + btnH) {
+                tryCraft(item.id);
+            }
+        });
+        return; 
     }
-  });
+
+    // --- 2. CLIQUE NO INVENTÁRIO PARA EQUIPAR ---
+    if (inventoryOpen) {
+        const slotSize = 110;
+        const gap = 15;
+        const cols = 7;
+        const centerX = canvas.width / 2;
+        const startX = centerX - ((slotSize + gap) * cols) / 2;
+
+        // Loop pelos 14 slots para detectar clique
+        for (let i = 0; i < 14; i++) {
+            const x = startX + (i % cols) * (slotSize + gap);
+            const y = 150 + Math.floor(i / cols) * (slotSize + gap);
+
+            if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
+                // Mapeamento dos índices para as ferramentas
+                if (i === 6) player.weapon = 1; // Machado M.
+                if (i === 7) player.weapon = 2; // Picareta M.
+                if (i === 8) player.weapon = 3; // Machado P.
+                if (i === 9) player.weapon = 4; // Picareta P.
+                if (i === 5) player.weapon = 5; // Lança
+                if (i === 4) { // Clicou na Fogueira no inventário
+                     placingCampfire = true;
+                     inventoryOpen = false;
+                }
+                if (i <= 3 || i >= 10) player.weapon = 0; // Mão / Recursos
+                return;
+            }
+        }}
+    
+    // Ativa o clique de ataque se não houver menus abertos
+    mouse.down = true;
 });
 function drawFullscreenInventory() {
   if (!inventoryOpen) return;
 
   ctx.save();
-  // Fundo escuro para dar foco ao menu
-  ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const centerX = canvas.width / 2;
   ctx.fillStyle = "#2ecc71";
-  ctx.font = "bold 45px 'Segoe UI'";
+  ctx.font = "bold 40px Arial Black";
   ctx.textAlign = "center";
-  ctx.fillText("INVENTÁRIO", centerX, 100);
+  ctx.fillText("INVENTÁRIO (CAPACIDADE)", centerX, 70);
 
-  // Grade de Itens
+  // Mapeamento dos 14 itens/slots
   const items = [
-    { n: "Madeira", q: player.wood, i: "🪵" },
-    { n: "Pedra", q: player.stone, i: "🪨" },
-    { n: "Ouro", q: player.gold, i: "✨" },
-    { n: "Gravetos", q: player.sticks, i: "🥢" },
-    { n: "Fogueira", q: player.inventory.campfire, i: "🔥" },
-    { n: "Lança", q: player.inventory.spear, i: "⚔️" },
-    { n: "Comida", q: Math.floor(player.food), i: "🍎" }
+    { label: "MADEIRA", value: player.wood, color: "#8d6e63", detail: "#5d4037", max: LIMITES.recursos },
+    { label: "PEDRA", value: player.stone, color: "#757575", detail: "#4a4a4a", max: LIMITES.recursos },
+    { label: "OURO", value: player.gold, color: "#f1c40f", detail: "#d4ac0d", max: LIMITES.recursos },
+    { label: "GRAVETO", value: player.sticks, max: LIMITES.recursos },
+    { label: "FOGUEIRA", value: player.inventory.campfire, color: "#e67e22", detail: "#d35400", max: 5 },
+    { label: "LANÇA", value: player.inventory.spear, color: "#95a5a6", detail: "#7f8c8d", max: LIMITES.ferramentas },
+    { label: "MACHADO M.", value: player.inventory.axe_wood, color: "#8d6e63", detail: "#fff", max: LIMITES.ferramentas },
+    { label: "PICARETA M.", value: player.inventory.pickaxe_wood, color: "#8d6e63", detail: "#fff", max: LIMITES.ferramentas },
+    { label: "MACHADO P.", value: player.inventory.axe_stone, color: "#757575", detail: "#fff", max: LIMITES.ferramentas },
+    { label: "PICARETA P.", value: player.inventory.pickaxe_stone, color: "#757575", detail: "#fff", max: LIMITES.ferramentas },
+    { label: "COMIDA", value: Math.floor(player.food), color: "#e74c3c", detail: "#c0392b", max: 100 },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true }
   ];
 
-  const slotSize = 90;
-  const gap = 20;
-  const startX = centerX - (4 * (slotSize + gap)) / 2;
+  const slotSize = 110;
+  const gap = 15;
+  const cols = 7; // 7 colunas para dar 14 slots (7x2)
+  const startX = centerX - ((slotSize + gap) * cols) / 2;
 
-  items.forEach((item, index) => {
-    const x = startX + (index % 4) * (slotSize + gap);
-    const y = 180 + Math.floor(index / 4) * (slotSize + gap);
+  items.forEach((res, index) => {
+    const x = startX + (index % cols) * (slotSize + gap);
+    const y = 150 + Math.floor(index / cols) * (slotSize + gap);
 
-    // Slot
-    ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
-    ctx.strokeStyle = "#2ecc71";
+    // Fundo do Slot
+    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.strokeStyle = (res.value >= res.max && !res.empty) ? "#e74c3c" : "#2ecc71"; // Vermelho se estiver cheio
     ctx.lineWidth = 2;
     ctx.fillRect(x, y, slotSize, slotSize);
     ctx.strokeRect(x, y, slotSize, slotSize);
 
-    // Ícone e Quantidade
-    ctx.font = "40px Arial";
-    ctx.fillText(item.i, x + slotSize / 2, y + slotSize / 2 + 10);
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 16px Arial";
-    ctx.textAlign = "right";
-    ctx.fillText(item.q, x + slotSize - 5, y + slotSize - 5);
-    ctx.textAlign = "center";
+    if (!res.empty) {
+      const iconCenterX = x + slotSize / 2;
+      const iconCenterY = y + slotSize / 2 - 10;
+
+      // Desenho do Graveto
+      if (res.label === "GRAVETO") {
+        ctx.save();
+        ctx.translate(iconCenterX, iconCenterY);
+        ctx.rotate(-Math.PI / 4);
+        ctx.fillStyle = "#8b5a2b";
+        ctx.fillRect(-5, -15, 10, 30);
+        ctx.restore();
+      } 
+      // Outros ícones (Madeira, Pedra, Ouro, Ferramentas)
+      else if (res.color) {
+        ctx.fillStyle = res.color;
+        ctx.fillRect(iconCenterX - 15, iconCenterY - 15, 30, 30);
+        ctx.strokeStyle = res.detail;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(iconCenterX - 15, iconCenterY - 15, 30, 30);
+      }
+
+      // Texto de quantidade e limite
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 11px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(res.label, iconCenterX, y + slotSize - 30);
+      
+      ctx.fillStyle = (res.value >= res.max) ? "#ff4d4d" : "#2ecc71";
+      ctx.font = "bold 14px Arial";
+      ctx.fillText(`${res.value} / ${res.max || 0}`, iconCenterX, y + slotSize - 10);
+    }
   });
+
+  drawHotbar(); // Chama a barra de baixo junto com o inventário grande
+
+  // Botão de Fechar Mobile (Meio Esquerda)
+  if (isMobile) {
+    const sw = 140, sh = 80, sx = 20, sy = canvas.height / 2 - 40;
+    ctx.fillStyle = "#e74c3c";
+    ctx.fillRect(sx, sy, sw, sh);
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(sx, sy, sw, sh);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 20px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("FECHAR", sx + sw/2, sy + sh/2 + 8);
+  }
 
   ctx.restore();
 }
@@ -784,20 +962,37 @@ function tryCraft(id) {
   const r = recipes[id];
   if (!r) return;
 
-  // Verifica se tem recursos
+  // Limite para ferramentas (Não deixa fazer mais de 1)
+  const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear"];
+  if (ferramentas.includes(id) && player.inventory[id] >= LIMITES.ferramentas) {
+    console.log("Você já tem esta ferramenta!");
+    return;
+  }
+
+  // Limite para recurso (Se estiver refinando madeira)
+  if (id === "wood_convert" && player.wood >= LIMITES.recursos) {
+    console.log("Limite de madeira atingido!");
+    return;
+  }
+
   const hasWood = player.wood >= r.wood;
   const hasSticks = player.sticks >= r.sticks;
   const hasStone = player.stone >= (r.stone || 0);
 
   if (hasWood && hasSticks && hasStone) {
-    player.wood -= r.wood;
-    player.sticks -= r.sticks;
-    player.stone -= (r.stone || 0);
-    
-    // Adiciona ao inventário
-    player.inventory[id]++;
-    console.log("Você fabricou: " + r.name);
-  } else {
+        player.wood -= r.wood;
+        player.sticks -= r.sticks;
+        player.stone -= (r.stone || 0);
+        
+        if (id === "wood_convert") {
+            if(player.wood < LIMITES.recursos) player.wood += 1;
+        } else {
+            // Garante que o item existe no objeto antes de somar
+            if (player.inventory[id] === undefined) player.inventory[id] = 0;
+            player.inventory[id]++; 
+        }
+        console.log("Sucesso: " + id);
+    } else {
     console.log("Recursos insuficientes!");
   }
 }
@@ -1086,137 +1281,100 @@ animals.forEach(ani => {
         player.y += Math.sin(angle) * overlap;
     }
 });
+// --- 1. COLETA PASSIVA (GRAVETOS NO CHÃO) ---
 resources.forEach(res => {
   if(!res.alive) return;
-
   if(res.type === "stick"){
     if(Math.hypot(player.x - res.x, player.y - res.y) < player.r + res.r){
-      res.alive = false;      // "Mata" o item para ele sumir e iniciar o respawn
-      res.respawnTimer = 0;   // Reseta o contador de tempo para renascer
-      player.sticks += 1;     // Adiciona ao seu inventário de gravetos
-      
-      // Efeito visual de madeira ao coletar
-      if(typeof createParticles === "function") {
-        createParticles(res.x, res.y, "#8b5a2b", 4, 0.5);
+      // Só coleta se tiver menos que o limite
+      if(player.sticks < LIMITES.recursos) {
+        res.alive = false;
+        res.respawnTimer = 0;
+        player.sticks = Math.min(LIMITES.recursos, player.sticks + 1);
+        if(typeof createParticles === "function") createParticles(res.x, res.y, "#8b5a2b", 4, 0.5);
       }
     }
   }
 });
- if(isMobile){
+
+// --- 2. SISTEMA DE MIRA (MOBILE / MOUSE) ---
+if(isMobile){
   if(touchAim.active && Math.hypot(touchAim.dx, touchAim.dy) > 5){
-  player.angle = Math.atan2(touchAim.dy, touchAim.dx);
+    player.angle = Math.atan2(touchAim.dy, touchAim.dx);
+  }
+} else {
+  player.angle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
 }
 
-  // se não estiver mirando, mantém o último ângulo (não faz nada)
-}
-else{
-  player.angle = Math.atan2(
-    mouse.y - canvas.height/2,
-    mouse.x - canvas.width/2
-  );
-}
+// --- 3. ESCONDER NO MATO ---
+player.hidden = false;
+bushes.forEach(b => { 
+  if(Math.hypot(player.x - b.x, player.y - b.y) < b.r * 1.1) player.hidden = true; 
+});
 
-  player.hidden=false;
-  bushes.forEach(b=>{ if(Math.hypot(player.x-b.x,player.y-b.y)<b.r*1.1) player.hidden=true; });
+// --- 4. SISTEMA DE ATAQUE UNIFICADO ---
+if ((!isMobile && mouse.down && !player.attacking) || (isMobile && touchAttack && !player.attacking)) {
 
-  if (
-  (!isMobile && mouse.down && !player.attacking) ||
-  (isMobile && touchAttack && !player.attacking)
-) {
-  touchAttack = false;
   player.attacking = true;
   player.atkTimer = weapons[player.weapon].speed;
   player.attackProgress = 1;
-const w = weapons[player.weapon];
-const hx = player.x + Math.cos(player.angle) * w.range;
-const hy = player.y + Math.sin(player.angle) * w.range;
 
-bushes.forEach(b => {
-  if (b.hasFruit && Math.hypot(hx - b.x, hy - b.y) < b.r + 20) {
-    b.hasFruit = false;
-    player.food = Math.min(player.maxFood, player.food + 10);
-player.foodCooldown = 180; // 3 segundos sem perder fome
-    createParticles(hx, hy, "#ff4d4d", 8);
-  }
-});
+  const w = weapons[player.weapon];
+  const hx = player.x + Math.cos(player.angle) * w.range;
+  const hy = player.y + Math.sin(player.angle) * w.range;
 
-
-// 🌲 CORTE DE ÁRVORE
-resources.forEach(res => {
-  if(!res.alive) return;
-  if(res.type !== "tree") return;
-
-  if(Math.hypot(hx - res.x, hy - res.y) < res.r + 15){
-
-    // só machado corta
-    if(weapons[player.weapon].style !== "axe") return;
-
-    res.hp -= weapons[player.weapon].damage;
-   createParticles(hx, hy, "#6d4c41", 6);
-
-if(res.hp <= 0){
-  res.alive = false;
-  player.wood += (res.yield || 1); // Ganha 1 se for pequena, 3 se for grande
-player.sticks += 2;}
-  }
-});
-// 🥥 COLETA DO COQUEIRO
-resources.forEach(res => {
-  if(!res.alive || res.type !== "palm") return;
-
-  // hx e hy já estão definidos lá no topo do seu sistema de ataque
-  const dist = Math.hypot(hx - res.x, hy - res.y);
-  
-  if(dist < res.r + 15){
-    // Só o machado corta!
-    if(weapons[player.weapon].style !== "axe") return;
-
-    res.hp -= weapons[player.weapon].damage;
-    createParticles(hx, hy, "#27ae60", 6); // Partículas de folhas
-
-    if(res.hp <= 0){
-      res.alive = false;
-      res.respawnTimer = 0;
-      
-      // RECOMPENSA QUE VOCÊ PEDIU:
-      player.wood += 2;      // +2 Madeiras
-      player.sticks += 1; // +1 Galho (Stick)
-      player.food = Math.min(player.maxFood, player.food + 20); // +20 de Comida (Coco)
-      
-      // Partículas brancas para o coco
-      createParticles(res.x, res.y, "#ffffff", 12, 1.5);
+  // --- COLETA DE FRUTAS ---
+  bushes.forEach(b => {
+    if (b.hasFruit && Math.hypot(hx - b.x, hy - b.y) < b.r + 20) {
+      b.hasFruit = false;
+      player.food = Math.min(player.maxFood, player.food + 10);
+      player.foodCooldown = 180;
+      createParticles(hx, hy, "#ff4d4d", 8);
     }
-  }
-});
-// ⛏️ ATAQUE EM PEDRA / OURO (UNIFICADO)
-resources.forEach(res => {
-  if(!res.alive) return;
-  if(res.type !== "stone" && res.type !== "gold") return;
+  });
 
-  const dist = Math.hypot(hx - res.x, hy - res.y);
-  if(dist > res.r + 15) return;
+  // --- ATAQUE A RECURSOS (ÁRVORE, COQUEIRO, PEDRA, OURO) ---
+  resources.forEach(res => {
+    if(!res.alive) return;
+    const dist = Math.hypot(hx - res.x, hy - res.y);
+    if(dist > res.r + 15) return;
 
-  // só picareta minera
-  if(weapons[player.weapon].style !== "pickaxe") return;
+    // MADEIRA / COQUEIRO (PRECISA DE MACHADO)
+    if(res.type === "tree" || res.type === "palm") {
+      if(w.style !== "axe") return;
+      res.hp -= w.damage;
+      createParticles(hx, hy, res.type === "tree" ? "#6d4c41" : "#27ae60", 6);
 
-  res.hp -= weapons[player.weapon].damage;
-  createParticles(
-  hx,
-  hy,
-  res.type === "gold" ? "#FFD700" : "#7f8c8d",
-  res.type === "gold" ? 10 : 8,
-  res.type === "gold" ? 1.4 : 1.1
-);
+      if(res.hp <= 0) {
+        res.alive = false;
+        res.respawnTimer = 0;
+        if(res.type === "tree") {
+          player.wood = Math.min(LIMITES.recursos, player.wood + (res.yield || 1));
+          player.sticks = Math.min(LIMITES.recursos, player.sticks + 2);
+        } else { // PALM
+          player.wood = Math.min(LIMITES.recursos, player.wood + 2);
+          player.sticks = Math.min(LIMITES.recursos, player.sticks + 1);
+          player.food = Math.min(player.maxFood, player.food + 20);
+          createParticles(res.x, res.y, "#ffffff", 12, 1.5);
+        }
+      }
+    }
 
-  if(res.hp <= 0){
-  res.alive = false;
+    // PEDRA / OURO (PRECISA DE PICARETA)
+    if(res.type === "stone" || res.type === "gold") {
+      if(w.style !== "pickaxe") return;
+      res.hp -= w.damage;
+      createParticles(hx, hy, res.type === "gold" ? "#FFD700" : "#7f8c8d", 8);
 
-  if(res.type === "gold") player.gold += 1;
-  if(res.type === "stone") player.stone += 1;
-
-  if(res.ref) res.ref.active = false;
-}
-});
+      if(res.hp <= 0) {
+        res.alive = false;
+        res.respawnTimer = 0;
+        if(res.type === "gold") player.gold = Math.min(LIMITES.recursos, player.gold + 1);
+        if(res.type === "stone") player.stone = Math.min(LIMITES.recursos, player.stone + 1);
+        if(res.ref) res.ref.active = false;
+      }
+    }
+  });
 
 if(player.attacking){
   const hx = player.x + Math.cos(player.angle) * weapons[player.weapon].range;
@@ -1560,42 +1718,146 @@ function drawAimJoystick(){
   ctx.fillStyle = "rgba(255,255,255,0.45)";
   ctx.fill();
 }
-function drawMobileHUD(){
-    // barras adaptáveis
-const barWidth = Math.min(160, canvas.width * 0.4);
-const barHeight = 8;
-const barX = 20;
-const barY = 20; // ajuste para mobile se quiser mais baixo
-    const x = 20;
-    let y = 20;
+function drawMobileCrafting() {
+    if (!craftingOpen) return; // Se não estiver aberto, não faz nada
 
-    ctx.font = `${Math.floor(barHeight*1.2)}px Arial`;
-    ctx.textBaseline = "middle";
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Garante que o menu não "ande" com a câmera
 
-    // ❤️ VIDA
-    ctx.fillText("❤️", x, y);
-    ctx.fillStyle="rgba(0,0,0,0.4)";
-    ctx.fillRect(x+30, y-7, barWidth, barHeight);
-    ctx.fillStyle="#e74c3c";
-    ctx.fillRect(x+30, y-7, barWidth*(player.hp/player.maxHp), barHeight);
-    y += barHeight + 14;
+    // 1. Fundo escuro para destacar o menu no celular
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // ⚡ STAMINA
-    ctx.fillText("⚡", x, y);
-    ctx.fillStyle="rgba(0,0,0,0.4)";
-    ctx.fillRect(x+30, y-7, barWidth, barHeight);
-    ctx.fillStyle=player.exhausted ? "#95a5a6" : "#f1c40f";
-    ctx.fillRect(x+30, y-7, barWidth*(player.stamina/player.maxStamina), barHeight);
-    y += 30;
+    // 2. Botão FECHAR (Vermelho, no topo direito, bem grande)
+    const sw = 140, sh = 70;
+    const sx = canvas.width - sw - 20;
+    const sy = 20;
+    ctx.fillStyle = "#e74c3c";
+    ctx.fillRect(sx, sy, sw, sh);
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(sx, sy, sw, sh);
+    
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 22px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("FECHAR", sx + sw/2, sy + sh/2 + 8);
 
-    // 🍗 FOME
-    ctx.fillText("🍗", x, y);
-    ctx.fillStyle="rgba(0,0,0,0.4)";
-    ctx.fillRect(x+30, y-7, barWidth, barHeight);
-    ctx.fillStyle="#ff9800";
-    ctx.fillRect(x+30, y-7, barWidth*(player.food/player.maxFood), barHeight);
- }   
+    // 3. Título do Menu
+    ctx.font = "bold 35px Arial";
+    ctx.fillText("CRAFTING MOBILE", canvas.width / 2, 60);
 
+    // 4. Lista de itens para craftar (Botões gigantes)
+    const options = [
+        { id: "axe_wood", name: "🪓 Machado de Madeira" },
+        { id: "pickaxe_wood", name: "⛏️ Picareta de Madeira" },
+        { id: "axe_stone", name: "🪓 Machado de Pedra" },
+        { id: "pickaxe_stone", name: "⛏️ Picareta de Pedra" },
+        { id: "spear", name: "🗡️ Lança" },
+        { id: "campfire", name: "🔥 Fogueira" }
+    ];
+
+    const bW = 450; // Largura do botão
+    const bH = 60;  // Altura do botão
+    const startY = 120;
+
+    options.forEach((item, i) => {
+        const x = (canvas.width / 2) - (bW / 2);
+        const y = startY + (i * (bH + 15));
+
+        ctx.fillStyle = "#2c3e50";
+        ctx.fillRect(x, y, bW, bH);
+        ctx.strokeStyle = "#ecf0f1";
+        ctx.strokeRect(x, y, bW, bH);
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "20px Arial";
+        ctx.fillText(item.name, x + bW / 2, y + bH / 2 + 7);
+    });
+
+    ctx.restore();
+}
+function drawMobileHUD() {
+    if (!isMobile) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Trava o HUD na tela do celular
+
+    // --- 📊 BARRAS (MAIS PARA A ESQUERDA) ---
+    let barY = 25;
+    const barW = 180; // Tamanho bom para mobile
+    const sx = 20;    // Encostado na tela (20px de margem)
+    
+    const bars = [
+        { name: "HP", color: "#e74c3c", val: player.hp, max: player.maxHp, icon: "❤️" },
+        { name: "STAMINA", color: player.exhausted ? "#95a5a6" : "#f1c40f", val: player.stamina, max: player.maxStamina, icon: "⚡" },
+        { name: "FOOD", color: "#ff9800", val: player.food, max: player.maxFood, icon: "🍗" }
+    ];
+
+    bars.forEach(bar => {
+        // Ícone e Nome
+        ctx.fillStyle = "#fff"; ctx.font = "bold 14px Arial";
+        ctx.textAlign = "left";
+        ctx.fillText(`${bar.icon} ${bar.name}`, sx, barY + 12);
+        
+        // Fundo da barra
+        ctx.fillStyle = "rgba(0,0,0,0.5)"; 
+        ctx.fillRect(sx + 90, barY, barW, 14);
+        
+        // Preenchimento
+        ctx.fillStyle = bar.color; 
+        ctx.fillRect(sx + 90, barY, barW * (bar.val / bar.max), 14);
+        barY += 28;
+    });
+
+    // --- 🟢 BOTÃO DE CRAFTING (CENTRO) ---
+    const bw = 160, bh = 70, bx = (canvas.width / 2) - (bw / 2), by = 15;
+    ctx.fillStyle = "#2ecc71"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3;
+    ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 18px Arial"; ctx.textAlign = "center";
+    ctx.fillText("CRAFTING", bx + bw/2, by + bh/2 + 7);
+           //INVENTÁRIO 
+    const btnW = 140, btnH = 70;
+const btnX = 20; // Lado esquerdo da tela
+const btnY = canvas.height / 2 - 35; // Bem no meio da altura
+ctx.fillStyle = "#3498db"; // Azul
+ctx.fillRect(btnX, btnY, btnW, btnH);
+ctx.strokeStyle = "#fff";
+ctx.strokeRect(btnX, btnY, btnW, btnH);
+
+ctx.fillStyle = "#fff";
+ctx.font = "bold 18px Arial";
+ctx.textAlign = "center";
+ctx.fillText("ITENS", btnX + btnW / 2, btnY + btnH / 2 + 7);
+
+    // --- 🔴 BOTÃO DE SAIR (SINCRONIZADO COM SEU TOUCHSTART) ---
+    if (craftingOpen) {
+        const sx_sair = bx + bw + 10; 
+        const sw = 100, sh = 50; 
+        ctx.fillStyle = "#e74c3c"; 
+        ctx.fillRect(sx_sair, by + 5, sw, sh); // by+5 para alinhar com o toque (sh=50)
+        ctx.strokeStyle = "#fff"; 
+        ctx.strokeRect(sx_sair, by + 5, sw, sh);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px Arial";
+        ctx.fillText("SAIR", sx_sair + sw/2, by + 5 + sh/2 + 6);
+    }
+    // --- 🗺️ MINIMAPA (IGUAL PC) ---
+    const sz = 150, p = 15;
+    const mx = canvas.width - sz - p, my = p;
+    const sc = sz / MAP; 
+    ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(mx, my, sz, sz);
+    ctx.fillStyle = SAND_COLOR;
+    ctx.fillRect(mx + rivers[0].x*sc, my + (rivers[0].y-SAND_WIDTH)*sc, rivers[0].w*sc, (rivers[0].h+SAND_WIDTH*2)*sc);
+    ctx.beginPath(); ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, (circularRiver.r+SAND_WIDTH)*sc, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#3498db";
+    ctx.fillRect(mx + rivers[0].x*sc, my + rivers[0].y*sc, rivers[0].w*sc, rivers[0].h*sc);
+    ctx.beginPath(); ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, circularRiver.r*sc, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = MOUNTAIN_COLOR;
+    mountains.forEach(m => { ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, m.r*sc, 0, Math.PI*2); ctx.fill(); });
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 4, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+}
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle="#3f8f4d"; ctx.fillRect(-camX(),-camY(),MAP,MAP);
@@ -2093,12 +2355,7 @@ if(isBloodMoon){
     ctx.fillStyle="#fff";
     ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
   }
-if(!player.dead && !craftingOpen){
-  drawInventory();
-}
-if(isMobile && !player.dead) drawMobileHUD();
-drawJoystick();
-drawAimJoystick();
+
 
 if(craftingOpen){
   ctx.save();
@@ -2132,33 +2389,39 @@ if(craftingOpen){
     { id: "axe_stone", txt: "Machado Pedra", cost: "3 Madeiras / 3 Pedras / 3 Gravetos" },
     { id: "pickaxe_stone", txt: "Picareta Pedra", cost: "3 Madeiras / 4 Pedras / 2 Gravetos" },
     { id: "spear", txt: "Lança de Combate", cost: "4 Madeiras / 2 Gravetos" },
-    { id: "campfire", txt: "Fogueira", cost: "2 Madeiras / 10 Gravetos" }
-  ];
+    { id: "spear", txt: "Lança de Combate", cost: "4 Madeiras / 2 Gravetos" },
+    { id: "campfire", txt: "Fogueira", cost: "2 Madeiras / 10 Gravetos" },
+    { id: "wood_convert", txt: "Refinar Madeira", cost: "2 Gravetos" }
+];
 
-  craftOptions.forEach((item, i) => {
-    const yPos = canvas.height/2 - 100 + (i * 45);
-    const btnX = canvas.width/2 - 150;
-    const btnW = 300;
-    const btnH = 38;
+  // Dentro da função onde você desenha o menu de Crafting:
+// Dentro do seu if(craftingOpen) no draw()
+const centerX = canvas.width / 2;
+const centerY = canvas.height / 2;
 
-    // BOTÃO MINIMALISTA
-    ctx.fillStyle = "#111"; 
-    ctx.strokeStyle = "#444";
-    ctx.lineWidth = 1;
-    ctx.fillRect(btnX, yPos, btnW, btnH);
+craftOptions.forEach((item, i) => {
+    const btnW = 320;
+    const btnH = 40;
+    const btnX = centerX - 160;
+    // O segredo é manter esse -100 e o 45 iguais em todo lugar
+    const yPos = centerY - 180 + (i * 45); 
+
+    // O Retângulo
+    ctx.strokeStyle = "#2ecc71";
+    ctx.lineWidth = 2;
     ctx.strokeRect(btnX, yPos, btnW, btnH);
 
-    // TEXTO DO ITEM
-    ctx.textAlign = "center";
+    // O Texto (ajustado para ficar no meio do retângulo acima)
     ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
     ctx.font = "bold 14px Arial";
-    ctx.fillText(item.txt, canvas.width/2, yPos + 18);
-
-    // CUSTO
-    ctx.fillStyle = "#2ecc71";
+    // yPos + 18 coloca o título no meio da altura (38/2 = 19)
+    ctx.fillText(item.txt, centerX, yPos + 16); 
+    
     ctx.font = "10px Arial";
-    ctx.fillText(item.cost, canvas.width/2, yPos + 32);
-  });
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.fillText(item.cost, centerX, yPos + 32);
+});
 
   // Instrução para sair (Ajustada)
   ctx.fillStyle = "#666";
@@ -2168,7 +2431,32 @@ if(craftingOpen){
 
   ctx.restore();
 }
-drawFullscreenInventory();}
+if (isMobile) {
+        if (!player.dead) {
+            drawMobileHUD();
+            drawJoystick();
+            drawAimJoystick();
+            
+            if (craftingOpen) {
+                drawMobileCrafting(); 
+            } else if (inventoryOpen) {
+                // AQUI: Agora o celular abre o inventário grande igual ao PC
+                drawFullscreenInventory();
+                drawInventory();
+              }
+        }
+    } else {
+        // --- VERSÃO PC ---
+        if (!player.dead) {
+            if (craftingOpen) {
+                // Aqui chamamos o desenho do menu de PC
+                
+            } else {
+                drawInventory(); 
+          drawFullscreenInventory();   }
+        }
+    }
+}
 function drawHotbar() {
   const slots = [
     { id: "hand", name: "Mão", weapon: 0 },
@@ -2210,8 +2498,14 @@ function drawHotbar() {
   });
 }
 function drawInventory(){
-  const slotSize = 64;
-  const padding = 10;
+  if (!inventoryOpen) return;
+
+  ctx.save();
+    
+    // 🚩 ISSO FAZ O INVENTÁRIO APARECER NO CELULAR:
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const slotSize = 80;
+  const padding = 15;
   const items = [
     { label: "🪵", qty: player.wood },
     { label: "🪨", qty: player.stone },
@@ -2223,7 +2517,7 @@ function drawInventory(){
 
   const width = items.length * (slotSize + padding) - padding;
   const startX = canvas.width/2 - width/2;
-  const y = canvas.height - slotSize - 30;
+  const y = canvas.height - slotSize - 120;
 
   // Fundo do Painel
   ctx.fillStyle = "rgba(0,0,0,0.7)";
@@ -2242,7 +2536,7 @@ function drawInventory(){
     ctx.lineWidth = (player.weapon === i) ? 3 : 1;
     ctx.strokeRect(x, y, slotSize, slotSize);
 
-    // Desenho do ícone/quantidade teste
+    // Desenho do ícone/quantidade
     ctx.textAlign = "center";
     ctx.fillStyle = "#fff";
     ctx.font = "20px Arial";
@@ -2251,8 +2545,10 @@ function drawInventory(){
     if(item.qty !== undefined) {
       ctx.font = "bold 14px Arial";
       ctx.fillText(item.qty, x + slotSize/2, y + slotSize - 5);
+    
     }
   });
+  ctx.restore();
 }
 
 let running=false;

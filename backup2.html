@@ -6,54 +6,101 @@
 <style>
 
 html,body{
-  margin:0;
-  width:100%;
-  height:100%;
-  overflow:hidden;
-  background:#0b1220;
+  margin:0; width:100%; height:100%;
+  overflow:hidden; background:#0b1220;
   font-family:'Segoe UI', Arial, sans-serif;
   touch-action: none;
 }
 
 canvas{display:block;}
+
+/* AJUSTE DO OVERLAY PARA FICAR LADO A LADO */
 #overlay, #gameOver {
   position:fixed; inset:0; background:rgba(0,0,0,0.85);
-  color:white; display:flex; justify-content:center;
-  align-items:center; flex-direction:column;
+  color:white; display:flex; 
+  justify-content:center; align-items:center; 
+  flex-direction:row; /* Mudamos para linha para ter a esquerda e direita */
+  gap: 60px; /* Espaço entre as novidades e o título */
   z-index:10; text-align:center; padding: 20px;
 }
-#gameOver { display: none; background: rgba(139, 0, 0, 0.9); }
+
+#gameOver { display: none; background: rgba(139, 0, 0, 0.9); flex-direction:column; }
+
+/* PAINEL DE NOVIDADES (ESQUERDA) */
+#news-panel {
+  text-align: left;
+  background: rgba(255,255,255,0.05);
+  padding: 25px;
+  border-left: 5px solid #2ecc71;
+  border-radius: 10px;
+  max-width: 350px;
+}
+.news-title { color: #2ecc71; font-size: 24px; margin-bottom: 15px; font-weight: bold; }
+.news-item { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; font-size: 16px; }
+.icon-box { 
+  font-size: 30px; background: rgba(0,0,0,0.3); 
+  width: 50px; height: 50px; display: flex; 
+  justify-content: center; align-items: center; border-radius: 8px;
+}
+
+/* PAINEL PRINCIPAL (DIREITA) */
+#main-panel { display: flex; flex-direction: column; align-items: center; }
+
 #instructions{
   background: rgba(255,255,255,0.1);
-  padding: 20px;
-  border-radius: 12px;
-  margin: 20px 0;
-  font-size: 16px;
-  line-height: 1.6;
-  max-width: 400px;
+  padding: 20px; border-radius: 12px;
+  margin: 20px 0; font-size: 16px;
+  line-height: 1.6; max-width: 400px;
 }
-h1{ font-size: 64px; margin: 0; color: #2ecc71; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+
+h1{ font-size: 80px; margin: 0; color: #2ecc71; text-shadow: 0 4px 15px rgba(46,204,113,0.4); }
+
 button{
-  padding: 15px 40px; font-size: 24px; cursor: pointer;
+  padding: 18px 50px; font-size: 26px; cursor: pointer;
   border: none; border-radius: 50px;
   background: #2ecc71; color: white;
-  transition: transform 0.2s;
+  transition: 0.2s; font-weight: bold;
 }
-button:hover{ transform: scale(1.1); background: #27ae60; }
+button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #2ecc71; }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 
 <div id="overlay">
-  <h1>Zumi.io</h1>
-  <div id="instructions">
-    • Noite com Visibilidade Melhorada<br>
-    • Efeitos de Água ao Nadar<br>
-    • Montanhas Ampliadas em 50%<br>
-    • Ciclo de Dia (2 min) e Noite (1 min)
+  <div id="news-panel">
+    <div class="news-title">O QUE HÁ DE NOVO:</div>
+    
+    <div class="news-item">
+      <div class="icon-box">⛏️</div>
+      <div><strong>Mineração de Ouro</strong><br>Procure nas montanhas!</div>
+    </div>
+
+    <div class="news-item">
+      <div class="icon-box">⚔️</div>
+      <div><strong>Lanças de Combate</strong><br>Maior alcance contra zumbis.</div>
+    </div>
+
+    <div class="news-item">
+      <div class="icon-box">🔥</div>
+      <div><strong>Fogueiras</strong><br>Sobreviva à noite com luz.</div>
+    </div>
+
+    <div class="news-item">
+      <div class="icon-box">🪓</div>
+      <div><strong>Novos Machados</strong><br>Colete madeira mais rápido.</div>
+    </div>
   </div>
-  <button id="startBtn">Começar Exploração</button>
+
+  <div id="main-panel">
+    <h1>Zumi.io</h1>
+    <div id="instructions">
+      • Noite com Visibilidade Melhorada<br>
+      • Ciclo de Dia e Noite Ativo<br>
+      • Pressione 'C' para abrir o Crafting
+    </div>
+    <button id="startBtn">Começar Exploração</button>
+  </div>
 </div>
 
 <div id="gameOver">
@@ -241,46 +288,36 @@ const player={
   food: 100, maxFood: 100,
   foodCooldown: 0,
   wood:0, stone:0, gold:0, sticks:0,
-  dead: false
+  dead: false,
+  inventory: {
+    axe_wood: 0,
+    pickaxe_wood: 0,
+    axe_stone: 0,
+    pickaxe_stone: 0,
+    campfire: 0,
+    spear: 0
+  }
 };
 let craftingOpen = false;
+let placingCampfire = false;
+let inventoryOpen = false;
+let inventorySlots = [];
 let ultimoTickGlobal = Date.now();
 const recipes = {
-  axe: {
-    name: "Machado",
-    wood: 3,     // Mudamos para 3
-    sticks: 2,   // Adicionamos 2 gravetos
-    weaponIndex: 1
-  },
-  pickaxe: {
-    name: "Picareta",
-    wood: 3,     // Mudamos para 3
-    sticks: 3,   // Adicionamos 3 gravetos
-    weaponIndex: 2
-  }
+  axe_wood: { name: "Machado de Madeira", wood: 3, sticks: 2, weaponIndex: 1 },
+  pickaxe_wood: { name: "Picareta de Madeira", wood: 3, sticks: 3, weaponIndex: 2 },
+  axe_stone: { name: "Machado de Pedra", wood: 3, stone: 3, sticks: 3, weaponIndex: 3 },
+  pickaxe_stone: { name: "Picareta de Pedra", wood: 3, stone: 4, sticks: 2, weaponIndex: 4 },
+  campfire: { name: "Fogueira", wood: 2, sticks: 10, isPlaceable: true },
+  spear: { name: "Lança", wood: 4, sticks: 2, weaponIndex: 5 }
 };
 const weapons = [
-  {
-    name: "Mão",
-    range: 30,
-    damage: 5,
-    speed: 12,
-    style: "hand"
-  },
-  {
-    name: "Machado",
-    range: 42,
-    damage: 20,
-    speed: 16,
-    style: "axe"
-  },
-  {
-    name: "Picareta",
-    range: 46,
-    damage: 22,
-    speed: 18,
-    style: "pickaxe"
-  }
+  { name: "Mão", range: 30, damage: 5, speed: 12, style: "hand" },
+  { name: "Machado Madeira", range: 42, damage: 20, speed: 16, style: "axe" },
+  { name: "Picareta Madeira", range: 46, damage: 22, speed: 18, style: "pickaxe" },
+  { name: "Machado Pedra", range: 45, damage: 35, speed: 15, style: "axe" }, // Novo
+  { name: "Picareta Pedra", range: 50, damage: 38, speed: 17, style: "pickaxe" }, // Novo
+  { name: "Lança", range: 75, damage: 25, speed: 10, style: "spear" } // Novo
 ];
 
 let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[];
@@ -454,11 +491,12 @@ function findSafeSpawn() {
     const inRiver = isInRiver(spawnX, spawnY);
     const inSand = isInSand(spawnX, spawnY);
     const inMountain = mountains.some(m => Math.hypot(spawnX - m.x, spawnY - m.y) < m.r + 60);
-
     if (!inRiver && !inSand && !inMountain) {
       safe = true;
     }
   }
+
+
   return { x: spawnX, y: spawnY };
 }
 
@@ -553,37 +591,83 @@ onkeydown = e => {
   const k = e.key.toLowerCase();
   keys[k] = true;
 
+  // Sistema de Corrida (Shift)
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") {
     keys.shift = true;
   }
 
-  // ABRIR / FECHAR INVENTÁRIO
-  if(k === "c"){
+  // C -> Abre/Fecha Crafting
+  if (k === "c") {
     craftingOpen = !craftingOpen;
+    if (craftingOpen) inventoryOpen = false; // Fecha o outro menu se abrir este
   }
 
-  // TROCA DE FERRAMENTA VIA TECLA
-  if(k === "1") player.weapon = 0;
-  if(k === "2") player.weapon = 1;
-  if(k === "3") player.weapon = 2;
+  // E -> Abre/Fecha Inventário Tela Cheia
+  if (k === "e") {
+    inventoryOpen = !inventoryOpen;
+    if (inventoryOpen) {
+        craftingOpen = false;
+        placingCampfire = false; // Cancela fogueira se abrir o menu
+    }
+  }
+
+  // Q -> Modo Fogueira (Separado para não bugar o E)
+  if (k === "q") {
+    if (player.inventory.campfire > 0) {
+      placingCampfire = !placingCampfire;
+      if (placingCampfire) console.log("Modo fogueira: Clique no chão!");
+    }
+  }
+
+  // Troca de ferramentas
+  if (k === "1") player.weapon = 0;
+  if (k === "2") player.weapon = 1;
+  if (k === "3") player.weapon = 2;
 };
+
+// Abre inventário também com o botão direito do mouse
+window.addEventListener("contextmenu", e => {
+  e.preventDefault(); // Não abre o menu do navegador
+  inventoryOpen = !inventoryOpen;
+  if (inventoryOpen) craftingOpen = false;
+});
 
 onkeyup = e => {
   const k = e.key.toLowerCase();
   keys[k] = false;
-
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") {
     keys.shift = false;
   }
 };
-window.addEventListener("blur", () => {
-  for (let k in keys) keys[k] = false;
-});
-
 
 if(!isMobile){
-  onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; }
-  onmousedown = () => mouse.down = true;
+  onmousedown = e => {
+    // 1. Lógica de colocar fogueira
+    if(placingCampfire && player.inventory.campfire > 0){
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) + camX();
+      const my = (e.clientY - rect.top) + camY();
+
+      resources.push({
+        type: "campfire",
+        x: mx,
+        y: my,
+        r: 30,
+        hp: 100,
+        alive: true,
+        fuel: 1000
+      });
+
+      player.inventory.campfire--;
+      placingCampfire = false;
+      return; // Sai da função para não atacar
+    }
+
+    // 2. Se não for fogueira, é ataque normal
+    mouse.down = true;
+  };
+  
+  onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
   onmouseup = () => mouse.down = false;
 }
 
@@ -602,7 +686,6 @@ function createParticles(x,y,color,count=6, speedMult=1){
 canvas.addEventListener("click", e => {
   if(!craftingOpen) return;
 
-  // Isso aqui corrige o erro de clicar "fora" do botão
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
@@ -610,17 +693,20 @@ canvas.addEventListener("click", e => {
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
 
-  // Botão do Machado (centerX - 130 até +130, centerY - 40 até +5)
-  if(mx > centerX - 130 && mx < centerX + 130 && 
-     my > centerY - 40 && my < centerY + 5){
-    tryCraft("axe");
-  }
+  // Lista dos IDs na mesma ordem do desenho do menu
+  const listaIds = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "campfire"];
 
-  // Botão da Picareta (centerX - 130 até +130, centerY + 25 até +70)
-  if(mx > centerX - 130 && mx < centerX + 130 && 
-     my > centerY + 25 && my < centerY + 70){
-    tryCraft("pickaxe");
-  }
+  // Loop para verificar cada um dos 6 botões
+  listaIds.forEach((id, i) => {
+    const yPos = centerY - 100 + (i * 45); // Mesma fórmula do desenho (draw)
+    
+    // Verifica se o clique foi dentro do retângulo do botão atual
+    if(mx > centerX - 140 && mx < centerX + 140 && 
+       my > yPos && my < yPos + 35) {
+        
+       tryCraft(id); // Chama a fabricação para o item clicado
+    }
+  });
 });
 canvas.addEventListener("mousedown", e => {
   if(craftingOpen) return;
@@ -642,19 +728,77 @@ canvas.addEventListener("mousedown", e => {
     }
   });
 });
+function drawFullscreenInventory() {
+  if (!inventoryOpen) return;
 
-function tryCraft(type){
-  const r = recipes[type]; // Olha a receita no objeto que já atualizamos
+  ctx.save();
+  // Fundo escuro para dar foco ao menu
+  ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // AGORA: Verifica se você tem madeira E gravetos suficientes
-  if(player.wood >= r.wood && player.sticks >= r.sticks){
-    player.wood -= r.wood;     // Tira a madeira
-    player.sticks -= r.sticks; // Tira os gravetos (novo!)
-    player.weapon = r.weaponIndex; // Te dá a ferramenta certa
+  const centerX = canvas.width / 2;
+  ctx.fillStyle = "#2ecc71";
+  ctx.font = "bold 45px 'Segoe UI'";
+  ctx.textAlign = "center";
+  ctx.fillText("INVENTÁRIO", centerX, 100);
+
+  // Grade de Itens
+  const items = [
+    { n: "Madeira", q: player.wood, i: "🪵" },
+    { n: "Pedra", q: player.stone, i: "🪨" },
+    { n: "Ouro", q: player.gold, i: "✨" },
+    { n: "Gravetos", q: player.sticks, i: "🥢" },
+    { n: "Fogueira", q: player.inventory.campfire, i: "🔥" },
+    { n: "Lança", q: player.inventory.spear, i: "⚔️" },
+    { n: "Comida", q: Math.floor(player.food), i: "🍎" }
+  ];
+
+  const slotSize = 90;
+  const gap = 20;
+  const startX = centerX - (4 * (slotSize + gap)) / 2;
+
+  items.forEach((item, index) => {
+    const x = startX + (index % 4) * (slotSize + gap);
+    const y = 180 + Math.floor(index / 4) * (slotSize + gap);
+
+    // Slot
+    ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.strokeStyle = "#2ecc71";
+    ctx.lineWidth = 2;
+    ctx.fillRect(x, y, slotSize, slotSize);
+    ctx.strokeRect(x, y, slotSize, slotSize);
+
+    // Ícone e Quantidade
+    ctx.font = "40px Arial";
+    ctx.fillText(item.i, x + slotSize / 2, y + slotSize / 2 + 10);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 16px Arial";
+    ctx.textAlign = "right";
+    ctx.fillText(item.q, x + slotSize - 5, y + slotSize - 5);
+    ctx.textAlign = "center";
+  });
+
+  ctx.restore();
+}
+function tryCraft(id) {
+  const r = recipes[id];
+  if (!r) return;
+
+  // Verifica se tem recursos
+  const hasWood = player.wood >= r.wood;
+  const hasSticks = player.sticks >= r.sticks;
+  const hasStone = player.stone >= (r.stone || 0);
+
+  if (hasWood && hasSticks && hasStone) {
+    player.wood -= r.wood;
+    player.sticks -= r.sticks;
+    player.stone -= (r.stone || 0);
     
-    craftingOpen = false; // Fecha o menu
+    // Adiciona ao inventário
+    player.inventory[id]++;
+    console.log("Você fabricou: " + r.name);
   } else {
-    alert("Você precisa de mais materiais! (Madeira e Gravetos)");
+    console.log("Recursos insuficientes!");
   }
 }
 function spawnAnimal() {
@@ -702,7 +846,7 @@ const agora = Date.now();
     }
 
     if (craftingOpen) return;
-    
+    if (inventoryOpen) return;
 // ===== CICLO DIA/NOITE AJUSTADO COM LUA DE SANGUE =====
 if(isDay && worldTime >= DAY_DURATION){
     isDay = false;
@@ -913,6 +1057,20 @@ resources.forEach(res => {
     player.y += Math.sin(angle) * overlap;
   }
 });
+// Colisão com a Fogueira
+resources.forEach(res => {
+  if(res.type === "campfire" && res.alive){
+    const dx = player.x - res.x;
+    const dy = player.y - res.y;
+    const dist = Math.hypot(dx, dy);
+    if(dist < player.r + res.r){
+      const angle = Math.atan2(dy, dx);
+      const overlap = (player.r + res.r) - dist;
+      player.x += Math.cos(angle) * overlap;
+      player.y += Math.sin(angle) * overlap;
+    }
+  }
+});
 // 🐇 COLISÃO FÍSICA COM COELHOS
 animals.forEach(ani => {
     if (!ani.alive) return; // Só colide se estiver vivo
@@ -1109,7 +1267,7 @@ animals.forEach(a => {
 
     // 1. LÓGICA DE MOVIMENTAÇÃO E STAMINA
     if (dist < 300) {
-      if (a.stamina < 100) a.stamina += 0.2;
+      if (a.stamina < 100) a.stamina += 0.3;
       if (a.stamina >= 50) a.isExhausted = false;
         // --- NOVO: TENTA ACHAR A TOCA MAIS PRÓXIMA ---
         let minhaToca = rabbitHoles.find(h => Math.hypot(a.x - h.x, a.y - h.y) < 400);
@@ -1130,7 +1288,7 @@ animals.forEach(a => {
         // Só corre se tiver stamina e não estiver exausto
         if (a.stamina > 0 && !a.isExhausted) {
             currentSpeed = player.speed * 1.5; // Corre 1.5x mais rápido
-            a.stamina -= 1.6; // Cansa rápido (o dobro do player)
+            a.stamina -= 1.35; // Cansa rápido (o dobro do player)
             if (a.stamina <= 0) a.isExhausted = true;
 
             // Partículas de poeira/água ao correr
@@ -1209,6 +1367,7 @@ animals.forEach(a => {
             a.lastBuildTime = gTime;
         }
         return; // IMPORTANTE: Ele fica parado enquanto constrói
+
     }
     a.x = Math.max(a.r, Math.min(MAP - a.r, a.x));
     a.y = Math.max(a.r, Math.min(MAP - a.r, a.y));
@@ -1277,21 +1436,37 @@ function semearFlores() {
 semearFlores();
 function drawPlayer(ctxRef, x, y, angle, hidden){
   ctxRef.save();
-  ctxRef.translate(x, y); ctxRef.rotate(angle);
+  ctxRef.translate(x, y); 
+  ctxRef.rotate(angle);
   ctxRef.globalAlpha = hidden ? 0.3 : 1;
 
-  // Ferramenta atual e o valor do empurrão (off)
+
   const w = weapons[player.weapon];
-  const off = player.attackProgress * 20; // Aumentei para 20 para o golpe aparecer mais
+  const off = player.attackProgress * 25; // Aumentei um pouco o impacto do golpe
 
   if(w.style !== "hand") {
-    // 1. CABO (Agora com + off no X para ir para frente)
-    ctxRef.fillStyle = "#5d4037";
-    ctxRef.fillRect(player.r + off, -3, 30, 6);
+    // 1. COR DA FERRAMENTA (Cinza para Pedra/Lança, Bege para Madeira)
+    // Se o índice da arma for 3, 4 ou 5, usamos cor de pedra
+    const isStone = (player.weapon >= 3);
+    const headColor = isStone ? "#7f8c8d" : "#bdc3c7"; 
+    const woodColor = "#5d4037";
 
-    if(w.style === "axe") {
-      // 2. MACHADO (Agora com + off em todos os pontos X)
-      ctxRef.fillStyle = "#bdc3c7";
+    // 2. DESENHO DA LANÇA (Spear)
+    if(w.style === "spear") {
+      ctxRef.fillStyle = woodColor;
+      ctxRef.fillRect(player.r + off, -2, 60, 4); // Cabo longo
+      ctxRef.fillStyle = "#bdc3c7"; // Ponta de metal/pedra
+      ctxRef.beginPath();
+      ctxRef.moveTo(player.r + 60 + off, -6);
+      ctxRef.lineTo(player.r + 75 + off, 0);
+      ctxRef.lineTo(player.r + 60 + off, 6);
+      ctxRef.fill();
+    } 
+    // 3. DESENHO DO MACHADO (Axe)
+    else if(w.style === "axe") {
+      ctxRef.fillStyle = woodColor;
+      ctxRef.fillRect(player.r + off, -3, 30, 6);
+      ctxRef.fillStyle = headColor; // Cor dinâmica (Pedra ou Madeira)
       ctxRef.beginPath();
       ctxRef.moveTo(player.r + 20 + off, -15);
       ctxRef.lineTo(player.r + 35 + off, -20);
@@ -1299,9 +1474,11 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
       ctxRef.lineTo(player.r + 20 + off, 15);
       ctxRef.fill();
     } 
+    // 4. DESENHO DA PICARETA (Pickaxe)
     else if(w.style === "pickaxe") {
-      // 3. PICARETA (Agora com + off no centro do arco)
-      ctxRef.strokeStyle = "#7f8c8d";
+      ctxRef.fillStyle = woodColor;
+      ctxRef.fillRect(player.r + off, -3, 30, 6);
+      ctxRef.strokeStyle = headColor; // Cor dinâmica
       ctxRef.lineWidth = 6;
       ctxRef.lineCap = "round";
       ctxRef.beginPath();
@@ -1311,9 +1488,12 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
   }
 
   // CORPO DO PLAYER
-  ctxRef.fillStyle = "#d2b48c"; ctxRef.beginPath(); ctxRef.arc(0, 0, player.r, 0, Math.PI*2); ctxRef.fill();
+  ctxRef.fillStyle = "#d2b48c"; 
+  ctxRef.beginPath(); 
+  ctxRef.arc(0, 0, player.r, 0, Math.PI*2); 
+  ctxRef.fill();
 
-  // MÃOS (Mantendo o movimento que você já tinha)
+  // MÃOS
   const hands = [{x: player.r, y: -14}, {x: player.r, y: 14}];
   hands.forEach(h => {
     ctxRef.save(); 
@@ -1455,6 +1635,9 @@ flowers.forEach(f => {
   resources.forEach(res => {
   if(!res.alive) return;
 
+const rx = res.x - camX();
+  const ry = res.y - camY();
+
   if(res.type === "stick"){
     ctx.fillStyle = "#8b5a2b";
     ctx.fillRect(
@@ -1504,7 +1687,54 @@ if(res.type === "palm") {
     ctx.fillRect(res.x - barW/2 - camXVal, res.y - 80 - camYVal, barW * hpPct, 5);
   }
 }
-});
+// --- DESENHO: FOGUEIRA MELHORADA (TAMANHO 1.5x) ---
+else if(res.type === "campfire"){
+    // 1. MADEIRA (Pilha de 8 galhos - 1.5x maior)
+    ctx.save();
+    ctx.translate(rx, ry); 
+    ctx.fillStyle = "#5d4037"; 
+    
+    for(let i = 0; i < 8; i++) {
+        ctx.save();
+        ctx.rotate((i * 45) * Math.PI / 180); 
+        // Aumentado de 30x6 para 45x9 (1.5x mais largo e grosso)
+        ctx.fillRect(-22.5, -4.5, 45, 9); 
+        
+        // Detalhe de sombra no galho
+        ctx.fillStyle = "#4e342e";
+        ctx.fillRect(-22.5, 0, 45, 3);
+        ctx.restore();
+    }
+    ctx.restore();
+
+    // 2. FOGO (Proporcional ao novo tamanho da lenha)
+    const pulo = Math.random() * 7; // Oscilação um pouco maior
+    
+    // Parte externa (Laranja) - Raio base aumentado para 15
+    ctx.fillStyle = "#e67e22";
+    ctx.beginPath();
+    ctx.arc(rx, ry - 8, 15 + pulo, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Parte interna (Amarelo brilhante) - Raio base aumentado para 8
+    ctx.fillStyle = "#f1c40f";
+    ctx.beginPath();
+    ctx.arc(rx, ry - 8, 8 + pulo * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. ✨ BRASAS (Subindo proporcionalmente)
+    if(!isDay) {
+        ctx.fillStyle = "#ffcc00";
+        for(let j = 0; j < 3; j++) { // Aumentei para 3 brasas
+            let tempoBrasa = Date.now() * 0.003 + j;
+            let bx = rx + Math.sin(tempoBrasa) * 20; // Espalhamento maior
+            let by = (ry - 15) - (Date.now() * 0.08 + j * 30) % 80;
+            ctx.globalAlpha = 0.8;
+            ctx.fillRect(bx, by, 2.5, 2.5); // Brasas levemente maiores
+            ctx.globalAlpha = 1.0;
+        }
+    }
+}})
   mountains.forEach(m=>{
     ctx.fillStyle=m.color; ctx.beginPath(); ctx.arc(m.x-camX(), m.y-camY(), m.r, 0, Math.PI*2); ctx.fill();
     m.goldRocks.forEach(gr=>drawRock(gr, camX(), camY()));
@@ -1528,6 +1758,7 @@ if(res.type === "palm") {
   ctx.fillRect(x, y, barW * hpPct, barH);
 });
   });
+
 zombies.forEach(z => {
   if(!z.active) return;
 
@@ -1659,54 +1890,91 @@ rabbitHoles.forEach(h => {
 
     ctx.restore();
 });
-  // 🌙 NOITE — JOGADOR MAIS ILUMINADO, BORDAS MAIS ESCURAS
+// 🌙 NOITE COM DUPLO RECORTE + FUMAÇA (ESTÁVEL)
 if(!isDay) {
-  // estrelas (opcional manter)
-  ctx.fillStyle = "white";
- ctx.globalAlpha = 1; // ou 1 se não quiser piscar
-stars.forEach(s => {
-  ctx.globalAlpha = s.a;
-  ctx.fillStyle = "white";
-  ctx.fillRect(
-  ((s.x - camX()*0.1) + canvas.width) % canvas.width
-,
-  ((s.y - camY()*0.1) + canvas.height) % canvas.height
-
-,
-  s.s, s.s
-);
-});
-ctx.globalAlpha = 1;
-
-
-  // camada escura forte
+  // 1. ESTRELAS
   ctx.save();
-  ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  stars.forEach(s => {
+    ctx.globalAlpha = s.a; ctx.fillStyle = "white";
+    ctx.fillRect(((s.x - camX()*0.1) + canvas.width) % canvas.width, ((s.y - camY()*0.1) + canvas.height) % canvas.height, s.s, s.s);
+  });
+  ctx.restore();
 
-  // recorte de luz no jogador
+  // --- ETAPA A: A PENUMBRA (O furo maior) ---
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, canvas.width, canvas.height); 
+
+  resources.forEach(res => {
+    if(res.type === "campfire" && res.alive) {
+      const fx = res.x - camX();
+      const fy = res.y - camY();
+      const raioPenumbra = 650; 
+      ctx.moveTo(fx + raioPenumbra, fy);
+      ctx.arc(fx, fy, raioPenumbra, 0, Math.PI * 2, true); 
+    }
+  });
+  
+  ctx.clip(); 
+  ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; 
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  // --- ETAPA B: O BREU (O furo menor) ---
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, canvas.width, canvas.height); 
+
+  resources.forEach(res => {
+    if(res.type === "campfire" && res.alive) {
+      const fx = res.x - camX();
+      const fy = res.y - camY();
+      const raioDia = 350; 
+      ctx.moveTo(fx + raioDia, fy);
+      ctx.arc(fx, fy, raioDia, 0, Math.PI * 2, true); 
+    }
+  });
+
+  ctx.clip();
+  ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
-
-  const lightRadius = 800; // luz próxima
-  const fadeRadius  = 1200; // transição
-
- const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, fadeRadius);
-grad.addColorStop(0, "rgba(0,0,0,0)");
-grad.addColorStop(0.5, "rgba(0,0,0,0.3)");
-grad.addColorStop(1, "rgba(0,0,0,0.85)");
-
-ctx.fillStyle = grad;
-ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.beginPath();
-  ctx.arc(cx, cy, fadeRadius, 0, Math.PI * 2);
-
-  ctx.fill();
+  const viguette = ctx.createRadialGradient(cx, cy, 100, cx, cy, 700);
+  viguette.addColorStop(0, "rgba(0, 0, 0, 0)"); 
+  viguette.addColorStop(1, "rgba(0, 0, 0, 0.95)"); 
+  ctx.fillStyle = viguette;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.restore();
-  ctx.globalCompositeOperation = "source-over";
-}
 
+  // --- ETAPA C: EFEITOS DA FOGUEIRA (LUZ CENTRO 10% + FUMAÇA) ---
+  ctx.save();
+  resources.forEach(res => {
+    if(res.type === "campfire" && res.alive) {
+      const fx = res.x - camX();
+      const fy = res.y - camY();
+      
+      // Filtro de 10% no centro (deixa 90% da claridade do dia)
+      ctx.fillStyle = "rgba(0, 0, 0, 0.1)"; 
+      ctx.beginPath();
+      ctx.arc(fx, fy, 350, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 💨 FUMAÇA PRETA
+      ctx.fillStyle = "rgba(15, 15, 15, 0.6)";
+      for(let i = 0; i < 3; i++) {
+        let tempo = Date.now() * 0.002;
+        let ox = Math.sin(tempo + i) * 10; 
+        let oy = (Date.now() * 0.05 + i * 25) % 100;
+        ctx.beginPath();
+        ctx.arc(fx + ox, (fy - 20) - oy, 7 + i*2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  });
+  ctx.restore();
+}
 if(isBloodMoon){
   ctx.fillStyle = "rgba(0,0,0,0.5)";
   ctx.fillRect(
@@ -1726,16 +1994,91 @@ if(isBloodMoon){
   );
   ctx.textAlign = "left";
 }
-  // UI
+  // --- UI MELHORADA (BARRAS GRANDES E ÍCONES TEXTURIZADOS) ---
   if(!player.dead && !isMobile) {
-    ctx.fillStyle="#fff"; ctx.font="bold 16px Arial";
-    ctx.fillText(`MADEIRA: ${player.wood} | GRAVETOS: ${player.sticks}| PEDRA: ${player.stone} | OURO: ${player.gold}`, 20, 30);
-    ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 50, 200, 10);
-    ctx.fillStyle="#e74c3c"; ctx.fillRect(20, 50, 200*(player.hp/player.maxHp), 10);
-    ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 65, 200, 10);
-    ctx.fillStyle=player.exhausted ? "#95a5a6" : "#f1c40f"; ctx.fillRect(20, 65, 200*(player.stamina/player.maxStamina), 10);
-    ctx.fillStyle="rgba(0,0,0,0.4)"; ctx.fillRect(20, 80, 200, 10);
-    ctx.fillStyle="#ff9800"; ctx.fillRect(20, 80, 200*(player.food/player.maxFood), 10);
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    // 1. DESENHO DOS RECURSOS COM "TEXTURAS"
+    const resourcesUI = [
+      { label: "MADEIRA", value: player.wood, color: "#8b5a2b", detail: "#5d4037" },
+      { label: "GRAVETO", value: player.sticks, color: "#d2b48c", detail: "#8b5a2b" },
+      { label: "PEDRA", value: player.stone, color: "#7f8c8d", detail: "#4f5b5c" },
+      { label: "OURO", value: player.gold, color: "#f1c40f", detail: "#d4ac0d" }
+    ];
+
+    resourcesUI.forEach((res, i) => {
+      let x = 20;
+      let y = 20 + (i * 28);
+
+      // Fundo do slot do recurso
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(x, y, 160, 24);
+
+      // --- DESENHO DOS ÍCONES ---
+      if (res.label === "GRAVETO") {
+        ctx.save();
+        // Move para o centro do espaço do ícone
+        ctx.translate(x + 13, y + 12);
+        // Inclina para a esquerda (rotação negativa)
+        ctx.rotate(-Math.PI / 4); 
+        
+        // Cor das bordas (o marrom mais escuro que você pediu)
+        ctx.fillStyle = "#8b5a2b"; 
+        
+        // Desenha o retângulo: 
+        // Largura 6 (metade da madeira) e Altura 18 (compridinho)
+        // Centralizamos o desenho usando -3 e -9
+        ctx.fillRect(-3, -9, 6, 18); 
+        
+        ctx.restore();
+      } else {
+        // Madeira, Pedra e Ouro continuam QUADRADOS
+        ctx.fillStyle = res.color;
+        ctx.fillRect(x + 5, y + 4, 16, 16);
+        ctx.strokeStyle = res.detail;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 5, y + 4, 16, 16);
+      }
+
+      // Texto
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 13px Arial";
+      ctx.fillText(`${res.label}: ${res.value}`, x + 30, y + 5);
+    });
+
+    // 2. BARRAS DE STATUS (VOLTARAM PARA 200px)
+    let barY = 140; 
+    const bars = [
+      { name: "VIDA", color: "#e74c3c", val: player.hp, max: player.maxHp, icon: "❤️" },
+      { name: "ENERGIA", color: player.exhausted ? "#95a5a6" : "#f1c40f", val: player.stamina, max: player.maxStamina, icon: "⚡" },
+      { name: "FOME", color: "#ff9800", val: player.food, max: player.maxFood, icon: "🍗" }
+    ];
+
+    bars.forEach(bar => {
+      // Nome e Ícone
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 12px Arial";
+      ctx.fillText(`${bar.icon} ${bar.name}`, 20, barY - 2);
+      
+      // Fundo da barra (200px de largura)
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(20, barY + 12, 200, 12); 
+      
+      // Brilho/Preenchimento da barra
+      ctx.fillStyle = bar.color;
+      let currentWidth = 200 * (bar.val / bar.max);
+      ctx.fillRect(20, barY + 12, Math.max(0, currentWidth), 12);
+
+      // Borda da barra para acabamento
+      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.strokeRect(20, barY + 12, 200, 12);
+
+      barY += 35;
+    });
+
+    ctx.restore();
     // MINIMAPA
     const sz=150, p=6, mx=canvas.width-sz-p, my=p, sc=sz/MAP;
     ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillRect(mx, my, sz, sz);
@@ -1756,88 +2099,160 @@ if(!player.dead && !craftingOpen){
 if(isMobile && !player.dead) drawMobileHUD();
 drawJoystick();
 drawAimJoystick();
-// Substitua o bloco do título dentro do if(craftingOpen)
+
 if(craftingOpen){
-  // Fundo do menu
-  ctx.fillStyle = "rgba(0,0,0,0.85)";
-  ctx.fillRect(canvas.width/2 - 150, canvas.height/2 - 120, 300, 220); // Aumentei um pouco o fundo
-
-  // TÍTULO CRAFT VERDE E GRANDE
   ctx.save();
-  ctx.fillStyle = "#2ecc71"; // Verde esmeralda
-  ctx.font = "bold 40px Arial Black"; // Bem maior e em negrito
+  
+  // 1. FUNDO TELA CHEIA (Preto Profundo)
+  ctx.fillStyle = "rgba(0, 0, 0, 0.98)"; 
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 2. NEON VERDE (Contorno da área de craft)
+  ctx.strokeStyle = "#2ecc71";
+  ctx.lineWidth = 4;
+  ctx.shadowBlur = 15; // O efeito de brilho neon
+  ctx.shadowColor = "#2ecc71";
+  
+  // Desenha um retângulo neon em volta dos botões para dar o estilo que você gostou
+  ctx.strokeRect(canvas.width/2 - 170, canvas.height/2 - 190, 340, 380);
+  
+  // Reset do shadow para não borrar os textos
+  ctx.shadowBlur = 0;
+
+  // 3. TÍTULO
+  ctx.fillStyle = "#2ecc71";
+  ctx.font = "bold 40px Arial Black";
   ctx.textAlign = "center";
-  // Desenhado mais alto (subi de -70 para -85)
-  ctx.fillText("CRAFT", canvas.width/2, canvas.height/2 - 85);
+  ctx.fillText("CRAFTING", canvas.width/2, 80);
+
+  // Itens (Mesma ordem/lógica do seu código original)
+  const craftOptions = [
+    { id: "axe_wood", txt: "Machado Madeira", cost: "3 Madeiras / 2 Gravetos" },
+    { id: "pickaxe_wood", txt: "Picareta Madeira", cost: "3 Madeiras / 3 Gravetos" },
+    { id: "axe_stone", txt: "Machado Pedra", cost: "3 Madeiras / 3 Pedras / 3 Gravetos" },
+    { id: "pickaxe_stone", txt: "Picareta Pedra", cost: "3 Madeiras / 4 Pedras / 2 Gravetos" },
+    { id: "spear", txt: "Lança de Combate", cost: "4 Madeiras / 2 Gravetos" },
+    { id: "campfire", txt: "Fogueira", cost: "2 Madeiras / 10 Gravetos" }
+  ];
+
+  craftOptions.forEach((item, i) => {
+    const yPos = canvas.height/2 - 100 + (i * 45);
+    const btnX = canvas.width/2 - 150;
+    const btnW = 300;
+    const btnH = 38;
+
+    // BOTÃO MINIMALISTA
+    ctx.fillStyle = "#111"; 
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 1;
+    ctx.fillRect(btnX, yPos, btnW, btnH);
+    ctx.strokeRect(btnX, yPos, btnW, btnH);
+
+    // TEXTO DO ITEM
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px Arial";
+    ctx.fillText(item.txt, canvas.width/2, yPos + 18);
+
+    // CUSTO
+    ctx.fillStyle = "#2ecc71";
+    ctx.font = "10px Arial";
+    ctx.fillText(item.cost, canvas.width/2, yPos + 32);
+  });
+
+  // Instrução para sair (Ajustada)
+  ctx.fillStyle = "#666";
+  ctx.font = "14px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("Pressione C para fechar", canvas.width/2, canvas.height - 50);
+
   ctx.restore();
-
-  // Botão do Machado
-  ctx.fillStyle = "#444";
-  ctx.fillRect(canvas.width/2 - 130, canvas.height/2 - 40, 260, 45);
-  ctx.fillStyle = "white";
-  ctx.font = "18px Arial";
-  // ATUALIZADO: 3 Mad / 2 Grav
-  ctx.fillText("Machado (3 Mad / 2 Grav)", canvas.width/2 - 110, canvas.height/2 - 12);
-
-  // Botão da Picareta
-  ctx.fillStyle = "#444";
-  ctx.fillRect(canvas.width/2 - 130, canvas.height/2 + 25, 260, 45);
-  ctx.fillStyle = "white";
-  // ATUALIZADO: 3 Mad / 3 Grav
-  ctx.fillText("Picareta (3 Mad / 3 Grav)", canvas.width/2 - 110, canvas.height/2 + 53);
 }
+drawFullscreenInventory();}
+function drawHotbar() {
+  const slots = [
+    { id: "hand", name: "Mão", weapon: 0 },
+    { id: "axe_wood", name: "Mach. M", weapon: 1 },
+    { id: "pickaxe_wood", name: "Pic. M", weapon: 2 },
+    { id: "axe_stone", name: "Mach. P", weapon: 3 },
+    { id: "pickaxe_stone", name: "Pic. P", weapon: 4 },
+    { id: "spear", name: "Lança", weapon: 5 },
+    { id: "campfire", name: "Fogueira", isPlaceable: true }
+  ];
+
+  const slotSize = 50;
+  const startX = canvas.width / 2 - (slots.length * (slotSize + 5)) / 2;
+  const y = canvas.height - 70;
+
+  slots.forEach((slot, i) => {
+    const x = startX + i * (slotSize + 5);
+    
+    // Só desenha se for a Mão (0) ou se o player tiver o item no inventário
+    if (slot.id !== "hand" && player.inventory[slot.id] <= 0) return;
+
+    // Fundo do quadradinho
+    ctx.fillStyle = (player.weapon === slot.weapon || (slot.id === "campfire" && placingCampfire)) 
+                    ? "rgba(46, 204, 113, 0.7)" : "rgba(0,0,0,0.5)";
+    ctx.fillRect(x, y, slotSize, slotSize);
+    ctx.strokeStyle = "white";
+    ctx.strokeRect(x, y, slotSize, slotSize);
+
+    // Texto curto do item
+    ctx.fillStyle = "white";
+    ctx.font = "10px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(slot.name, x + slotSize/2, y + slotSize/2 + 5);
+    
+    // Quantidade (se for fogueira)
+    if(player.inventory[slot.id] > 1) {
+      ctx.fillText("x" + player.inventory[slot.id], x + slotSize - 10, y + slotSize - 5);
+    }
+  });
 }
 function drawInventory(){
   const slotSize = 64;
   const padding = 10;
-  const totalSlots = 6;
-  const width = totalSlots * (slotSize + padding) - padding;
+  const items = [
+    { label: "🪵", qty: player.wood },
+    { label: "🪨", qty: player.stone },
+    { label: "✨", qty: player.gold },
+    { label: "🪓", owned: player.weapon === 1 || player.weapon === 3 }, // Machados
+    { label: "⛏️", owned: player.weapon === 2 || player.weapon === 4 }, // Picaretas
+    { label: "⚔️", owned: player.weapon === 5 } // Lança
+  ];
+
+  const width = items.length * (slotSize + padding) - padding;
   const startX = canvas.width/2 - width/2;
   const y = canvas.height - slotSize - 30;
 
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
-  ctx.fillRect(startX - 20, y - 20, width + 40, slotSize + 40);
+  // Fundo do Painel
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.roundRect(startX - 10, y - 10, width + 20, slotSize + 20, 10);
+  ctx.fill();
 
- const items = [
-    {name:"Madeira", qty: player.wood},
-    {name:"Pedra", qty: player.stone},
-    {name:"Ouro", qty: player.gold},
-    {name: player.weapon === 1 ? "✔" : "", owned: player.weapon === 1}, // Machado ,,
-    {name: player.weapon === 2 ? "✔" : "", owned: player.weapon === 2}, // Picareta
-    {name: player.weapon === 0 ? "✔" : "", owned: player.weapon === 0}  // Mão
-  ];
+  items.forEach((item, i) => {
+    const x = startX + i * (slotSize + padding);
 
- inventorySlots = [];
+    // Fundo do Slot
+    ctx.fillStyle = "rgba(255,255,255,0.1)";
+    ctx.fillRect(x, y, slotSize, slotSize);
+    
+    // Borda de seleção (se for a arma atual)
+    ctx.strokeStyle = (player.weapon === i) ? "#2ecc71" : "#555";
+    ctx.lineWidth = (player.weapon === i) ? 3 : 1;
+    ctx.strokeRect(x, y, slotSize, slotSize);
 
-items.forEach((item, i)=>{
-  const x = startX + i*(slotSize + padding);
+    // Desenho do ícone/quantidade teste
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#fff";
+    ctx.font = "20px Arial";
+    ctx.fillText(item.label, x + slotSize/2, y + slotSize/2 + 5);
 
-  inventorySlots.push({
-    x, y,
-    w: slotSize,
-    h: slotSize,
-    index: i
+    if(item.qty !== undefined) {
+      ctx.font = "bold 14px Arial";
+      ctx.fillText(item.qty, x + slotSize/2, y + slotSize - 5);
+    }
   });
-
-  ctx.fillStyle = "rgba(255,255,255,0.15)";
-  ctx.fillRect(x, y, slotSize, slotSize);
-
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = player.weapon === i-3 ? 3 : 1;
-  ctx.strokeRect(x, y, slotSize, slotSize);
-
-  ctx.fillStyle = "#fff";
-  ctx.font = "12px Arial";
-  ctx.textAlign = "center";
-
-  if(item.qty !== undefined){
-    ctx.fillText(item.qty, x + slotSize/2, y + slotSize - 8);
-  }
-
-  ctx.fillText(item.name, x + slotSize/2, y - 6);
-});
-
-  ctx.textAlign = "left";
 }
 
 let running=false;
