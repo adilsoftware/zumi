@@ -384,8 +384,8 @@ const SAFE_SPAWN_DIST = 1200;
 const ZOMBIE_SPREAD_DIST = 150;
 
 // CONFIGURAÇÕES
-const DAY_DURATION = 5 * 60;
-const NIGHT_DURATION = 4 * 60; 
+const DAY_DURATION = 300;
+const NIGHT_DURATION = 240;
 let zombieSpawnTimer = 0;
 let worldTime = 0;
 let isDay = true;
@@ -445,7 +445,8 @@ const player = {
     axe_stone: 0,
     pickaxe_stone: 0,
     campfire: 0,
-    spear: 0
+    spear: 0,
+    torch: 0
   }
 };
 let isRaining = false;
@@ -456,24 +457,27 @@ let inventoryOpen = false;
 let inventorySlots = [];
 let ultimoTickGlobal = Date.now();
 const recipes = {
+  
   axe_wood: { name: "Machado de Madeira", wood: 3, sticks: 2, weaponIndex: 1 },
   pickaxe_wood: { name: "Picareta de Madeira", wood: 3, sticks: 3, weaponIndex: 2 },
   axe_stone: { name: "Machado de Pedra", wood: 3, stone: 3, sticks: 3, weaponIndex: 3 },
   pickaxe_stone: { name: "Picareta de Pedra", wood: 3, stone: 4, sticks: 2, weaponIndex: 4 },
   campfire: { name: "Fogueira", wood: 2, sticks: 10, isPlaceable: true },
   spear: { name: "Lança", wood: 4, sticks: 2, weaponIndex: 5 },
+  torch: { name: "Tocha", wood: 2, stone: 2, sticks: 1, weaponIndex: 6 }, 
   wood_convert: { name: "Refinar Madeira", wood: 0, sticks: 2, yield: 1 } 
 };
 const weapons = [
-  { name: "Mão", range: 30, damage: 5, speed: 12, style: "hand" },
-  { name: "Machado Madeira", range: 42, damage: 20, speed: 16, style: "axe" },
-  { name: "Picareta Madeira", range: 46, damage: 22, speed: 18, style: "pickaxe" },
-  { name: "Machado Pedra", range: 45, damage: 35, speed: 15, style: "axe" }, // Novo
-  { name: "Picareta Pedra", range: 50, damage: 38, speed: 17, style: "pickaxe" }, // Novo
-  { name: "Lança", range: 75, damage: 25, speed: 10, style: "spear" } // Novo
+  { name: "Mão", range: 30, damage: 3, speed: 12, style: "hand" },
+  { name: "Machado Madeira", range: 42, damage: 12.5, speed: 16, style: "axe" },
+  { name: "Picareta Madeira", range: 46, damage: 12.5, speed: 18, style: "pickaxe" },
+  { name: "Machado Pedra", range: 45, damage: 16.7, speed: 15, style: "axe" }, // Novo
+  { name: "Picareta Pedra", range: 50, damage: 16.7, speed: 17, style: "pickaxe" }, // Novo
+  { name: "Lança", range: 75, damage: 20, speed: 10, style: "spear" }, // Novo
+  { name: "Tocha", range: 40, damage: 5, speed: 14, style: "torch" }
 ];
 
-let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[];
+let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[];
 
 function makeRock(x, y, radius, color, type="stone") {
   const points = [];
@@ -529,6 +533,34 @@ function spawnZombie(type = "normal") {
     });
   }
 }
+function spawnJaguar() {
+    let x, y, dist;
+    let minDist = 800; // A "distância de uma montanha" que você quer do player
+
+    // Tenta encontrar uma posição longe do player
+    do {
+        x = Math.random() * MAP;
+        y = Math.random() * MAP;
+        let dx = x - player.x;
+        let dy = y - player.y;
+        dist = Math.sqrt(dx * dx + dy * dy);
+    } while (dist < minDist); 
+
+    jaguars.push({
+        x: x,
+        y: y,
+        r: 25,
+        hp: 300,
+        maxHp: 300,
+        angle: 0,
+        speed: player.speed * 0.9,
+        alive: true,
+        target: null
+    });
+}
+
+for(let i=0; i<50; i++) spawnJaguar();
+
 function drawRock(rock, offsetX=0, offsetY=0, scale=1){
   if(!rock.active) return;
   ctx.save();
@@ -609,8 +641,8 @@ mountains.forEach(m => {
   x: r.x,
   y: r.y,
   r: r.r,
-  hp: 160,        // ⛏️ ouro mais duro
-  maxHp: 160,
+  hp: 134,        // ⛏️ ouro mais duro
+  maxHp: 134,
   alive: true,
   ref: r
 });
@@ -658,7 +690,7 @@ const startPos = findSafeSpawn();
 player.x = startPos.x;
 player.y = startPos.y;
 
-for(let i=0;i<10000;i++){
+for(let i=0;i<9500;i++){
   let x=Math.random()*MAP, y=Math.random()*MAP;
   let inMountain = mountains.some(m => Math.hypot(x-m.x, y-m.y) < m.r);
   let tooClose =
@@ -677,8 +709,8 @@ for(let i=0;i<10000;i++){
       x, y,
       r: isLarge ? 75 : 54,
       color: isLarge ? "#1b5e20" : "#2ecc71", 
-      hp: isLarge ? 300 : 100, // 300 HP = 15 hits do machado
-      maxHp: isLarge ? 300 : 100,
+      hp: isLarge ? 200 : 100,
+      maxHp: isLarge ? 200 : 100,
       yield: isLarge ? 3 : 1,
       alive: true
     });
@@ -709,8 +741,8 @@ for(let i = 0; i < 2400; i++) {
         x, y,
         r: 35,
         trunkColor: "#6d4c41", // Cor nova aqui
-        hp: 200,
-        maxHp: 200,
+        hp: 150,
+        maxHp: 150,
         alive: true,
         respawnTimer: 0
       });
@@ -774,7 +806,7 @@ onkeydown = e => {
 
   // Troca de ferramentas
   if (k === "1") player.weapon = 0;
-  
+
 };
 
 // Abre inventário também com o botão direito do mouse
@@ -861,25 +893,39 @@ canvas.addEventListener("mousedown", e => {
             const x = startX + (i % cols) * (slotSize + gap);
             const y = 150 + Math.floor(i / cols) * (slotSize + gap); // 150 é o Y inicial do draw
 
-            if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
-                console.log("Slot clicado no PC:", i);
+            // ... dentro do loop for (let i = 0; i < 14; i++) ...
 
-                // Lógica de Equipar (Sua Versão de Sucesso)
-                if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
-                else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
-                else if (i === 8 && player.inventory.axe_stone > 0) player.weapon = 3;
-                else if (i === 9 && player.inventory.pickaxe_stone > 0) player.weapon = 4;
-                else if (i === 5 && player.inventory.spear > 0) player.weapon = 5;
-                else if (i === 4 && player.inventory.campfire > 0) {
-                     placingCampfire = true;
-                     inventoryOpen = false;
-                }
-                else if (i <= 3 || i >= 10) {
-                    player.weapon = 0; // Mão / Recursos
-                }
-                
-                return; // INTERROMPE aqui para não atacar ao mesmo tempo
-            }
+if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
+    console.log("Slot clicado:", i);
+
+    // 1. Ferramentas de Madeira e Pedra
+    if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
+    else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
+    else if (i === 8 && player.inventory.axe_stone > 0) player.weapon = 3;
+    else if (i === 9 && player.inventory.pickaxe_stone > 0) player.weapon = 4;
+    
+    // 2. Armas e Utilitários
+    else if (i === 5 && player.inventory.spear > 0) player.weapon = 5;
+    
+    // 🌟 AQUI ESTAVA O ERRO: Adicionando a TOCHA (Slot 11)
+    else if (i === 11 && player.inventory.torch > 0) {
+        player.weapon = 6; 
+        inventoryOpen = false; // Fecha para mostrar a luz
+    }
+    
+    // 3. Fogueira (Slot 4)
+    else if (i === 4 && player.inventory.campfire > 0) {
+         placingCampfire = true;
+         inventoryOpen = false;
+    }
+    
+    // 4. Recursos ou Slots vazios (Mão)
+    else if (i <= 3 || i === 10 || i >= 12) {
+        player.weapon = 0; 
+    }
+    
+    return; 
+}
         }
         return; // Se clicou no inventário mas fora de um slot, também não ataca
     }
@@ -924,7 +970,7 @@ function drawFullscreenInventory() {
     { label: "MACHADO P.", value: player.inventory.axe_stone, color: "#757575", detail: "#fff", max: LIMITES.ferramentas },
     { label: "PICARETA P.", value: player.inventory.pickaxe_stone, color: "#757575", detail: "#fff", max: LIMITES.ferramentas },
     { label: "COMIDA", value: Math.floor(player.food), color: "#e74c3c", detail: "#c0392b", max: 100 },
-    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "TOCHA", value: player.inventory.torch || 0, color: "#f39c12", detail: "#d35400", max: 1 },
     { label: "SLOT VAZIO", value: 0, empty: true },
     { label: "SLOT VAZIO", value: 0, empty: true }
   ];
@@ -958,6 +1004,41 @@ function drawFullscreenInventory() {
         ctx.fillRect(-5, -15, 10, 30);
         ctx.restore();
       } 
+      else if (res.label === "TOCHA") {
+    ctx.save();
+    // Efeito de brilho atrás da tocha
+    const glow = ctx.createRadialGradient(iconCenterX, iconCenterY, 2, iconCenterX, iconCenterY, 25);
+    glow.addColorStop(0, "rgba(255, 165, 0, 0.3)");
+    glow.addColorStop(1, "rgba(255, 165, 0, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(iconCenterX, iconCenterY, 25, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cabo de Madeira
+    ctx.fillStyle = "#5d4037"; // Marrom escuro
+    ctx.fillRect(iconCenterX - 3, iconCenterY - 5, 6, 25);
+    
+    // Suporte de Metal
+    ctx.fillStyle = "#37474f"; 
+    ctx.fillRect(iconCenterX - 5, iconCenterY - 8, 10, 4);
+
+    // Chama Pulsante (Usa o tempo para animar o tamanho)
+    const flicker = Math.sin(Date.now() * 0.01) * 3;
+    ctx.fillStyle = "#ff7043"; // Laranja fogo
+    ctx.beginPath();
+    ctx.moveTo(iconCenterX - 6, iconCenterY - 8);
+    ctx.quadraticCurveTo(iconCenterX, iconCenterY - 25 - flicker, iconCenterX + 6, iconCenterY - 8);
+    ctx.fill();
+
+    // Miolo da chama (Amarelo)
+    ctx.fillStyle = "#fff176";
+    ctx.beginPath();
+    ctx.moveTo(iconCenterX - 3, iconCenterY - 8);
+    ctx.quadraticCurveTo(iconCenterX, iconCenterY - 18 - flicker, iconCenterX + 3, iconCenterY - 8);
+    ctx.fill();
+    ctx.restore();
+}
       // Outros ícones (Madeira, Pedra, Ouro, Ferramentas)
       else if (res.color) {
         ctx.fillStyle = res.color;
@@ -1108,35 +1189,7 @@ console.log("Coelhos criados: " + animals.length);
 
 let jaTestouSorteNoPeriodo = false;
 
-function atualizarClima() {
-    // Se o jogo mudar de estado (dia/noite), resetamos o teste de sorte
-    // Você deve colocar essa verificação onde você alterna o isDay
-    // Exemplo: if(tempo == amanhecer) jaTestouSorteNoPeriodo = false;
 
-    if (!jaTestouSorteNoPeriodo) {
-        jaTestouSorteNoPeriodo = true; // Marca que já testamos a sorte neste ciclo
-        
-        if (Math.random() < 0.30) { 
-            isRaining = true;
-            rainTextTimer = 300; 
-            console.log("A tempestade começou!");
-
-            // Define quanto tempo a chuva dura (ex: 20 segundos)
-            setTimeout(() => {
-                isRaining = false;
-            }, 20000);
-        }
-    }
-}
-function tentarChuva() {
-    if (Math.random() < 0.30) { // 30% de chance
-        isRaining = true;
-        rainTextTimer = 5 * 60; // 5 segundos (em frames de 60fps)
-        console.log("A tempestade começou!");
-    } else {
-        isRaining = false;
-    }
-}
 function update(){
 const agora = Date.now();
     let passouUmSegundo = false;
@@ -1154,45 +1207,51 @@ const agora = Date.now();
 
     if (craftingOpen) return;
     if (inventoryOpen) return;
-// ===== CICLO DIA/NOITE AJUSTADO COM LUA DE SANGUE =====
-if(isDay && worldTime >= DAY_DURATION){
+
+    // 2. TROCA DE CICLO (DIA <-> NOITE)
+if (isDay && worldTime >= DAY_DURATION) {
     isDay = false;
     worldTime = 0;
+    jaTestouSorteNoPeriodo = false; 
+    isRaining = false;              // Para a chuva ao anoitecer
     zombieSpawnTimer = 0;
 
-    // 🌕 Chance de Lua de Sangue a partir da 5ª noite
-    if(dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE){
+    // Lógica da Lua de Sangue
+    if (dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE) {
         isBloodMoon = true;
         bloodMoonTimer = 0;
-
-        // Mostra "LUA DE SANGUE" na tela
-        showBloodMoonText = 180; // duração do texto em frames (3s a 60fps)
-
-        // Spawn de 3 zumbis fortes vermelhos imediatamente
-        for(let i=0;i<3;i++){
-            spawnZombie("blood"); 
-        }
+        showBloodMoonText = 180;
+        for (let i = 0; i < 3; i++) spawnZombie("blood");
     } else {
         isBloodMoon = false;
     }
 } 
-else if(!isDay && worldTime >= NIGHT_DURATION){
+else if (!isDay && worldTime >= NIGHT_DURATION) {
     isDay = true;
     worldTime = 0;
     dayCount++;
-
-    // Amanheceu → remove zumbis e reseta timers
+    jaTestouSorteNoPeriodo = false; // Permite novo sorteio ao amanhecer
+    isRaining = false;              // Para a chuva ao amanhecer
     zombies.length = 0;
     zombieSpawnTimer = 0;
     isBloodMoon = false;
 }
 
-// Atualiza timer da Lua de Sangue
-if(isBloodMoon && passouUmSegundo){
+// 3. ATUALIZA TIMER LUA DE SANGUE
+if (isBloodMoon && passouUmSegundo) {
     bloodMoonTimer++;
+    if (bloodMoonTimer >= BLOOD_MOON_DURATION) isBloodMoon = false;
+}
 
-    if(bloodMoonTimer >= BLOOD_MOON_DURATION){
-        isBloodMoon = false;
+// 4. SORTEIO ÚNICO DA CHUVA (30% Chance)
+if (!jaTestouSorteNoPeriodo) {
+    jaTestouSorteNoPeriodo = true; 
+    
+    // Regra: Começa a sortear a partir do Dia 2 (dayCount > 1)
+    if (dayCount > 1 && Math.random() < 0.30) { 
+        isRaining = true;
+        rainTextTimer = 300; 
+        console.log("A tempestade começou e durará o ciclo todo!");
     }
 }
 
@@ -1213,13 +1272,6 @@ if(zombieSpawnTimer >= 120){
 
     zombieSpawnTimer = 0;
 }
-
-if(isDay && worldTime >= DAY_DURATION){
-    isDay = false;
-    worldTime = 0;
-    jaTestouSorteNoPeriodo = false; // <-- RESET AQUI: A noite começou, pode testar sorte pra chuva
-    // ... (resto do código da Lua de Sangue)
-} 
 else if(!isDay && worldTime >= NIGHT_DURATION){
     isDay = true;
     worldTime = 0;
@@ -1227,7 +1279,17 @@ else if(!isDay && worldTime >= NIGHT_DURATION){
     jaTestouSorteNoPeriodo = false; // <-- RESET AQUI: O dia começou, pode testar sorte pra chuva
     
     zombies.length = 0;
-    // ...
+    zombieSpawnTimer = 0;
+    isBloodMoon = false;
+}
+
+// Atualiza timer da Lua de Sangue
+if(isBloodMoon && passouUmSegundo){
+    bloodMoonTimer++;
+
+    if(bloodMoonTimer >= BLOOD_MOON_DURATION){
+        isBloodMoon = false;
+    }
 }
 
 // ===== GATILHO DA CHUVA (30% de chance, mas só após o 1º dia) =====
@@ -1236,7 +1298,7 @@ if (!jaTestouSorteNoPeriodo) {
     
     // Só permite sortear chuva se o contador de dias for maior que 0
     // (Ou seja, já passou pelo menos o primeiro dia)
-    if (dayCount > 0 && Math.random() < 0.30) { 
+    if (dayCount > 1 && Math.random() < 0.30) { 
         isRaining = true;
         rainTextTimer = 300; 
         console.log("A tempestade começou!");
@@ -1424,6 +1486,48 @@ animals.forEach(ani => {
         player.y += Math.sin(angle) * overlap;
     }
 });
+jaguars.forEach(j => {
+    if (!j.alive) return;
+
+    // SÓ PROCESSA SE ESTIVER PERTO DO PLAYER (Ex: 800 pixels)
+    const distPlayer = Math.hypot(player.x - j.x, player.y - j.y);
+    if (distPlayer > 800) return; 
+
+    resources.forEach(res => {
+        // Se a árvore estiver longe do Jaguar, ignora
+        if (Math.abs(j.x - res.x) > 100 || Math.abs(j.y - res.y) > 100) return;
+        if (!res.alive) return;
+        
+        const dx = j.x - res.x;
+        const dy = j.y - res.y;
+        const dist = Math.hypot(dx, dy);
+        const colRadius = (res.type === "palm") ? 20 : res.r; // Ajuste para o tronco
+        if (dist > 1200) return;
+        if (dist < j.r + colRadius) {
+            const angle = Math.atan2(dy, dx);
+            const overlap = (j.r + colRadius) - dist;
+            // Empurra o JAGUAR para fora do recurso
+            j.x += Math.cos(angle) * overlap;
+            j.y += Math.sin(angle) * overlap;
+        }
+    });
+
+    // --- COLISÃO JAGUAR vs PLAYER (Sólida para ambos) ---
+    const dxP = player.x - j.x;
+    const dyP = player.y - j.y;
+    const distP = Math.hypot(dxP, dyP);
+
+    if (distP < player.r + j.r) {
+        const angle = Math.atan2(dyP, dxP);
+        const overlap = (player.r + j.r) - distP;
+        
+        // Divide o empurrão entre os dois para não ficar "estranho"
+        player.x += Math.cos(angle) * (overlap / 2);
+        player.y += Math.sin(angle) * (overlap / 2);
+        j.x -= Math.cos(angle) * (overlap / 2);
+        j.y -= Math.sin(angle) * (overlap / 2);
+    }
+});
 // --- 1. COLETA PASSIVA (GRAVETOS NO CHÃO) ---
 resources.forEach(res => {
   if(!res.alive) return;
@@ -1476,48 +1580,62 @@ if ((!isMobile && mouse.down && !player.attacking) || (isMobile && touchAttack &
     }
   });
 
-  // --- ATAQUE A RECURSOS (ÁRVORE, COQUEIRO, PEDRA, OURO) ---
-  resources.forEach(res => {
+  // --- NOVO SISTEMA DE DANO E PROGRESSÃO ---
+resources.forEach(res => {
     if(!res.alive) return;
     const dist = Math.hypot(hx - res.x, hy - res.y);
     if(dist > res.r + 15) return;
 
-    // MADEIRA / COQUEIRO (PRECISA DE MACHADO)
+    // --- MADEIRA / COQUEIRO ---
     if(res.type === "tree" || res.type === "palm") {
-      if(w.style !== "axe") return;
-      res.hp -= w.damage;
-      createParticles(hx, hy, res.type === "tree" ? "#6d4c41" : "#27ae60", 6);
+        if(w.style !== "axe") return;
 
-      if(res.hp <= 0) {
-        res.alive = false;
-        res.respawnTimer = 0;
-        if(res.type === "tree") {
-          player.wood = Math.min(LIMITES.recursos, player.wood + (res.yield || 1));
-          player.sticks = Math.min(LIMITES.recursos, player.sticks + 2);
-        } else { // PALM
-          player.wood = Math.min(LIMITES.recursos, player.wood + 2);
-          player.sticks = Math.min(LIMITES.recursos, player.sticks + 1);
-          player.food = Math.min(player.maxFood, player.food + 20);
-          createParticles(res.x, res.y, "#ffffff", 12, 1.5);
+        // BLOQUEIO: Machado de Madeira (1) não quebra Árvore Grande (HP 300)
+        if(player.weapon === 1 && res.hp >= 300) {
+            console.log("Este machado é muito fraco para esta árvore!");
+            return; 
         }
-      }
+
+        res.hp -= w.damage;
+        createParticles(hx, hy, res.type === "tree" ? "#6d4c41" : "#27ae60", 6);
+
+        if(res.hp <= 0) {
+            res.alive = false;
+            res.respawnTimer = 0;
+            if(res.type === "tree") {
+                player.wood = Math.min(LIMITES.recursos, player.wood + (res.yield || 1));
+                player.sticks = Math.min(LIMITES.recursos, player.sticks + 2);
+            } else { // PALM
+                player.wood = Math.min(LIMITES.recursos, player.wood + 2);
+                player.sticks = Math.min(LIMITES.recursos, player.sticks + 1);
+                player.food = Math.min(player.maxFood, player.food + 20);
+                createParticles(res.x, res.y, "#ffffff", 12, 1.5);
+            }
+        }
     }
 
-    // PEDRA / OURO (PRECISA DE PICARETA)
+    // --- PEDRA / OURO ---
     if(res.type === "stone" || res.type === "gold") {
-      if(w.style !== "pickaxe") return;
-      res.hp -= w.damage;
-      createParticles(hx, hy, res.type === "gold" ? "#FFD700" : "#7f8c8d", 8);
+        if(w.style !== "pickaxe") return;
 
-      if(res.hp <= 0) {
-        res.alive = false;
-        res.respawnTimer = 0;
-        if(res.type === "gold") player.gold = Math.min(LIMITES.recursos, player.gold + 1);
-        if(res.type === "stone") player.stone = Math.min(LIMITES.recursos, player.stone + 1);
-        if(res.ref) res.ref.active = false;
-      }
+        // BLOQUEIO: Picareta de Madeira (2) não quebra Ouro
+        if(player.weapon === 2 && res.type === "gold") {
+            console.log("Você precisa de uma picareta de pedra para minerar ouro!");
+            return;
+        }
+
+        res.hp -= w.damage;
+        createParticles(hx, hy, res.type === "gold" ? "#FFD700" : "#7f8c8d", 8);
+
+        if(res.hp <= 0) {
+            res.alive = false;
+            res.respawnTimer = 0;
+            if(res.type === "gold") player.gold = Math.min(LIMITES.recursos, player.gold + 1);
+            if(res.type === "stone") player.stone = Math.min(LIMITES.recursos, player.stone + 1);
+            if(res.ref) res.ref.active = false;
+        }
     }
-  });
+});
 
 if(player.attacking){
   const hx = player.x + Math.cos(player.angle) * weapons[player.weapon].range;
@@ -1534,7 +1652,24 @@ zombies.forEach(z => {
     }
   }
 });
+jaguars.forEach(j => {
+    if(!j.alive) return;
 
+    if(Math.hypot(hx - j.x, hy - j.y) < j.r + 15){
+        // Tira dano baseado na arma atual
+        j.hp -= weapons[player.weapon].damage; 
+        
+        // Partículas cor de "onça/sangue"
+        createParticles(hx, hy, "#d3a625", 6); 
+        
+        if(j.hp <= 0){
+            j.alive = false;
+            // O Jaguar dá muito mais comida que o coelho!
+            player.food = Math.min(player.maxFood, player.food + 100); 
+            player.gold = Math.min(LIMITES.recursos, player.gold + 5); // Bônus por matar um predador
+        }
+    }
+});
 animals.forEach(ani => {
     if(!ani.alive) return; // Só bate se estiver vivo
 
@@ -1700,6 +1835,28 @@ animals.forEach(a => {
           }
       });
   }
+  jaguars.forEach(j => {
+    if (!j.alive) return;
+
+    // A onça persegue o player se estiver perto
+    const distToPlayer = Math.hypot(player.x - j.x, player.y - j.y);
+    
+    if (distToPlayer < 400) {
+        // Mira no player
+        j.angle = Math.atan2(player.y - j.y, player.x - j.x);
+        
+        // Se não estiver muito colada, ela corre atrás
+        if (distToPlayer > 10) {
+            j.x += Math.cos(j.angle) * j.speed;
+            j.y += Math.sin(j.angle) * j.speed;
+        }
+
+        // Se encostar no player, dá dano (ex: 1 de HP por frame)
+        if (distToPlayer < j.r + player.r) {
+            player.hp -= 0.5; 
+        }
+    }
+});
 }
 function drawBloodMoonText(){
     if(showBloodMoonText > 0){
@@ -1748,21 +1905,39 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
   if(w.style !== "hand") {
     // Definir cores: 3, 4 e 5 são de Pedra/Metal (Cinza)
     const isStone = (player.weapon >= 3);
-    const headColor = isStone ? "#7f8c8d" : "#bdc3c7"; 
+    const headColor = isStone ? "#7f8c8d" : "#a1887f"; 
     const woodColor = "#5d4037";
 
     
     if(w.style === "spear") {
       ctxRef.fillStyle = woodColor;
       ctxRef.fillRect(player.r + off, -2, 60, 4); 
-      ctxRef.fillStyle = "#bdc3c7"; 
+      ctxRef.fillStyle = "#3e2723"; 
       ctxRef.beginPath();
       ctxRef.moveTo(player.r + 60 + off, -6);
       ctxRef.lineTo(player.r + 75 + off, 0);
       ctxRef.lineTo(player.r + 60 + off, 6);
       ctxRef.fill();
     } 
-
+       else if(w.style === "torch") {
+    const off = player.attackProgress * 15;
+    // Cabo
+    ctxRef.fillStyle = "#5d4037";
+    ctxRef.fillRect(player.r + off, -3, 25, 6);
+    
+    // Chama
+    const flicker = Math.sin(Date.now() * 0.02) * 4;
+    ctxRef.fillStyle = "#ff7043";
+    ctxRef.beginPath();
+    ctxRef.arc(player.r + 25 + off, 0, 8 + flicker/2, 0, Math.PI * 2);
+    ctxRef.fill();
+    
+    // Brilho interno
+    ctxRef.fillStyle = "#fff176";
+    ctxRef.beginPath();
+    ctxRef.arc(player.r + 25 + off, 0, 4, 0, Math.PI * 2);
+    ctxRef.fill();
+}
     else if(w.style === "axe") {
       ctxRef.fillStyle = woodColor;
       ctxRef.fillRect(player.r + off, -3, 30, 6);
@@ -2296,6 +2471,164 @@ rabbitHoles.forEach(h => {
 
     ctx.restore();
 });
+jaguars.forEach(j => {
+    if (!j.alive) return;
+
+    // Culling (Só desenha o que está na tela)
+    if (j.x > camX() - 150 && j.x < camX() + canvas.width + 150 &&
+        j.y > camY() - 150 && j.y < camY() + canvas.height + 150) {
+
+        ctx.save();
+        ctx.translate(j.x - camX(), j.y - camY());
+
+        // --- 1. BARRA DE VIDA (Corrigida para usar j.hp e j.maxHp) ---
+        if (j.hp < j.maxHp) { 
+            let larguraBarra = 50;
+            let alturaBarra = 7;
+            let yBarra = -j.r - 20; 
+
+            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+            ctx.fillRect(-larguraBarra / 2, yBarra, larguraBarra, alturaBarra);
+
+            // Cálculo da porcentagem usando os nomes corretos:
+            let preenchimento = (j.hp / j.maxHp) * larguraBarra;
+            ctx.fillStyle = "#2ecc71"; 
+            ctx.fillRect(-larguraBarra / 2, yBarra, preenchimento, alturaBarra);
+        }
+
+        const breath = Math.sin(Date.now() * 0.005) * 1.5;
+        const currentR = j.r + breath;
+
+        // --- 2. SOMBRA NO CHÃO ---
+        ctx.fillStyle = "rgba(0,0,0,0.15)";
+        ctx.beginPath();
+        // Usando currentR para a sombra "pulsar" junto com o corpo
+        ctx.ellipse(0, currentR * 0.2, currentR * 1.3, currentR * 0.9, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.rotate(j.angle);
+
+        // 2. RABO (Grande e externo, com animação)
+        ctx.save();
+        ctx.translate(-currentR * 0.9, 0); 
+        const tailSwing = Math.sin(Date.now() * 0.003) * 0.15;
+        ctx.rotate(Math.PI / 2 + tailSwing + 0.15); 
+        ctx.strokeStyle = "#91711a"; 
+        ctx.lineWidth = 6;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(currentR * 0.6, currentR * 0.9, 0, currentR * 1.7);
+        ctx.stroke();
+        ctx.strokeStyle = "#d3a625";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.restore();
+
+        // === 3. ORELHAS (CORRIGIDAS: NAS BORDAS E MAIS PARA FORA) ===
+        // Desenha as orelhas ANTES do corpo para "colar"
+        [1, -1].forEach(side => {
+            ctx.save();
+            ctx.scale(1, side); // Sistema de espelho
+
+            // === MELHORIA: AFASTA O PONTO DE ORIGEM ===
+            // py e px ajustados para ficarem BEM na borda e um pouco para trás
+            const py = currentR * 0.95; // Mais longe do centro (quase no raio total)
+            const px = currentR * 0.35; // Mais para a frente, longe dos olhos e rabo
+            ctx.translate(-px, py); 
+            
+            // Ângulo de inclinação para fora (espelhado)
+            ctx.rotate(-0.5); 
+
+            // Desenha a orelha (Triângulo pequeno)
+            ctx.fillStyle = "#d3a625"; // Dourado
+            ctx.strokeStyle = "#91711a"; // Borda escura
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-8, 5);  // Base Traseira (fora do corpo)
+            ctx.lineTo(0, -16); // Ponta (Pequena e visível)
+            ctx.lineTo(8, 5);   // Base Dianteira (fora do corpo)
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+
+            // Interior (Detalhe Marrom)
+            ctx.fillStyle = "#5d4037"; // Marrom escuro
+            ctx.beginPath(); ctx.moveTo(-5, 4); ctx.lineTo(0, -9); ctx.lineTo(5, 4); ctx.fill();
+            ctx.restore();
+        });
+        // 4. MÃOS (Posição do Player - Estilo Moomoo.io)
+        const drawMaoAtaque = (side) => {
+            const px = currentR * 0.85; 
+            const py = side * (currentR * 0.6); 
+            ctx.fillStyle = "#111"; // GARRAS
+            for(let i = -1; i <= 1; i++) {
+                ctx.beginPath();
+                ctx.moveTo(px + 8, py + (i * 4));
+                ctx.lineTo(px + 26, py + (i * 2.5));
+                ctx.lineTo(px + 8, py + (i * 4) + 1);
+                ctx.fill();
+            }
+            ctx.fillStyle = "#d3a625";
+            ctx.strokeStyle = "#91711a";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(px, py, 11, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        };
+        drawMaoAtaque(1);
+        drawMaoAtaque(-1);
+
+        // 5. CORPO PRINCIPAL (A "Bolona")
+        let grad = ctx.createRadialGradient(-currentR*0.2, -currentR*0.2, currentR*0.1, 0, 0, currentR);
+        grad.addColorStop(0, "#f1c40f"); 
+        grad.addColorStop(1, "#d3a625");
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = "#91711a";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, currentR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // 6. ROSTO E OLHOS DE FÚRIA (V-Shape)
+        ctx.fillStyle = "#4e342e"; // Nariz
+        ctx.beginPath();
+        ctx.arc(currentR - 5, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        const drawFuryEye = (ey) => {
+            ctx.save();
+            ctx.translate(currentR * 0.4, ey); 
+            
+            // ÂNGULO DE BRAVEZA CORRIGIDO: Inclinando para o centro (V-shape)
+            ctx.rotate(ey > 0 ? -0.5 : 0.5);
+
+            // Fundo Branco (franzido)
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 12, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Pupila pequena e focada
+            ctx.fillStyle = "#000";
+            ctx.beginPath();
+            ctx.arc(4, 0, 4.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Reflexo de luz pequeno
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.arc(5, -1.5, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        };
+        drawFuryEye(-12);
+        drawFuryEye(12);
+
+        ctx.restore();
+    }
+});
 // 🌙 NOITE COM DUPLO RECORTE + FUMAÇA (ESTÁVEL)
 if(!isDay) {
   // 1. ESTRELAS
@@ -2320,7 +2653,14 @@ if(!isDay) {
       ctx.arc(fx, fy, raioPenumbra, 0, Math.PI * 2, true); 
     }
   });
-  
+  // ✨ LUZ DA TOCHA NA PENUMBRA
+  if (player.weapon === 6) {
+    const px = player.x - camX();
+    const py = player.y - camY();
+    const raioTochaP = 300; // Um pouco menor que a fogueira
+    ctx.moveTo(px + raioTochaP, py);
+    ctx.arc(px, py, raioTochaP, 0, Math.PI * 2, true);
+  }
   ctx.clip(); 
   ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; 
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2340,7 +2680,15 @@ if(!isDay) {
       ctx.arc(fx, fy, raioDia, 0, Math.PI * 2, true); 
     }
   });
-
+// ✨ LUZ DA TOCHA NO BREU
+  if (player.weapon === 6) {
+    const px = player.x - camX();
+    const py = player.y - camY();
+    // Se chover, a luz da tocha diminui
+    const raioTochaB = isRaining ? 150 : 160; 
+    ctx.moveTo(px + raioTochaB, py);
+    ctx.arc(px, py, raioTochaB, 0, Math.PI * 2, true);
+  }
   ctx.clip();
   ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2579,6 +2927,7 @@ function drawHotbar() {
     { id: "axe_stone", name: "Mach. P", weapon: 3 },
     { id: "pickaxe_stone", name: "Pic. P", weapon: 4 },
     { id: "spear", name: "Lança", weapon: 5 },
+    { id: "torch", name: "Tocha", weapon: 6 },
     { id: "campfire", name: "Fogueira", isPlaceable: true }
   ];
 
