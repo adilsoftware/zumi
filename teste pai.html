@@ -501,7 +501,7 @@ const weapons = [
   { name: "Tocha", range: 40, damage: 5, speed: 14, style: "torch" }
 ];
 
-let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[];
+let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [];
 
 function makeRock(x, y, radius, color, type="stone") {
   const points = [];
@@ -557,6 +557,46 @@ function spawnZombie(type = "normal") {
     });
   }
 }
+
+function spawnBird() {
+    let x, y, dist;
+    let achouLugar = false;
+
+    for (let tentativas = 0; tentativas < 30; tentativas++) {
+        x = Math.random() * MAP;
+        y = Math.random() * MAP;
+        dist = Math.hypot(x - player.x, y - player.y);
+        
+        let dentroDeObjeto = mountains.some(m => Math.hypot(x - m.x, y - m.y) < m.r + 10);
+        
+        if (!dentroDeObjeto && dist > 500) {
+            achouLugar = true;
+            break;
+        }
+    }
+
+    birds.push({
+        x: x, 
+        y: y,
+        r: 10,
+        hp: 15,          // Vida definida
+        maxHp: 15,
+        foodValue: 30,   // Valor da carne
+        maxSpeed: 1.5 + Math.random(),
+        speed: 1.5,
+        color: "#ffcc00",
+        wingColor: "#e6b800",
+        angle: Math.random() * Math.PI * 2,
+        timer: Math.random() * 10,
+        stamina: 8 + Math.random() * 4,
+        resting: false,
+        restTimer: 0,
+        active: true
+    });
+}
+// Inicializa os 250
+for(let i=0; i<250; i++) spawnBird();
+
 function spawnJaguar() {
     let x, y, dist;
     let minDist = 9000; // Começa com uma distância razoável
@@ -1573,6 +1613,20 @@ animals.forEach(ani => {
         player.y += Math.sin(angle) * overlap;
     }
 });
+birds.forEach(b => {
+    if (!b.active || !b.resting) return; // Só colide se estiver no chão
+
+    const dist = Math.hypot(player.x - b.x, player.y - b.y);
+    const minDist = player.r + b.r;
+
+    if (dist < minDist) {
+        const angle = Math.atan2(player.y - b.y, player.x - b.x);
+        const overlap = minDist - dist;
+        // Empurra o player levemente para fora do passarinho
+        player.x += Math.cos(angle) * overlap;
+        player.y += Math.sin(angle) * overlap;
+    }
+});
 // --- SISTEMA DE ONÇAS (JAGUARS) ---
 jaguars.forEach(j => {
     if (!j.alive) return;
@@ -1823,6 +1877,37 @@ jaguars.forEach(j => {
         }
     }
 });
+// --- DENTRO DA SUA FUNÇÃO DE ATAQUE ---
+for (let i = 0; i < birds.length; i++) {
+    let b = birds[i];
+    if (!b.active) continue;
+
+    // SÓ PODE BATER SE ESTIVER NO CHÃO (resting)
+    if (b.resting) {
+        // Usa o hx/hy (ponta da arma) para detectar o hit
+        let d = Math.hypot(hx - b.x, hy - b.y);
+        
+        // Colisão com a ponta da arma + raio do pássaro
+        if (d < b.r + 15) { 
+            b.hp -= w.damage; // Aplica o dano da arma (Lança=20, Tocha=5, Mão=3)
+            
+            // Sangue
+            createParticles(b.x, b.y, "#ff0000", 8);
+
+            if (b.hp <= 0) {
+                b.active = false;
+                // Dá a comida (12 de valor como definido no seu spawnBird)
+                player.food = Math.min(player.maxFood, player.food + b.foodValue);
+                console.log("Pássaro abatido! Comida + " + b.foodValue);
+            } else {
+                // Se sobreviveu ao golpe, foge desesperado
+                b.resting = false; 
+                b.stamina = 5; 
+                b.angle = Math.atan2(b.y - player.y, b.x - player.x);
+            }
+        }
+    }
+}
 animals.forEach(ani => {
     if(!ani.alive) return; // Só bate se estiver vivo
 
@@ -1988,6 +2073,62 @@ animals.forEach(a => {
           }
       });
   }
+// --- LÓGICA DOS PASSARINHOS ---
+for (let i = 0; i < birds.length; i++) {
+    let b = birds[i];
+    if (!b.active) continue;
+
+    const distPlayer = Math.hypot(player.x - b.x, player.y - b.y);
+    const dt = 0.016;
+
+    if (b.resting) {
+        b.speed = 0; 
+        b.restTimer += dt;
+
+        if (b.restTimer >= 2) { 
+            b.resting = false;
+            b.restTimer = 0;
+            b.stamina = 8 + Math.random() * 4;
+        }
+    } else {
+        // Voo e Fuga
+        if (distPlayer < 250) {
+            b.angle = Math.atan2(b.y - player.y, b.x - player.x);
+            b.speed = b.maxSpeed * 3; 
+            b.stamina -= dt;
+            if (Math.random() > 0.8) particles.push({ x: b.x, y: b.y, life: 15, color: "#d2b48c" });
+        } else {
+            b.speed = b.maxSpeed * 0.5; 
+            b.timer -= dt;
+            if (b.timer <= 0) {
+                b.angle = Math.random() * Math.PI * 2;
+                b.timer = 3 + Math.random() * 5;
+            }
+            if(b.stamina < 8) b.stamina += dt * 0.1;
+        }
+
+        b.x += Math.cos(b.angle) * b.speed;
+        b.y += Math.sin(b.angle) * b.speed;
+        b.stamina -= 0.005;
+        if (b.stamina <= 0) b.resting = true;
+    }
+
+    // Barreira do Mundo
+    if (b.x < 50) b.x = 50; if (b.x > MAP - 50) b.x = MAP - 50;
+    if (b.y < 50) b.y = 50; if (b.y > MAP - 50) b.y = MAP - 50;
+
+    // Lógica de Morte
+   if (b.hp <= 0 && b.active) {
+    b.active = false; // O pássaro some
+    
+    // Entrega a comida direto para a barra do player (igual na sua palmeira)
+    player.food = Math.min(player.maxFood, player.food + 35); 
+    
+    // Feedback visual (partículas vermelhas/laranjas de comida)
+    if (typeof createParticles === 'function') {
+        createParticles(b.x, b.y, "#ff4d4d", 10);
+    }
+}}
 jaguars.forEach(j => {
     if (!j.alive) return;
 
@@ -2651,6 +2792,70 @@ rabbitHoles.forEach(h => {
     ctx.fill();
 
     ctx.restore();
+});
+// --- DESENHO DOS PÁSSAROS MoMoo STYLE ---
+birds.forEach(b => {
+    if (!b.active) return;
+
+    if (b.x > camX() - 50 && b.x < camX() + canvas.width + 50 &&
+        b.y > camY() - 50 && b.y < camY() + canvas.height + 50) {
+        
+        const freqAsa = b.resting ? 0 : (b.speed > b.maxSpeed * 1.5 ? 0.04 : 0.02);
+        const flap = b.resting ? 0.5 : Math.sin(Date.now() * freqAsa);
+        const shadowDist = b.resting ? 2 : 5;
+
+        ctx.save();
+        ctx.translate(b.x - camX(), b.y - camY());
+        
+        // Desenha a Barra de Vida ANTES de rotacionar o corpo (para ela ficar reta)
+        if (b.hp < b.maxHp) {
+            let bw = 24; let bh = 4;
+            ctx.fillStyle = "red"; ctx.fillRect(-bw/2, -b.r - 15, bw, bh);
+            ctx.fillStyle = "#00ff00"; ctx.fillRect(-bw/2, -b.r - 15, (b.hp/b.maxHp)*bw, bh);
+        }
+
+        ctx.rotate(b.angle);
+        // 1. SOMBRA
+        ctx.fillStyle = "rgba(0,0,0,0.15)";
+        ctx.beginPath();
+        ctx.arc(0, shadowDist, b.r * 1.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. CORPO
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, b.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 3. ROSTO E BICO
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        ctx.arc(b.r * 0.7, -3, 2, 0, Math.PI * 2); 
+        ctx.arc(b.r * 0.7, 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#e67e22"; 
+        ctx.beginPath();
+        ctx.moveTo(b.r + 2, -2);
+        ctx.lineTo(b.r + 6, 0);
+        ctx.lineTo(b.r + 2, 2);
+        ctx.fill();
+
+        // 4. ASAS
+        ctx.fillStyle = b.wingColor;
+        [1, -1].forEach(lado => {
+            ctx.save();
+            ctx.translate(0, (b.r - 2) * lado);
+            // Aplica a rotação da asa (flap)
+            ctx.rotate((Math.PI / 6) * lado + flap * 0.5 * lado);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, b.r * 1.3, b.r * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
+
+        ctx.restore();
+    }
 });
 jaguars.forEach(j => {
     if (!j.alive) return;
