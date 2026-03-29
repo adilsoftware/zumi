@@ -97,7 +97,7 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
     <div id="instructions">
       • Sobreviva ao Ciclo de Dia e Noite<br>
       • Gerencie Fome e Stamina<br>
-      • Use 'C' (Craft) e 'I' (Inventário)
+      • Use 'C' (Craft) e 'E' (Inventário)
     </div>
     
     <div style="display: flex; flex-direction: column; gap: 15px;">
@@ -118,7 +118,7 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
           </div>
           <div style="flex:1; min-width:300px; background:rgba(255,255,255,0.05); padding:20px; border-radius:15px;">
               <h3 style="color:#e67e22; border-bottom:2px solid #e67e22;">🐆 PERIGOS</h3>
-              <p><strong>A Noite:</strong> Sem uma fogueira ou tocha, sua vida drenará rapidamente no breu total.</p>
+              <p><strong>A Noite:</strong> Sem uma fogueira ou tocha, você ficará na escuridão.</p>
               <p><strong>Onças:</strong> São rápidas e silenciosas. Elas costumam caçar perto das bordas das florestas.</p>
               <p><strong>Fome:</strong> Mantenha a barra de comida alta colhendo frutas ou usando o inventário para comer.</p>
           </div>
@@ -470,11 +470,15 @@ const player = {
     pickaxe_stone: 0,
     campfire: 0,
     spear: 0,
-    torch: 0
+    torch: 0,
+    fishing_rod: 0
   }
 };
 let isRaining = false;
 let rainTextTimer = 0;
+let isFishing = false;      // O jogador está com a linha na água?
+let fishTimer = 0;          // Quanto tempo falta para o peixe morder?
+let fishBite = false;       // O peixe já mordeu (as bolhas ficaram loucas)?
 let craftingOpen = false;
 let placingCampfire = false;
 let inventoryOpen = false;
@@ -488,7 +492,8 @@ const recipes = {
   pickaxe_stone: { name: "Picareta de Pedra", wood: 3, stone: 4, sticks: 2, weaponIndex: 4 },
   campfire: { name: "Fogueira", wood: 2, sticks: 10, isPlaceable: true },
   spear: { name: "Lança", wood: 4, sticks: 2, weaponIndex: 5 },
-  torch: { name: "Tocha", wood: 2, stone: 2, sticks: 1, weaponIndex: 6 }, 
+  torch: { name: "Tocha", wood: 2, stone: 2, sticks: 1, weaponIndex: 6 },
+  fishing_rod: { name: "Vara de Pesca", wood: 5, sticks: 1, weaponIndex: 7 }, // weaponIndex 7 (Vara) 
   wood_convert: { name: "Refinar Madeira", wood: 0, sticks: 2, yield: 1 } 
 };
 const weapons = [
@@ -498,7 +503,8 @@ const weapons = [
   { name: "Machado Pedra", range: 45, damage: 16.7, speed: 15, style: "axe" }, // Novo
   { name: "Picareta Pedra", range: 50, damage: 16.7, speed: 17, style: "pickaxe" }, // Novo
   { name: "Lança", range: 75, damage: 20, speed: 10, style: "spear" }, // Novo
-  { name: "Tocha", range: 40, damage: 5, speed: 14, style: "torch" }
+  { name: "Tocha", range: 40, damage: 5, speed: 14, style: "torch" },
+  { name: "Vara de Pesca", range: 90, damage: 4, speed: 1000, style: "fishing_rod" }
 ];
 
 let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [];
@@ -987,7 +993,12 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
         player.weapon = 6; 
         inventoryOpen = false; // Fecha para mostrar a luz
     }
-    
+    // 🎣 NOVO: Adicionando a VARA DE PESCA (Slot 12)
+    else if (i === 12 && player.inventory.fishing_rod > 0) {
+        player.weapon = 7; // Índice 7 na lista 'weapons'
+        inventoryOpen = false; // Fecha para o jogador ver a vara na mão
+        console.log("Vara equipada via Inventário!");
+    }
     // 3. Fogueira (Slot 4)
     else if (i === 4 && player.inventory.campfire > 0) {
          placingCampfire = true;
@@ -1005,7 +1016,7 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
         return; // Se clicou no inventário mas fora de um slot, também não ataca
     }
 
-    // 4. Se não tem nenhum menu aberto, verifica se vai colocar fogueira ou ATACAR
+    // 4. LÓGICA DE LANÇAR O ANZOL OU ATACAR
     if (placingCampfire && player.inventory.campfire > 0) {
         const worldX = mx + camX();
         const worldY = my + camY();
@@ -1016,7 +1027,33 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
         player.inventory.campfire--;
         placingCampfire = false;
     } else {
-        mouse.down = true; // Só ataca se não estiver colocando fogueira nem com inventário aberto
+        // --- LÓGICA DE ATAQUE / PESCA ---
+        const worldMouseX = mx + camX();
+        const worldMouseY = my + camY();
+
+        if (weapons[player.weapon].style === "fishing_rod") {
+            if (isInRiver(worldMouseX, worldMouseY)) {
+                const dx = worldMouseX - player.x;
+                const dy = worldMouseY - player.y;
+                const distClique = Math.hypot(dx, dy);
+                
+                const maxRange = 150; 
+                const distFinal = Math.min(distClique, maxRange);
+                
+                player.anzolDestX = player.x + Math.cos(player.angle) * distFinal;
+                player.anzolDestY = player.y + Math.sin(player.angle) * distFinal;
+                
+                mouse.down = true; 
+            } else {
+                // TRAVA CRÍTICA: Se clicar na terra, reseta tudo da vara
+                mouse.down = false;
+                player.attacking = false;
+                player.attackProgress = 0; // Para a animação na hora
+                isFishing = false;
+            }
+        } else {
+            mouse.down = true;
+        }
     }
 });
 function drawFullscreenInventory() {
@@ -1046,7 +1083,7 @@ function drawFullscreenInventory() {
     { label: "PICARETA P.", value: player.inventory.pickaxe_stone, color: "#757575", detail: "#fff", max: LIMITES.ferramentas },
     { label: "COMIDA", value: Math.floor(player.food), color: "#e74c3c", detail: "#c0392b", max: 100 },
     { label: "TOCHA", value: player.inventory.torch || 0, color: "#f39c12", detail: "#d35400", max: 1 },
-    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "VARA PESCA", value: player.inventory.fishing_rod || 0, color: "#8b4513", detail: "#fff", max: 1 },
     { label: "SLOT VAZIO", value: 0, empty: true }
   ];
 
@@ -1114,6 +1151,25 @@ function drawFullscreenInventory() {
     ctx.fill();
     ctx.restore();
 }
+else if (res.label === "VARA PESCA") {
+        ctx.save();
+        ctx.translate(iconCenterX, iconCenterY);
+        // Haste da vara
+        ctx.strokeStyle = "#8b4513";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-15, 15);
+        ctx.lineTo(15, -15);
+        ctx.stroke();
+        // Linha pendurada
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(15, -15);
+        ctx.lineTo(20, 10);
+        ctx.stroke();
+        ctx.restore();
+      }
       // Outros ícones (Madeira, Pedra, Ouro, Ferramentas)
       else if (res.color) {
         ctx.fillStyle = res.color;
@@ -1200,7 +1256,7 @@ function tryCraft(id) {
   if (!r) return;
 
   // Limite para ferramentas (Não deixa fazer mais de 1)
-  const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear"];
+  const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "fishing_rod"];
   if (ferramentas.includes(id) && player.inventory[id] >= LIMITES.ferramentas) {
     console.log("Você já tem esta ferramenta!");
     return;
@@ -1302,6 +1358,13 @@ function equiparItemPorIndice(index) {
             // Índices 0, 1, 2, 3 são recursos (Madeira, Pedra, Ouro, Graveto)
             // Geralmente não equipam nada, mas você pode colocar um som de clique.
             console.log("Clicou no recurso: " + index);
+            break;
+            
+            case 12: // VARA DE PESCA (Novo!)
+            if (player.inventory.fishing_rod > 0) {
+                player.weapon = 7; // Índice 7 na lista 'weapons'
+                console.log("Vara equipada!");
+            }
             break;
     }
 }
@@ -2179,6 +2242,66 @@ jaguars.forEach(j => {
         j.y += Math.sin(j.angle) * (j.speed * 0.5);
     }
 });
+if (player.attacking && weapons[player.weapon].style === "fishing_rod") {
+    
+    const ax = player.anzolDestX;
+    const ay = player.anzolDestY;
+
+    // 1. CALCULA A DISTÂNCIA ENTRE O PLAYER E O ANZOL NO MUNDO
+    const distDaBoia = Math.hypot(player.x - ax, player.y - ay);
+
+    // 2. SE A LINHA ESTICAR DEMAIS (ex: 250px), ELA ARREBENTA
+    if (distDaBoia > 250) {
+        console.log("A linha arrebentou!");
+        isFishing = false;
+        player.attacking = false;
+        player.attackProgress = 0;
+        fishBite = false;
+        // Efeito visual de fumaça onde a boia estava
+        createParticles(ax, ay, "rgba(200,200,200,0.5)", 5, 0.5);
+    } 
+    // 3. SE ESTIVER NO RIO, CONTINUA PESCANDO
+    else if (isInRiver(ax, ay)) {
+        if (!isFishing) {
+            isFishing = true;
+            fishTimer = 150 + Math.random() * 200;
+            fishBite = false;
+        }
+
+        player.attackProgress = 1; // Trava a vara esticada
+
+        if (fishTimer > 0) {
+            fishTimer--;
+        } else {
+            fishBite = true; // Peixe mordeu!
+        }
+
+        // BOLHAS NA BOIA
+        let chanceBolha = (fishBite) ? 0.8 : 0.15;
+        if (Math.random() < chanceBolha) {
+            createParticles(ax, ay, "rgba(255,255,255,0.7)", 1, 0.4);
+        }
+    } 
+    // 4. SE O ANZOL CAIR NA TERRA (Proteção extra)
+    else {
+        isFishing = false;
+        player.attacking = false;
+        player.attackProgress = 0;
+    }
+} else {
+    // MOMENTO DA CAPTURA (Soltou o clique)
+    if (isFishing) {
+        if (fishBite) {
+            console.log("BOA! Você pescou um peixe!");
+            player.food = Math.min(player.maxFood, player.food + 40);
+            createParticles(player.x, player.y, "#ffffff", 15, 1);
+        }
+        // Reseta tudo ao recolher a vara
+        isFishing = false;
+        fishBite = false;
+        player.attackProgress = 0;
+    }
+}
 }
 function drawBloodMoonText(){
     if(showBloodMoonText > 0){
@@ -2281,6 +2404,46 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
       ctxRef.beginPath();
       ctxRef.arc(player.r + 15 + off, 0, 20, -Math.PI/2, Math.PI/2);
       ctxRef.stroke();
+    }
+    else if(w.style === "fishing_rod") {
+        const off = player.attackProgress * 20;
+        
+        // 1. Desenha a madeira da vara (segue o braço/corpo)
+        ctxRef.fillStyle = "#8b4513";
+        ctxRef.fillRect(player.r + off, -2, 70, 4); 
+        ctxRef.fillStyle = "#5d4037";
+        ctxRef.fillRect(player.r + 70 + off, -1, 15, 2);
+
+        if (isFishing) {
+            // PONTO A: Ponta da vara no mundo
+            // Como estamos dentro do translate/rotate do player, a ponta está em (player.r + 85 + off, 0)
+            const pontaX = player.r + 85 + off;
+            const pontaY = 0;
+
+            // PONTO B: Onde o anzol está parado no mundo
+            const dx = player.anzolDestX - player.x;
+            const dy = player.anzolDestY - player.y;
+
+            // Converter a posição do mundo (anzol) para o sistema de coordenadas local do player (ctxRef)
+            const localAnzolX = dx * Math.cos(-player.angle) - dy * Math.sin(-player.angle);
+            const localAnzolY = dx * Math.sin(-player.angle) + dy * Math.cos(-player.angle);
+
+            // Desenhar a linha da ponta da vara até o anzol
+            ctxRef.save();
+            ctxRef.strokeStyle = "rgba(255, 255, 255, 0.5)";
+            ctxRef.lineWidth = 1;
+            ctxRef.beginPath();
+            ctxRef.moveTo(pontaX, pontaY); 
+            ctxRef.lineTo(localAnzolX, localAnzolY);
+            ctxRef.stroke();
+
+            // Boia na posição local do anzol
+            ctxRef.fillStyle = (fishBite && Math.floor(Date.now()/200)%2) ? "#fff" : "#ff4d4d";
+            ctxRef.beginPath();
+            ctxRef.arc(localAnzolX, localAnzolY, 4, 0, Math.PI * 2);
+            ctxRef.fill();
+            ctxRef.restore();
+        }
     }
   }
 
