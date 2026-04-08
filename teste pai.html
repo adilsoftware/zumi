@@ -225,7 +225,13 @@ if (craftingOpen) {
         craftingOpen = false;
         return; // Sai da função touch para não clicar em nada embaixo
     }
-
+if (isMobile && showCraftMenu) {
+    // Se clicar na área da "Seta" (ajuste x e y conforme seu layout)
+    if (mouseX > canvas.width - 60 && mouseY > canvas.height / 2 - 30 && mouseY < canvas.height / 2 + 30) {
+        craftPage = (craftPage === 0) ? 1 : 0; // Alterna entre página 0 e 1
+        console.log("Mudou para página: " + craftPage);
+    }
+}
     // 2. Clicar nos Itens (Usa a sua lista real de receitas)
     const items = Object.keys(recipes); // Pega TODOS os itens (inclusive a madeira/wood_convert)
     
@@ -479,6 +485,8 @@ let rainTextTimer = 0;
 let isFishing = false;      // O jogador está com a linha na água?
 let fishTimer = 0;          // Quanto tempo falta para o peixe morder?
 let fishBite = false;       // O peixe já mordeu (as bolhas ficaram loucas)?
+let craftPage = 0; // 0 para itens básicos, 1 para itens avançados (pesca)
+const itemsPerPage = 5;
 let craftingOpen = false;
 let placingCampfire = false;
 let inventoryOpen = false;
@@ -504,10 +512,10 @@ const weapons = [
   { name: "Picareta Pedra", range: 50, damage: 16.7, speed: 17, style: "pickaxe" }, // Novo
   { name: "Lança", range: 75, damage: 20, speed: 10, style: "spear" }, // Novo
   { name: "Tocha", range: 40, damage: 5, speed: 14, style: "torch" },
-  { name: "Vara de Pesca", range: 90, damage: 4, speed: 1000, style: "fishing_rod" }
+  { name: "Vara de Pesca", range: 90, damage: 0, speed: 1000, style: "fishing_rod" }
 ];
 
-let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [];
+let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [], fishes = [];
 
 function makeRock(x, y, radius, color, type="stone") {
   const points = [];
@@ -563,6 +571,34 @@ function spawnZombie(type = "normal") {
     });
   }
 }
+
+function spawnFishes(amount) {
+    if (!rivers || rivers.length === 0) return; 
+
+    const coresVibrantes = ["#FF8C00", "#FFD700", "#00FF00"]; // Laranja, Ouro, Verde
+    const coresCamufladas = ["#3b78b5", "#2c5d8f", "#4a6b5d"]; // Tons de azul e lodo
+
+    for (let i = 0; i < amount; i++) {
+        const r = rivers[0];
+        // Sorteia a cor: 70% camuflado, 30% vibrante
+        let corSorteada = Math.random() > 0.3 ? 
+            coresCamufladas[Math.floor(Math.random() * coresCamufladas.length)] : 
+            coresVibrantes[Math.floor(Math.random() * coresVibrantes.length)];
+
+        fishes.push({
+            x: r.x + Math.random() * r.w,
+            y: r.y + Math.random() * r.h,
+            r: 13,
+            angle: Math.random() * Math.PI * 2,
+            speed: 0.8 + Math.random() * 0.5,
+            color: corSorteada, // Agora o peixe tem cor!
+            alive: true,
+            lastBoost: 0,
+            isBoosting: false
+        });
+    }
+}
+
 
 function spawnBird() {
     let x, y, dist;
@@ -671,7 +707,7 @@ function isInRiver(x,y){
   if(Math.hypot(x-circularRiver.x, y-circularRiver.y) < circularRiver.r) return true;
   return false;
 }
-
+spawnFishes(90);
 function isInSand(x,y){
   if(isInRiver(x,y)) return false; 
   if(y > (rivers[0].y - SAND_WIDTH) && y < (rivers[0].y + rivers[0].h + SAND_WIDTH)) return true;
@@ -947,7 +983,31 @@ function createParticles(x,y,color,count=6, speedMult=1){
     particles.push({x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,r:Math.random()*3+2,life:20+Math.random()*10,color});
   }
 }
+let lastFishRespawn = Date.now();
 
+function handleFishRespawn() {
+    const agora = Date.now();
+    // Só tenta spawnar se tiver menos de 25 peixes no total
+    if (fishes.length < 25) {
+        // Sorteia um tempo entre 1 e 3 minutos (60.000ms a 180.000ms)
+        let tempoNecessario = 60000 + Math.random() * 120000;
+
+        if (agora - lastFishRespawn > tempoNecessario) {
+            // Sorteia entre 1 e 3 peixes para nascer
+            let quantidade = Math.floor(Math.random() * 3) + 1;
+            spawnFishes(quantidade); 
+            lastFishRespawn = agora;
+            console.log(quantidade + " novos peixes nasceram no rio.");
+        }
+    }
+}
+function cleanDeadFishes() {
+    for (let i = fishes.length - 1; i >= 0; i--) {
+        if (!fishes[i].alive) {
+            fishes.splice(i, 1);
+        }
+    }
+}
 canvas.addEventListener("mousedown", e => {
     // 1. Pegar a posição exata do mouse dentro do canvas
     const rect = canvas.getBoundingClientRect();
@@ -1690,6 +1750,146 @@ birds.forEach(b => {
         player.y += Math.sin(angle) * overlap;
     }
 });
+fishes.forEach(f => {
+    if (!f.alive) return;
+
+    const dx = f.x - player.x;
+    const dy = f.y - player.y;
+    const dist = Math.hypot(dx, dy);
+    const agora = Date.now();
+
+    if (dist > 1000) return; 
+
+    // --- 1. LÓGICA DE SUSTO (Fuga imediata) ---
+    if (f.assustado) {
+        f.isBoosting = true;
+        f.lastBoost = agora;
+        // Foge para a direção oposta do player
+        f.angle = Math.atan2(f.y - player.y, f.x - player.x);
+        f.assustado = false; 
+        f.recusouIsca = true;
+        setTimeout(() => { f.isBoosting = false; f.recusouIsca = false; }, 1500);
+    }
+
+    // --- 2. VERIFICAÇÃO DE ESTADO ---
+    // SE NÃO ESTIVER PRESO, ELE NADA E SE ATRAI PELA ISCA
+    if (!f.presoNoAnzol) {
+        
+        // Inteligência de Fuga Natural (do player)
+        if (dist < 220) {
+            if (dist < 120 && agora - (f.lastBoost || 0) > 2000) {
+                f.isBoosting = true;
+                f.lastBoost = agora;
+                f.angle = Math.atan2(dy, dx);
+                setTimeout(() => { f.isBoosting = false; }, 600);
+            }
+            let anguloFuga = Math.atan2(dy, dx);
+            let diff = anguloFuga - f.angle;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            f.angle += diff * 0.1; 
+        }
+
+        // ATRAÇÃO DA ISCA
+        if (isFishing && !fishBite && !f.recusouIsca) {
+            const dAnzol = Math.hypot(f.x - player.anzolDestX, f.y - player.anzolDestY);
+            if (dAnzol < 200) {
+                // Chance de recusar
+                if (Math.random() < 0.005) { 
+                    f.recusouIsca = true;
+                    f.angle += Math.PI; 
+                    setTimeout(() => { f.recusouIsca = false; }, 8000); 
+                    return; 
+                }
+
+                let angIsca = Math.atan2(player.anzolDestY - f.y, player.anzolDestX - f.x);
+                let diff = angIsca - f.angle;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                f.angle += diff * 0.1;
+
+                if (dAnzol < 15) {
+                    fishBite = true; 
+                    f.presoNoAnzol = true;
+                    fishTimer = 180;
+                }
+            }
+        }
+
+        // MOVIMENTO FÍSICO (Aplica a velocidade se não estiver preso)
+        let moveSpeed = f.isBoosting ? 9.5 : (dist < 220 ? 3.5 : 1.2);
+        f.x += Math.cos(f.angle) * moveSpeed;
+        f.y += Math.sin(f.angle) * moveSpeed;
+
+    } else {
+        // --- 3. SE ESTIVER PRESO ---
+        // Ele apenas segue a boia e "roda" para mostrar que está lutando
+        f.x = player.anzolDestX;
+        f.y = player.anzolDestY;
+        f.angle += 0.2; 
+    }
+    // --- 4. COLISÃO SÓLIDA PLAYER vs PEIXE (Igual Onça vs Player) ---
+    if (dist < player.r + f.r) {
+        const angP = Math.atan2(dy, dx);
+        const overlapP = (player.r + f.r) - dist;
+        // Divide o empurrão entre os dois para não bugar
+        player.x -= Math.cos(angP) * (overlapP * 0.2); // Player sente um "toque"
+        player.y -= Math.sin(angP) * (overlapP * 0.2);
+        f.x += Math.cos(angP) * (overlapP * 0.8);
+        f.y += Math.sin(angP) * (overlapP * 0.8);
+    }
+// --- 4. COLISÃO PEIXE vs PEIXE (PARA NÃO SOBREPOR) ---
+    fishes.forEach(other => {
+        if (other === f || !other.alive) return;
+        if (Math.abs(f.x - other.x) < 30 && Math.abs(f.y - other.y) < 30) {
+            const dxF = other.x - f.x;
+            const dyF = other.y - f.y;
+            const distF = Math.hypot(dxF, dyF);
+            if (distF < f.r + other.r) {
+                const angF = Math.atan2(dyF, dxF);
+                const overlapF = (f.r + other.r) - distF;
+                f.x -= Math.cos(angF) * (overlapF / 2);
+                f.y -= Math.sin(angF) * (overlapF / 2);
+                other.x += Math.cos(angF) * (overlapF / 2);
+                other.y += Math.sin(angF) * (overlapF / 2);
+            }
+        }
+    });
+    // --- 5. COLISÃO COM RECURSOS (Copiado da Onça e Otimizado) ---
+    // Usamos um for simples que é mais rápido que forEach para listas grandes
+    let obstaculos = [...resources, ...rocks, ...mountains];
+    for (let i = 0; i < obstaculos.length; i++) {
+        let res = obstaculos[i];
+        if (!res.active && res.hp <= 0) continue;
+        if (res.type === "stick") continue;
+
+        // Filtro rápido de proximidade (Apenas se estiver "perto")
+        if (Math.abs(f.x - res.x) < 80 && Math.abs(f.y - res.y) < 80) {
+            const rDx = f.x - res.x;
+            const rDy = f.y - res.y;
+            const rDist = Math.hypot(rDx, rDy);
+            const colRadius = res.r || 20;
+            const minDist = f.r + colRadius;
+
+            if (rDist < minDist) {
+                const angleCol = Math.atan2(rDy, rDx);
+                const overlap = minDist - rDist;
+                f.x += Math.cos(angleCol) * overlap;
+                f.y += Math.sin(angleCol) * overlap;
+                f.angle = angleCol + (Math.random() - 0.5); // Desvia
+            }
+        }
+    }
+
+    // --- 6. LIMITES DO RIO (FÍSICO) ---
+    const r = rivers[0];
+    if (r) {
+        if (f.x < r.x + f.r) { f.x = r.x + f.r; f.angle = 0; }
+        if (f.x > r.x + r.w - f.r) { f.x = r.x + r.w - f.r; f.angle = Math.PI; }
+        if (f.y < r.y + f.r) { f.y = r.y + f.r; f.angle = Math.PI / 2; }
+        if (f.y > r.y + r.h - f.r) { f.y = r.y + r.h - f.r; f.angle = -Math.PI / 2; }
+    }
+});
 // --- SISTEMA DE ONÇAS (JAGUARS) ---
 jaguars.forEach(j => {
     if (!j.alive) return;
@@ -2253,13 +2453,20 @@ if (player.attacking && weapons[player.weapon].style === "fishing_rod") {
     // 2. SE A LINHA ESTICAR DEMAIS (ex: 250px), ELA ARREBENTA
     if (distDaBoia > 250) {
         console.log("A linha arrebentou!");
+        fishes.forEach(f => {
+            if (f.presoNoAnzol) {
+                f.presoNoAnzol = false;
+                f.assustado = true; // Ativa a fuga no peixe
+            }
+        });
+        
         isFishing = false;
         player.attacking = false;
-        player.attackProgress = 0;
+
         fishBite = false;
-        // Efeito visual de fumaça onde a boia estava
+
         createParticles(ax, ay, "rgba(200,200,200,0.5)", 5, 0.5);
-    } 
+    }
     // 3. SE ESTIVER NO RIO, CONTINUA PESCANDO
     else if (isInRiver(ax, ay)) {
         if (!isFishing) {
@@ -2271,37 +2478,74 @@ if (player.attacking && weapons[player.weapon].style === "fishing_rod") {
         player.attackProgress = 1; // Trava a vara esticada
 
         if (fishTimer > 0) {
-            fishTimer--;
-        } else {
-            fishBite = true; // Peixe mordeu!
+        fishTimer--;
+    } else {
+        fishBite = true; // Peixe mordeu!
+
+        // --- NOVIDADE: LÓGICA DA FISGADA (PUXÃO) ---
+        // Checa se o jogador se moveu (o "puxão" com as teclas ou mouse)
+        let moveuX = Math.abs(player.x - (player.oldX || player.x));
+            let moveuY = Math.abs(player.y - (player.oldY || player.y));
+
+            if (moveuX > 1.2 || moveuY > 1.2) { 
+                // SÓ GANHA COMIDA SE UM PEIXE REAL ESTIVER NO ANZOL
+                let peixeCapturado = false;
+                fishes.forEach(f => {
+                    if (f.presoNoAnzol && f.alive) { 
+                        f.alive = false; // O PEIXE SOME DO JOGO
+                        f.presoNoAnzol = false;
+                        peixeCapturado = true;
+                    }
+                });
+
+                if (peixeCapturado) {
+                    console.log("FISGOU!");
+                    player.food = Math.min(player.maxFood, player.food + 40);
+                    createParticles(player.x, player.y, "#ffffff", 15, 1);
+                }
+                
+                // Finaliza o estado
+                isFishing = false;
+                fishBite = false;
+                player.attacking = false;
+            }
         }
 
-        // BOLHAS NA BOIA
+        // BOLHAS VISUAIS
         let chanceBolha = (fishBite) ? 0.8 : 0.15;
         if (Math.random() < chanceBolha) {
             createParticles(ax, ay, "rgba(255,255,255,0.7)", 1, 0.4);
         }
-    } 
-    // 4. SE O ANZOL CAIR NA TERRA (Proteção extra)
-    else {
-        isFishing = false;
-        player.attacking = false;
-        player.attackProgress = 0;
     }
-} else {
-    // MOMENTO DA CAPTURA (Soltou o clique)
+// 4. SE O ANZOL CAIR NA TERRA
+else {
+    isFishing = false;
+    player.attacking = false;
+    player.attackProgress = 0;
+}
+ } else {
+    // MOMENTO DE RECOLHER A VARA (Soltou o clique)
     if (isFishing) {
-        if (fishBite) {
-            console.log("BOA! Você pescou um peixe!");
-            player.food = Math.min(player.maxFood, player.food + 30);
-            createParticles(player.x, player.y, "#ffffff", 15, 1);
-        }
-        // Reseta tudo ao recolher a vara
+        fishes.forEach(f => {
+            if (f.presoNoAnzol) {
+                f.presoNoAnzol = false;
+                f.assustado = true; // Peixe foge ao ser solto
+            }
+        });
         isFishing = false;
         fishBite = false;
         player.attackProgress = 0;
+        fishes.forEach(f => f.presoNoAnzol = false);
+        console.log("Recolheu a linha.");
     }
 }
+
+// ATUALIZA A POSIÇÃO ANTIGA (Coloque isso no final do seu update geral)
+player.oldX = player.x;
+player.oldY = player.y;
+
+handleFishRespawn();
+cleanDeadFishes();
 }
 function drawBloodMoonText(){
     if(showBloodMoonText > 0){
@@ -3017,6 +3261,57 @@ birds.forEach(b => {
             ctx.restore();
         });
 
+        ctx.restore();
+    }
+});
+// --- DESENHO DO PEIXE (ESTILO CLÁSSICO) ---
+fishes.forEach(f => {
+  if (!f.alive) return;
+    // Só desenha se estiver na tela (Culling)
+    if (f.x > camX() - 50 && f.x < camX() + canvas.width + 50 &&
+        f.y > camY() - 50 && f.y < camY() + canvas.height + 50) {
+        
+        ctx.save();
+        ctx.translate(f.x - camX(), f.y - camY());
+        ctx.rotate(f.angle);
+
+        // --- NOVO: DESENHO DO RASTRO DE IMPULSO (VISÍVEL NO DRAW) ---
+        if (f.isBoosting) {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.5)"; // Bolhas brancas transparentes
+            ctx.beginPath();
+            // Desenha 3 bolhas atrás do peixe
+            ctx.arc(-f.r - 5, -3, 3, 0, Math.PI * 2);
+            ctx.arc(-f.r - 8, 2, 2.5, 0, Math.PI * 2);
+            ctx.arc(-f.r - 12, -1, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // --- RESTO DO DESENHO (ESTILO CLÁSSICO .IO) ---
+        ctx.strokeStyle = "#000000"; ctx.lineWidth = 3; 
+        
+        // Nadadeiras
+        ctx.fillStyle = f.color || "#3498db";
+        [1, -1].forEach(lado => {
+            ctx.beginPath(); ctx.arc(-2, f.r * lado, f.r * 0.4, 0, Math.PI * 2);
+            ctx.fill(); ctx.stroke();
+        });
+
+        // Corpo
+        ctx.beginPath(); ctx.arc(0, 0, f.r, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+
+        // Rabo
+        ctx.beginPath(); ctx.moveTo(-f.r, 0); ctx.lineTo(-f.r - 10, -8);
+        ctx.lineTo(-f.r - 10, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+        // Olhos
+        ctx.fillStyle = "white";
+        ctx.beginPath(); ctx.arc(f.r * 0.5, -f.r * 0.4, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(f.r * 0.5, f.r * 0.4, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "black";
+        ctx.beginPath(); ctx.arc(f.r * 0.65, -f.r * 0.4, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(f.r * 0.65, f.r * 0.4, 2, 0, Math.PI * 2); ctx.fill();
+        
         ctx.restore();
     }
 });
