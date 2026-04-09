@@ -217,14 +217,39 @@ if (inventoryOpen) {
         
     // --- A) SE O CRAFT ESTIVER ABERTO ---
 if (craftingOpen) {
-    // 1. Botão FECHAR (Topo Direito)
-    const sw = 140, sh = 70;
-    const sx = canvas.width - sw - 20, sy = 20;
-    
-    if (tx > sx && tx < sx + sw && ty > sy && ty < sy + sh) {
+    // 1. Botão FECHAR (Meio Esquerda)
+    const sw_close = 140, sh_close = 80, sx_close = 20, sy_close = canvas.height / 2 - 40;
+    if (tx > sx_close && tx < sx_close + sw_close && ty > sy_close && ty < sy_close + sh_close) {
         craftingOpen = false;
-        return; // Sai da função touch para não clicar em nada embaixo
+        return; 
     }
+
+    // 2. CLIQUE NA SETA (Trocar Página)
+    // Se tocar na área da seta na direita
+    if (tx > canvas.width - 100 && ty > canvas.height / 2 - 60 && ty < canvas.height / 2 + 60) {
+        craftPage = (craftPage === 0) ? 1 : 0;
+        return; 
+    }
+
+   // 3. CLIQUE NOS ITENS FILTRADOS
+const allKeys = Object.keys(recipes);
+let displayKeys;
+
+if (craftPage === 0) {
+    displayKeys = allKeys.filter(k => k !== "fishing_rod");
+} else {
+    displayKeys = allKeys.filter(k => k === "fishing_rod");
+}
+
+for (let i = 0; i < displayKeys.length; i++) {
+    const pos = getCraftItemPos(i); // i é a posição visual na tela (0, 1, 2...)
+
+    if (tx >= pos.x && tx <= pos.x + pos.w && ty >= pos.y && ty <= pos.y + pos.h) {
+        tryCraft(displayKeys[i]); // Compra o item correto da lista filtrada
+        return; 
+    }
+}
+
 if (isMobile && showCraftMenu) {
     // Se clicar na área da "Seta" (ajuste x e y conforme seu layout)
     if (mouseX > canvas.width - 60 && mouseY > canvas.height / 2 - 30 && mouseY < canvas.height / 2 + 30) {
@@ -293,24 +318,93 @@ if (placingCampfire) {
     placingCampfire = false;    // Sai do modo de construção
     continue; // Pula o resto do processamento desse toque
 }
-        // --- D) JOYSTICK (LADO ESQUERDO) ---
-        // Se tocar no lado esquerdo da tela, o jogador ANDA
-        if (tx < canvas.width / 2 && !touchMove.active) {
-            touchMove.active = true;
-            touchMove.id = t.identifier;
-            touchMove.startX = tx;
-            touchMove.startY = ty;
-        } 
-        // --- E) MIRA (LADO DIREITO) ---
-        // Se tocar no lado direito (fora do botão de ataque), ele GIRA
-        else if (tx >= canvas.width / 2 && !touchAim.active) {
-            touchAim.active = true;
-            touchAim.id = t.identifier;
-            touchAim.startX = tx;
-            touchAim.startY = ty;
+// --- 5. LÓGICA DE JOGO (MOVIMENTO / ATAQUE / PESCA) ---
+            if (tx < canvas.width / 2) {
+                // LADO ESQUERDO: ANDAR
+                if (!touchMove.active) {
+                    touchMove.active = true;
+                    touchMove.id = t.identifier;
+                    touchMove.startX = tx;
+                    touchMove.startY = ty;
+                }
+            } else {
+                // LADO DIREITO: PESCAR OU ATACAR
+    if (player.inventory.fishing_rod > 0 && player.weapon === 7) { 
+        // Se estiver com a vara selecionada (índice 7)
+        
+        // 1. Definimos o destino do anzol (onde o dedo tocou + câmera)
+        const worldTouchX = tx + camX();
+        const worldTouchY = ty + camY();
+// --- LÓGICA DA FISGADA (PUXÃO) ---
+// Verifica se o jogador se moveu (pelo teclado/mouse no PC ou Joystick no Mobile)
+let moveuX = Math.abs(player.x - (player.oldX || player.x));
+let moveuY = Math.abs(player.y - (player.oldY || player.y));
+
+// Se houve movimento suficiente enquanto o peixe mordia
+if (moveuX > 1.2 || moveuY > 1.2) { 
+    let peixeCapturado = false;
+
+    // Checa na lista de peixes se algum está fisgado
+    fishes.forEach(f => {
+        if (f.presoNoAnzol && f.alive) { 
+            f.alive = false; // O peixe é removido
+            f.presoNoAnzol = false;
+            peixeCapturado = true;
+        }
+    });
+
+    if (peixeCapturado) {
+        console.log("FISGOU! +40 de Comida");
+        // Dá a comida respeitando o limite máximo
+        player.food = Math.min(player.maxFood, player.food + 40);
+        
+        // Efeito visual de sucesso no jogador
+        if (typeof createParticles === "function") {
+            createParticles(player.x, player.y, "#ffffff", 15, 1);
         }
     }
-}, { passive: false });
+    
+    // Reseta todos os estados de pesca após a tentativa
+    isFishing = false;
+    fishBite = false;
+    player.attacking = false;
+    player.attackProgress = 0; // Faz a vara voltar à posição inicial
+}
+        if (isInRiver(worldTouchX, worldTouchY)) {
+            const dx = worldTouchX - player.x;
+            const dy = worldTouchY - player.y;
+            const distClique = Math.hypot(dx, dy);
+            
+            const maxRange = 150; // Mesmo alcance do seu PC
+            const distFinal = Math.min(distClique, maxRange);
+            
+            // 2. Calcula onde a boia cai baseada no ângulo do toque
+            const angleToTouch = Math.atan2(dy, dx);
+            player.anzolDestX = player.x + Math.cos(angleToTouch) * distFinal;
+            player.anzolDestY = player.y + Math.sin(angleToTouch) * distFinal;
+            
+            // 3. Ativa o estado de ataque/pesca
+            player.attacking = true; 
+        } else {
+            // Se tocar na terra com a vara, cancela a pesca
+            player.attacking = false;
+            isFishing = false;
+        }
+    } else {
+        // Se não for vara, é soco normal
+        touchAttack = true; 
+    }
+
+    // Gira o personagem para onde o dedo tocou
+    if (!touchAim.active) {
+        touchAim.active = true;
+        touchAim.id = t.identifier;
+        touchAim.startX = tx;
+        touchAim.startY = ty;
+    }
+}
+        }
+    }, { passive: false });
  canvas.addEventListener("touchmove", e => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
@@ -2774,18 +2868,36 @@ function drawCraftingMenu() {
     ctx.fillStyle = UI_CRAFT.colorBg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 2. TÍTULO
+    // 2. TÍTULO E SUBTÍTULO
     ctx.textAlign = "center";
     ctx.fillStyle = UI_CRAFT.colorNeon;
     ctx.font = "bold 40px Arial";
     ctx.fillText("BANCADA DE TRABALHO", canvas.width / 2, 60);
+    
+    ctx.font = "bold 16px Arial";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.fillText("APERTE (C) PARA FECHAR", canvas.width / 2, 90);
+// 3. LÓGICA DE FILTRAGEM (Celular separa, PC mostra tudo)
+const allKeys = Object.keys(recipes);
+let displayKeys;
 
-    // 3. CÁLCULO DA GRADE
-    const items = Object.keys(recipes);
+if (isMobile) {
+    if (craftPage === 0) {
+        // PÁGINA 1: Tudo que NÃO for a vara de pesca
+        displayKeys = allKeys.filter(key => key !== "fishing_rod");
+    } else {
+        // PÁGINA 2: Apenas a vara de pesca
+        displayKeys = allKeys.filter(key => key === "fishing_rod");
+    }
+} else {
+    // Computador: Mostra todos os itens de uma vez
+    displayKeys = allKeys;
+}
+    // 4. CÁLCULO DA GRADE E DESENHO (Usando displayKeys!)
     const totalW = (UI_CRAFT.cols * UI_CRAFT.cardW) + ((UI_CRAFT.cols - 1) * UI_CRAFT.gap);
     UI_CRAFT.startX = (canvas.width - totalW) / 2;
 
-    items.forEach((key, i) => {
+    displayKeys.forEach((key, i) => {
         const item = recipes[key];
         const col = i % UI_CRAFT.cols;
         const row = Math.floor(i / UI_CRAFT.cols);
@@ -2815,13 +2927,30 @@ function drawCraftingMenu() {
         let custoText = `M:${item.wood||0} P:${item.stone||0} G:${item.sticks||0}`;
         ctx.fillText(custoText, x + UI_CRAFT.cardW/2, y + 75);
     });
+// 5. SETA DE NAVEGAÇÃO E BOTÃO SAIR (EXCLUSIVO MOBILE)
+    if (isMobile) {
+        // SETA DIREITA
+        const arrowX = canvas.width - 80, arrowY = canvas.height / 2;
+        ctx.fillStyle = "#3498db";
+        ctx.beginPath();
+        if (craftPage === 0) {
+            ctx.moveTo(arrowX, arrowY - 30); ctx.lineTo(arrowX + 30, arrowY); ctx.lineTo(arrowX, arrowY + 30);
+        } else {
+            ctx.moveTo(arrowX + 30, arrowY - 30); ctx.lineTo(arrowX, arrowY); ctx.lineTo(arrowX + 30, arrowY + 30);
+        }
+        ctx.fill();
 
-    // BOTÃO SAIR (No topo)
-    const sw = 120, sh = 50;
-    ctx.fillStyle = "#e74c3c";
-    ctx.fillRect(canvas.width - sw - 20, 20, sw, sh);
-    ctx.fillStyle = "#fff";
-    ctx.fillText("SAIR", canvas.width - sw + 40, 52);
+        // BOTÃO FECHAR (Estilo Inventário: Meio Esquerda)
+        const sw_close = 140, sh_close = 80, sx_close = 20, sy_close = canvas.height / 2 - 40;
+        ctx.fillStyle = "#e74c3c";
+        ctx.fillRect(sx_close, sy_close, sw_close, sh_close);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(sx_close, sy_close, sw_close, sh_close);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 20px Arial";
+        ctx.fillText("FECHAR", sx_close + sw_close/2, sy_close + sh_close/2 + 8);
+    }
 
     ctx.restore();
 }
