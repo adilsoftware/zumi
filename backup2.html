@@ -97,7 +97,7 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
     <div id="instructions">
       • Sobreviva ao Ciclo de Dia e Noite<br>
       • Gerencie Fome e Stamina<br>
-      • Use 'C' (Craft) e 'I' (Inventário)
+      • Use 'C' (Craft) e 'E' (Inventário)
     </div>
     
     <div style="display: flex; flex-direction: column; gap: 15px;">
@@ -118,7 +118,7 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
           </div>
           <div style="flex:1; min-width:300px; background:rgba(255,255,255,0.05); padding:20px; border-radius:15px;">
               <h3 style="color:#e67e22; border-bottom:2px solid #e67e22;">🐆 PERIGOS</h3>
-              <p><strong>A Noite:</strong> Sem uma fogueira ou tocha, sua vida drenará rapidamente no breu total.</p>
+              <p><strong>A Noite:</strong> Sem uma fogueira ou tocha, você ficará na escuridão.</p>
               <p><strong>Onças:</strong> São rápidas e silenciosas. Elas costumam caçar perto das bordas das florestas.</p>
               <p><strong>Fome:</strong> Mantenha a barra de comida alta colhendo frutas ou usando o inventário para comer.</p>
           </div>
@@ -217,15 +217,46 @@ if (inventoryOpen) {
         
     // --- A) SE O CRAFT ESTIVER ABERTO ---
 if (craftingOpen) {
-    // 1. Botão FECHAR (Topo Direito)
-    const sw = 140, sh = 70;
-    const sx = canvas.width - sw - 20, sy = 20;
-    
-    if (tx > sx && tx < sx + sw && ty > sy && ty < sy + sh) {
+    // 1. Botão FECHAR (Meio Esquerda)
+    const sw_close = 140, sh_close = 80, sx_close = 20, sy_close = canvas.height / 2 - 40;
+    if (tx > sx_close && tx < sx_close + sw_close && ty > sy_close && ty < sy_close + sh_close) {
         craftingOpen = false;
-        return; // Sai da função touch para não clicar em nada embaixo
+        return; 
     }
 
+    // 2. CLIQUE NA SETA (Trocar Página)
+    // Se tocar na área da seta na direita
+    if (tx > canvas.width - 100 && ty > canvas.height / 2 - 60 && ty < canvas.height / 2 + 60) {
+        craftPage = (craftPage === 0) ? 1 : 0;
+        return; 
+    }
+
+   // 3. CLIQUE NOS ITENS FILTRADOS
+const allKeys = Object.keys(recipes);
+let displayKeys;
+
+if (craftPage === 0) {
+    displayKeys = allKeys.filter(k => k !== "fishing_rod");
+} else {
+    displayKeys = allKeys.filter(k => k === "fishing_rod");
+}
+
+for (let i = 0; i < displayKeys.length; i++) {
+    const pos = getCraftItemPos(i); // i é a posição visual na tela (0, 1, 2...)
+
+    if (tx >= pos.x && tx <= pos.x + pos.w && ty >= pos.y && ty <= pos.y + pos.h) {
+        tryCraft(displayKeys[i]); // Compra o item correto da lista filtrada
+        return; 
+    }
+}
+
+if (isMobile && showCraftMenu) {
+    // Se clicar na área da "Seta" (ajuste x e y conforme seu layout)
+    if (mouseX > canvas.width - 60 && mouseY > canvas.height / 2 - 30 && mouseY < canvas.height / 2 + 30) {
+        craftPage = (craftPage === 0) ? 1 : 0; // Alterna entre página 0 e 1
+        console.log("Mudou para página: " + craftPage);
+    }
+}
     // 2. Clicar nos Itens (Usa a sua lista real de receitas)
     const items = Object.keys(recipes); // Pega TODOS os itens (inclusive a madeira/wood_convert)
     
@@ -287,24 +318,93 @@ if (placingCampfire) {
     placingCampfire = false;    // Sai do modo de construção
     continue; // Pula o resto do processamento desse toque
 }
-        // --- D) JOYSTICK (LADO ESQUERDO) ---
-        // Se tocar no lado esquerdo da tela, o jogador ANDA
-        if (tx < canvas.width / 2 && !touchMove.active) {
-            touchMove.active = true;
-            touchMove.id = t.identifier;
-            touchMove.startX = tx;
-            touchMove.startY = ty;
-        } 
-        // --- E) MIRA (LADO DIREITO) ---
-        // Se tocar no lado direito (fora do botão de ataque), ele GIRA
-        else if (tx >= canvas.width / 2 && !touchAim.active) {
-            touchAim.active = true;
-            touchAim.id = t.identifier;
-            touchAim.startX = tx;
-            touchAim.startY = ty;
+// --- 5. LÓGICA DE JOGO (MOVIMENTO / ATAQUE / PESCA) ---
+            if (tx < canvas.width / 2) {
+                // LADO ESQUERDO: ANDAR
+                if (!touchMove.active) {
+                    touchMove.active = true;
+                    touchMove.id = t.identifier;
+                    touchMove.startX = tx;
+                    touchMove.startY = ty;
+                }
+            } else {
+                // LADO DIREITO: PESCAR OU ATACAR
+    if (player.inventory.fishing_rod > 0 && player.weapon === 7) { 
+        // Se estiver com a vara selecionada (índice 7)
+        
+        // 1. Definimos o destino do anzol (onde o dedo tocou + câmera)
+        const worldTouchX = tx + camX();
+        const worldTouchY = ty + camY();
+// --- LÓGICA DA FISGADA (PUXÃO) ---
+// Verifica se o jogador se moveu (pelo teclado/mouse no PC ou Joystick no Mobile)
+let moveuX = Math.abs(player.x - (player.oldX || player.x));
+let moveuY = Math.abs(player.y - (player.oldY || player.y));
+
+// Se houve movimento suficiente enquanto o peixe mordia
+if (moveuX > 1.2 || moveuY > 1.2) { 
+    let peixeCapturado = false;
+
+    // Checa na lista de peixes se algum está fisgado
+    fishes.forEach(f => {
+        if (f.presoNoAnzol && f.alive) { 
+            f.alive = false; // O peixe é removido
+            f.presoNoAnzol = false;
+            peixeCapturado = true;
+        }
+    });
+
+    if (peixeCapturado) {
+        console.log("FISGOU! +40 de Comida");
+        // Dá a comida respeitando o limite máximo
+        player.food = Math.min(player.maxFood, player.food + 40);
+        
+        // Efeito visual de sucesso no jogador
+        if (typeof createParticles === "function") {
+            createParticles(player.x, player.y, "#ffffff", 15, 1);
         }
     }
-}, { passive: false });
+    
+    // Reseta todos os estados de pesca após a tentativa
+    isFishing = false;
+    fishBite = false;
+    player.attacking = false;
+    player.attackProgress = 0; // Faz a vara voltar à posição inicial
+}
+        if (isInRiver(worldTouchX, worldTouchY)) {
+            const dx = worldTouchX - player.x;
+            const dy = worldTouchY - player.y;
+            const distClique = Math.hypot(dx, dy);
+            
+            const maxRange = 150; // Mesmo alcance do seu PC
+            const distFinal = Math.min(distClique, maxRange);
+            
+            // 2. Calcula onde a boia cai baseada no ângulo do toque
+            const angleToTouch = Math.atan2(dy, dx);
+            player.anzolDestX = player.x + Math.cos(angleToTouch) * distFinal;
+            player.anzolDestY = player.y + Math.sin(angleToTouch) * distFinal;
+            
+            // 3. Ativa o estado de ataque/pesca
+            player.attacking = true; 
+        } else {
+            // Se tocar na terra com a vara, cancela a pesca
+            player.attacking = false;
+            isFishing = false;
+        }
+    } else {
+        // Se não for vara, é soco normal
+        touchAttack = true; 
+    }
+
+    // Gira o personagem para onde o dedo tocou
+    if (!touchAim.active) {
+        touchAim.active = true;
+        touchAim.id = t.identifier;
+        touchAim.startX = tx;
+        touchAim.startY = ty;
+    }
+}
+        }
+    }, { passive: false });
  canvas.addEventListener("touchmove", e => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
@@ -470,11 +570,17 @@ const player = {
     pickaxe_stone: 0,
     campfire: 0,
     spear: 0,
-    torch: 0
+    torch: 0,
+    fishing_rod: 0
   }
 };
 let isRaining = false;
 let rainTextTimer = 0;
+let isFishing = false;      // O jogador está com a linha na água?
+let fishTimer = 0;          // Quanto tempo falta para o peixe morder?
+let fishBite = false;       // O peixe já mordeu (as bolhas ficaram loucas)?
+let craftPage = 0; // 0 para itens básicos, 1 para itens avançados (pesca)
+const itemsPerPage = 5;
 let craftingOpen = false;
 let placingCampfire = false;
 let inventoryOpen = false;
@@ -488,7 +594,8 @@ const recipes = {
   pickaxe_stone: { name: "Picareta de Pedra", wood: 3, stone: 4, sticks: 2, weaponIndex: 4 },
   campfire: { name: "Fogueira", wood: 2, sticks: 10, isPlaceable: true },
   spear: { name: "Lança", wood: 4, sticks: 2, weaponIndex: 5 },
-  torch: { name: "Tocha", wood: 2, stone: 2, sticks: 1, weaponIndex: 6 }, 
+  torch: { name: "Tocha", wood: 2, stone: 2, sticks: 1, weaponIndex: 6 },
+  fishing_rod: { name: "Vara de Pesca", wood: 5, sticks: 1, weaponIndex: 7 }, // weaponIndex 7 (Vara) 
   wood_convert: { name: "Refinar Madeira", wood: 0, sticks: 2, yield: 1 } 
 };
 const weapons = [
@@ -498,10 +605,11 @@ const weapons = [
   { name: "Machado Pedra", range: 45, damage: 16.7, speed: 15, style: "axe" }, // Novo
   { name: "Picareta Pedra", range: 50, damage: 16.7, speed: 17, style: "pickaxe" }, // Novo
   { name: "Lança", range: 75, damage: 20, speed: 10, style: "spear" }, // Novo
-  { name: "Tocha", range: 40, damage: 5, speed: 14, style: "torch" }
+  { name: "Tocha", range: 40, damage: 5, speed: 14, style: "torch" },
+  { name: "Vara de Pesca", range: 90, damage: 0, speed: 1000, style: "fishing_rod" }
 ];
 
-let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [];
+let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [], fishes = [];
 
 function makeRock(x, y, radius, color, type="stone") {
   const points = [];
@@ -558,6 +666,34 @@ function spawnZombie(type = "normal") {
   }
 }
 
+function spawnFishes(amount) {
+    if (!rivers || rivers.length === 0) return; 
+
+    const coresVibrantes = ["#FF8C00", "#FFD700", "#00FF00"]; // Laranja, Ouro, Verde
+    const coresCamufladas = ["#3b78b5", "#2c5d8f", "#4a6b5d"]; // Tons de azul e lodo
+
+    for (let i = 0; i < amount; i++) {
+        const r = rivers[0];
+        // Sorteia a cor: 70% camuflado, 30% vibrante
+        let corSorteada = Math.random() > 0.3 ? 
+            coresCamufladas[Math.floor(Math.random() * coresCamufladas.length)] : 
+            coresVibrantes[Math.floor(Math.random() * coresVibrantes.length)];
+
+        fishes.push({
+            x: r.x + Math.random() * r.w,
+            y: r.y + Math.random() * r.h,
+            r: 13,
+            angle: Math.random() * Math.PI * 2,
+            speed: 0.8 + Math.random() * 0.5,
+            color: corSorteada, // Agora o peixe tem cor!
+            alive: true,
+            lastBoost: 0,
+            isBoosting: false
+        });
+    }
+}
+
+
 function spawnBird() {
     let x, y, dist;
     let achouLugar = false;
@@ -581,7 +717,7 @@ function spawnBird() {
         r: 10,
         hp: 15,          // Vida definida
         maxHp: 15,
-        foodValue: 12,   // Valor da carne
+        foodValue: 30,   // Valor da carne
         maxSpeed: 1.5 + Math.random(),
         speed: 1.5,
         color: "#ffcc00",
@@ -594,8 +730,8 @@ function spawnBird() {
         active: true
     });
 }
-// Inicializa os 1000
-for(let i=0; i<1000; i++) spawnBird();
+// Inicializa os 250
+for(let i=0; i<250; i++) spawnBird();
 
 function spawnJaguar() {
     let x, y, dist;
@@ -665,7 +801,7 @@ function isInRiver(x,y){
   if(Math.hypot(x-circularRiver.x, y-circularRiver.y) < circularRiver.r) return true;
   return false;
 }
-
+spawnFishes(90);
 function isInSand(x,y){
   if(isInRiver(x,y)) return false; 
   if(y > (rivers[0].y - SAND_WIDTH) && y < (rivers[0].y + rivers[0].h + SAND_WIDTH)) return true;
@@ -941,7 +1077,31 @@ function createParticles(x,y,color,count=6, speedMult=1){
     particles.push({x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,r:Math.random()*3+2,life:20+Math.random()*10,color});
   }
 }
+let lastFishRespawn = Date.now();
 
+function handleFishRespawn() {
+    const agora = Date.now();
+    // Só tenta spawnar se tiver menos de 25 peixes no total
+    if (fishes.length < 25) {
+        // Sorteia um tempo entre 1 e 3 minutos (60.000ms a 180.000ms)
+        let tempoNecessario = 60000 + Math.random() * 120000;
+
+        if (agora - lastFishRespawn > tempoNecessario) {
+            // Sorteia entre 1 e 3 peixes para nascer
+            let quantidade = Math.floor(Math.random() * 3) + 1;
+            spawnFishes(quantidade); 
+            lastFishRespawn = agora;
+            console.log(quantidade + " novos peixes nasceram no rio.");
+        }
+    }
+}
+function cleanDeadFishes() {
+    for (let i = fishes.length - 1; i >= 0; i--) {
+        if (!fishes[i].alive) {
+            fishes.splice(i, 1);
+        }
+    }
+}
 canvas.addEventListener("mousedown", e => {
     // 1. Pegar a posição exata do mouse dentro do canvas
     const rect = canvas.getBoundingClientRect();
@@ -987,7 +1147,12 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
         player.weapon = 6; 
         inventoryOpen = false; // Fecha para mostrar a luz
     }
-    
+    // 🎣 NOVO: Adicionando a VARA DE PESCA (Slot 12)
+    else if (i === 12 && player.inventory.fishing_rod > 0) {
+        player.weapon = 7; // Índice 7 na lista 'weapons'
+        inventoryOpen = false; // Fecha para o jogador ver a vara na mão
+        console.log("Vara equipada via Inventário!");
+    }
     // 3. Fogueira (Slot 4)
     else if (i === 4 && player.inventory.campfire > 0) {
          placingCampfire = true;
@@ -1005,7 +1170,7 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
         return; // Se clicou no inventário mas fora de um slot, também não ataca
     }
 
-    // 4. Se não tem nenhum menu aberto, verifica se vai colocar fogueira ou ATACAR
+    // 4. LÓGICA DE LANÇAR O ANZOL OU ATACAR
     if (placingCampfire && player.inventory.campfire > 0) {
         const worldX = mx + camX();
         const worldY = my + camY();
@@ -1016,7 +1181,33 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
         player.inventory.campfire--;
         placingCampfire = false;
     } else {
-        mouse.down = true; // Só ataca se não estiver colocando fogueira nem com inventário aberto
+        // --- LÓGICA DE ATAQUE / PESCA ---
+        const worldMouseX = mx + camX();
+        const worldMouseY = my + camY();
+
+        if (weapons[player.weapon].style === "fishing_rod") {
+            if (isInRiver(worldMouseX, worldMouseY)) {
+                const dx = worldMouseX - player.x;
+                const dy = worldMouseY - player.y;
+                const distClique = Math.hypot(dx, dy);
+                
+                const maxRange = 150; 
+                const distFinal = Math.min(distClique, maxRange);
+                
+                player.anzolDestX = player.x + Math.cos(player.angle) * distFinal;
+                player.anzolDestY = player.y + Math.sin(player.angle) * distFinal;
+                
+                mouse.down = true; 
+            } else {
+                // TRAVA CRÍTICA: Se clicar na terra, reseta tudo da vara
+                mouse.down = false;
+                player.attacking = false;
+                player.attackProgress = 0; // Para a animação na hora
+                isFishing = false;
+            }
+        } else {
+            mouse.down = true;
+        }
     }
 });
 function drawFullscreenInventory() {
@@ -1046,7 +1237,7 @@ function drawFullscreenInventory() {
     { label: "PICARETA P.", value: player.inventory.pickaxe_stone, color: "#757575", detail: "#fff", max: LIMITES.ferramentas },
     { label: "COMIDA", value: Math.floor(player.food), color: "#e74c3c", detail: "#c0392b", max: 100 },
     { label: "TOCHA", value: player.inventory.torch || 0, color: "#f39c12", detail: "#d35400", max: 1 },
-    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "VARA PESCA", value: player.inventory.fishing_rod || 0, color: "#8b4513", detail: "#fff", max: 1 },
     { label: "SLOT VAZIO", value: 0, empty: true }
   ];
 
@@ -1114,6 +1305,25 @@ function drawFullscreenInventory() {
     ctx.fill();
     ctx.restore();
 }
+else if (res.label === "VARA PESCA") {
+        ctx.save();
+        ctx.translate(iconCenterX, iconCenterY);
+        // Haste da vara
+        ctx.strokeStyle = "#8b4513";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-15, 15);
+        ctx.lineTo(15, -15);
+        ctx.stroke();
+        // Linha pendurada
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(15, -15);
+        ctx.lineTo(20, 10);
+        ctx.stroke();
+        ctx.restore();
+      }
       // Outros ícones (Madeira, Pedra, Ouro, Ferramentas)
       else if (res.color) {
         ctx.fillStyle = res.color;
@@ -1200,7 +1410,7 @@ function tryCraft(id) {
   if (!r) return;
 
   // Limite para ferramentas (Não deixa fazer mais de 1)
-  const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear"];
+  const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "fishing_rod"];
   if (ferramentas.includes(id) && player.inventory[id] >= LIMITES.ferramentas) {
     console.log("Você já tem esta ferramenta!");
     return;
@@ -1302,6 +1512,13 @@ function equiparItemPorIndice(index) {
             // Índices 0, 1, 2, 3 são recursos (Madeira, Pedra, Ouro, Graveto)
             // Geralmente não equipam nada, mas você pode colocar um som de clique.
             console.log("Clicou no recurso: " + index);
+            break;
+            
+            case 12: // VARA DE PESCA (Novo!)
+            if (player.inventory.fishing_rod > 0) {
+                player.weapon = 7; // Índice 7 na lista 'weapons'
+                console.log("Vara equipada!");
+            }
             break;
     }
 }
@@ -1613,6 +1830,160 @@ animals.forEach(ani => {
         player.y += Math.sin(angle) * overlap;
     }
 });
+birds.forEach(b => {
+    if (!b.active || !b.resting) return; // Só colide se estiver no chão
+
+    const dist = Math.hypot(player.x - b.x, player.y - b.y);
+    const minDist = player.r + b.r;
+
+    if (dist < minDist) {
+        const angle = Math.atan2(player.y - b.y, player.x - b.x);
+        const overlap = minDist - dist;
+        // Empurra o player levemente para fora do passarinho
+        player.x += Math.cos(angle) * overlap;
+        player.y += Math.sin(angle) * overlap;
+    }
+});
+fishes.forEach(f => {
+    if (!f.alive) return;
+
+    const dx = f.x - player.x;
+    const dy = f.y - player.y;
+    const dist = Math.hypot(dx, dy);
+    const agora = Date.now();
+
+    if (dist > 1000) return; 
+
+    // --- 1. LÓGICA DE SUSTO (Fuga imediata) ---
+    if (f.assustado) {
+        f.isBoosting = true;
+        f.lastBoost = agora;
+        // Foge para a direção oposta do player
+        f.angle = Math.atan2(f.y - player.y, f.x - player.x);
+        f.assustado = false; 
+        f.recusouIsca = true;
+        setTimeout(() => { f.isBoosting = false; f.recusouIsca = false; }, 1500);
+    }
+
+    // --- 2. VERIFICAÇÃO DE ESTADO ---
+    // SE NÃO ESTIVER PRESO, ELE NADA E SE ATRAI PELA ISCA
+    if (!f.presoNoAnzol) {
+        
+        // Inteligência de Fuga Natural (do player)
+        if (dist < 220) {
+            if (dist < 120 && agora - (f.lastBoost || 0) > 2000) {
+                f.isBoosting = true;
+                f.lastBoost = agora;
+                f.angle = Math.atan2(dy, dx);
+                setTimeout(() => { f.isBoosting = false; }, 600);
+            }
+            let anguloFuga = Math.atan2(dy, dx);
+            let diff = anguloFuga - f.angle;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            f.angle += diff * 0.1; 
+        }
+
+        // ATRAÇÃO DA ISCA
+        if (isFishing && !fishBite && !f.recusouIsca) {
+            const dAnzol = Math.hypot(f.x - player.anzolDestX, f.y - player.anzolDestY);
+            if (dAnzol < 200) {
+                // Chance de recusar
+                if (Math.random() < 0.005) { 
+                    f.recusouIsca = true;
+                    f.angle += Math.PI; 
+                    setTimeout(() => { f.recusouIsca = false; }, 8000); 
+                    return; 
+                }
+
+                let angIsca = Math.atan2(player.anzolDestY - f.y, player.anzolDestX - f.x);
+                let diff = angIsca - f.angle;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                f.angle += diff * 0.1;
+
+                if (dAnzol < 15) {
+                    fishBite = true; 
+                    f.presoNoAnzol = true;
+                    fishTimer = 180;
+                }
+            }
+        }
+
+        // MOVIMENTO FÍSICO (Aplica a velocidade se não estiver preso)
+        let moveSpeed = f.isBoosting ? 9.5 : (dist < 220 ? 3.5 : 1.2);
+        f.x += Math.cos(f.angle) * moveSpeed;
+        f.y += Math.sin(f.angle) * moveSpeed;
+
+    } else {
+        // --- 3. SE ESTIVER PRESO ---
+        // Ele apenas segue a boia e "roda" para mostrar que está lutando
+        f.x = player.anzolDestX;
+        f.y = player.anzolDestY;
+        f.angle += 0.2; 
+    }
+    // --- 4. COLISÃO SÓLIDA PLAYER vs PEIXE (Igual Onça vs Player) ---
+    if (dist < player.r + f.r) {
+        const angP = Math.atan2(dy, dx);
+        const overlapP = (player.r + f.r) - dist;
+        // Divide o empurrão entre os dois para não bugar
+        player.x -= Math.cos(angP) * (overlapP * 0.2); // Player sente um "toque"
+        player.y -= Math.sin(angP) * (overlapP * 0.2);
+        f.x += Math.cos(angP) * (overlapP * 0.8);
+        f.y += Math.sin(angP) * (overlapP * 0.8);
+    }
+// --- 4. COLISÃO PEIXE vs PEIXE (PARA NÃO SOBREPOR) ---
+    fishes.forEach(other => {
+        if (other === f || !other.alive) return;
+        if (Math.abs(f.x - other.x) < 30 && Math.abs(f.y - other.y) < 30) {
+            const dxF = other.x - f.x;
+            const dyF = other.y - f.y;
+            const distF = Math.hypot(dxF, dyF);
+            if (distF < f.r + other.r) {
+                const angF = Math.atan2(dyF, dxF);
+                const overlapF = (f.r + other.r) - distF;
+                f.x -= Math.cos(angF) * (overlapF / 2);
+                f.y -= Math.sin(angF) * (overlapF / 2);
+                other.x += Math.cos(angF) * (overlapF / 2);
+                other.y += Math.sin(angF) * (overlapF / 2);
+            }
+        }
+    });
+    // --- 5. COLISÃO COM RECURSOS (Copiado da Onça e Otimizado) ---
+    // Usamos um for simples que é mais rápido que forEach para listas grandes
+    let obstaculos = [...resources, ...rocks, ...mountains];
+    for (let i = 0; i < obstaculos.length; i++) {
+        let res = obstaculos[i];
+        if (!res.active && res.hp <= 0) continue;
+        if (res.type === "stick") continue;
+
+        // Filtro rápido de proximidade (Apenas se estiver "perto")
+        if (Math.abs(f.x - res.x) < 80 && Math.abs(f.y - res.y) < 80) {
+            const rDx = f.x - res.x;
+            const rDy = f.y - res.y;
+            const rDist = Math.hypot(rDx, rDy);
+            const colRadius = res.r || 20;
+            const minDist = f.r + colRadius;
+
+            if (rDist < minDist) {
+                const angleCol = Math.atan2(rDy, rDx);
+                const overlap = minDist - rDist;
+                f.x += Math.cos(angleCol) * overlap;
+                f.y += Math.sin(angleCol) * overlap;
+                f.angle = angleCol + (Math.random() - 0.5); // Desvia
+            }
+        }
+    }
+
+    // --- 6. LIMITES DO RIO (FÍSICO) ---
+    const r = rivers[0];
+    if (r) {
+        if (f.x < r.x + f.r) { f.x = r.x + f.r; f.angle = 0; }
+        if (f.x > r.x + r.w - f.r) { f.x = r.x + r.w - f.r; f.angle = Math.PI; }
+        if (f.y < r.y + f.r) { f.y = r.y + f.r; f.angle = Math.PI / 2; }
+        if (f.y > r.y + r.h - f.r) { f.y = r.y + r.h - f.r; f.angle = -Math.PI / 2; }
+    }
+});
 // --- SISTEMA DE ONÇAS (JAGUARS) ---
 jaguars.forEach(j => {
     if (!j.alive) return;
@@ -1870,18 +2241,23 @@ for (let i = 0; i < birds.length; i++) {
 
     // SÓ PODE BATER SE ESTIVER NO CHÃO (resting)
     if (b.resting) {
-        let d = Math.hypot(b.x - player.x, b.y - player.y);
+        // Usa o hx/hy (ponta da arma) para detectar o hit
+        let d = Math.hypot(hx - b.x, hy - b.y);
         
-        if (d < 80) { 
-            b.hp -= 5; // 3 tapas de 5 = 15 de vida (morte)
+        // Colisão com a ponta da arma + raio do pássaro
+        if (d < b.r + 15) { 
+            b.hp -= w.damage; // Aplica o dano da arma (Lança=20, Tocha=5, Mão=3)
             
-            // Efeito de acerto
-            for(let p=0; p<3; p++) {
-                particles.push({ x: b.x, y: b.y, life: 10, color: "red" });
-            }
+            // Sangue
+            createParticles(b.x, b.y, "#ff0000", 8);
 
-            // Se ainda estiver vivo após o tapa, ele toma susto e tenta fugir
-            if (b.hp > 0) {
+            if (b.hp <= 0) {
+                b.active = false;
+                // Dá a comida (12 de valor como definido no seu spawnBird)
+                player.food = Math.min(player.maxFood, player.food + b.foodValue);
+                console.log("Pássaro abatido! Comida + " + b.foodValue);
+            } else {
+                // Se sobreviveu ao golpe, foge desesperado
                 b.resting = false; 
                 b.stamina = 5; 
                 b.angle = Math.atan2(b.y - player.y, b.x - player.x);
@@ -2099,20 +2475,17 @@ for (let i = 0; i < birds.length; i++) {
     if (b.y < 50) b.y = 50; if (b.y > MAP - 50) b.y = MAP - 50;
 
     // Lógica de Morte
-    if (b.hp <= 0) {
-        b.active = false;
-        if (typeof foods !== 'undefined') {
-        foods.push({
-            x: b.x,
-            y: b.y,
-            r: 12,        // Tamanho da carne
-            value: 12,     // Quantidade de comida
-            type: "meat",
-            active: true
-        });
+   if (b.hp <= 0 && b.active) {
+    b.active = false; // O pássaro some
+    
+    // Entrega a comida direto para a barra do player (igual na sua palmeira)
+    player.food = Math.min(player.maxFood, player.food + 35); 
+    
+    // Feedback visual (partículas vermelhas/laranjas de comida)
+    if (typeof createParticles === 'function') {
+        createParticles(b.x, b.y, "#ff4d4d", 10);
     }
-}
-}
+}}
 jaguars.forEach(j => {
     if (!j.alive) return;
 
@@ -2163,6 +2536,110 @@ jaguars.forEach(j => {
         j.y += Math.sin(j.angle) * (j.speed * 0.5);
     }
 });
+if (player.attacking && weapons[player.weapon].style === "fishing_rod") {
+    
+    const ax = player.anzolDestX;
+    const ay = player.anzolDestY;
+
+    // 1. CALCULA A DISTÂNCIA ENTRE O PLAYER E O ANZOL NO MUNDO
+    const distDaBoia = Math.hypot(player.x - ax, player.y - ay);
+
+    // 2. SE A LINHA ESTICAR DEMAIS (ex: 250px), ELA ARREBENTA
+    if (distDaBoia > 250) {
+        console.log("A linha arrebentou!");
+        fishes.forEach(f => {
+            if (f.presoNoAnzol) {
+                f.presoNoAnzol = false;
+                f.assustado = true; // Ativa a fuga no peixe
+            }
+        });
+        
+        isFishing = false;
+        player.attacking = false;
+
+        fishBite = false;
+
+        createParticles(ax, ay, "rgba(200,200,200,0.5)", 5, 0.5);
+    }
+    // 3. SE ESTIVER NO RIO, CONTINUA PESCANDO
+    else if (isInRiver(ax, ay)) {
+        if (!isFishing) {
+            isFishing = true;
+            fishTimer = 150 + Math.random() * 200;
+            fishBite = false;
+        }
+
+        player.attackProgress = 1; // Trava a vara esticada
+
+        if (fishTimer > 0) {
+        fishTimer--;
+    } else {
+        fishBite = true; // Peixe mordeu!
+
+        // --- NOVIDADE: LÓGICA DA FISGADA (PUXÃO) ---
+        // Checa se o jogador se moveu (o "puxão" com as teclas ou mouse)
+        let moveuX = Math.abs(player.x - (player.oldX || player.x));
+            let moveuY = Math.abs(player.y - (player.oldY || player.y));
+
+            if (moveuX > 1.2 || moveuY > 1.2) { 
+                // SÓ GANHA COMIDA SE UM PEIXE REAL ESTIVER NO ANZOL
+                let peixeCapturado = false;
+                fishes.forEach(f => {
+                    if (f.presoNoAnzol && f.alive) { 
+                        f.alive = false; // O PEIXE SOME DO JOGO
+                        f.presoNoAnzol = false;
+                        peixeCapturado = true;
+                    }
+                });
+
+                if (peixeCapturado) {
+                    console.log("FISGOU!");
+                    player.food = Math.min(player.maxFood, player.food + 40);
+                    createParticles(player.x, player.y, "#ffffff", 15, 1);
+                }
+                
+                // Finaliza o estado
+                isFishing = false;
+                fishBite = false;
+                player.attacking = false;
+            }
+        }
+
+        // BOLHAS VISUAIS
+        let chanceBolha = (fishBite) ? 0.8 : 0.15;
+        if (Math.random() < chanceBolha) {
+            createParticles(ax, ay, "rgba(255,255,255,0.7)", 1, 0.4);
+        }
+    }
+// 4. SE O ANZOL CAIR NA TERRA
+else {
+    isFishing = false;
+    player.attacking = false;
+    player.attackProgress = 0;
+}
+ } else {
+    // MOMENTO DE RECOLHER A VARA (Soltou o clique)
+    if (isFishing) {
+        fishes.forEach(f => {
+            if (f.presoNoAnzol) {
+                f.presoNoAnzol = false;
+                f.assustado = true; // Peixe foge ao ser solto
+            }
+        });
+        isFishing = false;
+        fishBite = false;
+        player.attackProgress = 0;
+        fishes.forEach(f => f.presoNoAnzol = false);
+        console.log("Recolheu a linha.");
+    }
+}
+
+// ATUALIZA A POSIÇÃO ANTIGA (Coloque isso no final do seu update geral)
+player.oldX = player.x;
+player.oldY = player.y;
+
+handleFishRespawn();
+cleanDeadFishes();
 }
 function drawBloodMoonText(){
     if(showBloodMoonText > 0){
@@ -2266,6 +2743,46 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
       ctxRef.arc(player.r + 15 + off, 0, 20, -Math.PI/2, Math.PI/2);
       ctxRef.stroke();
     }
+    else if(w.style === "fishing_rod") {
+        const off = player.attackProgress * 20;
+        
+        // 1. Desenha a madeira da vara (segue o braço/corpo)
+        ctxRef.fillStyle = "#8b4513";
+        ctxRef.fillRect(player.r + off, -2, 70, 4); 
+        ctxRef.fillStyle = "#5d4037";
+        ctxRef.fillRect(player.r + 70 + off, -1, 15, 2);
+
+        if (isFishing) {
+            // PONTO A: Ponta da vara no mundo
+            // Como estamos dentro do translate/rotate do player, a ponta está em (player.r + 85 + off, 0)
+            const pontaX = player.r + 85 + off;
+            const pontaY = 0;
+
+            // PONTO B: Onde o anzol está parado no mundo
+            const dx = player.anzolDestX - player.x;
+            const dy = player.anzolDestY - player.y;
+
+            // Converter a posição do mundo (anzol) para o sistema de coordenadas local do player (ctxRef)
+            const localAnzolX = dx * Math.cos(-player.angle) - dy * Math.sin(-player.angle);
+            const localAnzolY = dx * Math.sin(-player.angle) + dy * Math.cos(-player.angle);
+
+            // Desenhar a linha da ponta da vara até o anzol
+            ctxRef.save();
+            ctxRef.strokeStyle = "rgba(255, 255, 255, 0.5)";
+            ctxRef.lineWidth = 1;
+            ctxRef.beginPath();
+            ctxRef.moveTo(pontaX, pontaY); 
+            ctxRef.lineTo(localAnzolX, localAnzolY);
+            ctxRef.stroke();
+
+            // Boia na posição local do anzol
+            ctxRef.fillStyle = (fishBite && Math.floor(Date.now()/200)%2) ? "#fff" : "#ff4d4d";
+            ctxRef.beginPath();
+            ctxRef.arc(localAnzolX, localAnzolY, 4, 0, Math.PI * 2);
+            ctxRef.fill();
+            ctxRef.restore();
+        }
+    }
   }
 
   // CORPO DO PLAYER
@@ -2351,18 +2868,36 @@ function drawCraftingMenu() {
     ctx.fillStyle = UI_CRAFT.colorBg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 2. TÍTULO
+    // 2. TÍTULO E SUBTÍTULO
     ctx.textAlign = "center";
     ctx.fillStyle = UI_CRAFT.colorNeon;
     ctx.font = "bold 40px Arial";
     ctx.fillText("BANCADA DE TRABALHO", canvas.width / 2, 60);
+    
+    ctx.font = "bold 16px Arial";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.fillText("APERTE (C) PARA FECHAR", canvas.width / 2, 90);
+// 3. LÓGICA DE FILTRAGEM (Celular separa, PC mostra tudo)
+const allKeys = Object.keys(recipes);
+let displayKeys;
 
-    // 3. CÁLCULO DA GRADE
-    const items = Object.keys(recipes);
+if (isMobile) {
+    if (craftPage === 0) {
+        // PÁGINA 1: Tudo que NÃO for a vara de pesca
+        displayKeys = allKeys.filter(key => key !== "fishing_rod");
+    } else {
+        // PÁGINA 2: Apenas a vara de pesca
+        displayKeys = allKeys.filter(key => key === "fishing_rod");
+    }
+} else {
+    // Computador: Mostra todos os itens de uma vez
+    displayKeys = allKeys;
+}
+    // 4. CÁLCULO DA GRADE E DESENHO (Usando displayKeys!)
     const totalW = (UI_CRAFT.cols * UI_CRAFT.cardW) + ((UI_CRAFT.cols - 1) * UI_CRAFT.gap);
     UI_CRAFT.startX = (canvas.width - totalW) / 2;
 
-    items.forEach((key, i) => {
+    displayKeys.forEach((key, i) => {
         const item = recipes[key];
         const col = i % UI_CRAFT.cols;
         const row = Math.floor(i / UI_CRAFT.cols);
@@ -2392,13 +2927,30 @@ function drawCraftingMenu() {
         let custoText = `M:${item.wood||0} P:${item.stone||0} G:${item.sticks||0}`;
         ctx.fillText(custoText, x + UI_CRAFT.cardW/2, y + 75);
     });
+// 5. SETA DE NAVEGAÇÃO E BOTÃO SAIR (EXCLUSIVO MOBILE)
+    if (isMobile) {
+        // SETA DIREITA
+        const arrowX = canvas.width - 80, arrowY = canvas.height / 2;
+        ctx.fillStyle = "#3498db";
+        ctx.beginPath();
+        if (craftPage === 0) {
+            ctx.moveTo(arrowX, arrowY - 30); ctx.lineTo(arrowX + 30, arrowY); ctx.lineTo(arrowX, arrowY + 30);
+        } else {
+            ctx.moveTo(arrowX + 30, arrowY - 30); ctx.lineTo(arrowX, arrowY); ctx.lineTo(arrowX + 30, arrowY + 30);
+        }
+        ctx.fill();
 
-    // BOTÃO SAIR (No topo)
-    const sw = 120, sh = 50;
-    ctx.fillStyle = "#e74c3c";
-    ctx.fillRect(canvas.width - sw - 20, 20, sw, sh);
-    ctx.fillStyle = "#fff";
-    ctx.fillText("SAIR", canvas.width - sw + 40, 52);
+        // BOTÃO FECHAR (Estilo Inventário: Meio Esquerda)
+        const sw_close = 140, sh_close = 80, sx_close = 20, sy_close = canvas.height / 2 - 40;
+        ctx.fillStyle = "#e74c3c";
+        ctx.fillRect(sx_close, sy_close, sw_close, sh_close);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(sx_close, sy_close, sw_close, sh_close);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 20px Arial";
+        ctx.fillText("FECHAR", sx_close + sw_close/2, sy_close + sh_close/2 + 8);
+    }
 
     ctx.restore();
 }
@@ -2838,6 +3390,57 @@ birds.forEach(b => {
             ctx.restore();
         });
 
+        ctx.restore();
+    }
+});
+// --- DESENHO DO PEIXE (ESTILO CLÁSSICO) ---
+fishes.forEach(f => {
+  if (!f.alive) return;
+    // Só desenha se estiver na tela (Culling)
+    if (f.x > camX() - 50 && f.x < camX() + canvas.width + 50 &&
+        f.y > camY() - 50 && f.y < camY() + canvas.height + 50) {
+        
+        ctx.save();
+        ctx.translate(f.x - camX(), f.y - camY());
+        ctx.rotate(f.angle);
+
+        // --- NOVO: DESENHO DO RASTRO DE IMPULSO (VISÍVEL NO DRAW) ---
+        if (f.isBoosting) {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.5)"; // Bolhas brancas transparentes
+            ctx.beginPath();
+            // Desenha 3 bolhas atrás do peixe
+            ctx.arc(-f.r - 5, -3, 3, 0, Math.PI * 2);
+            ctx.arc(-f.r - 8, 2, 2.5, 0, Math.PI * 2);
+            ctx.arc(-f.r - 12, -1, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // --- RESTO DO DESENHO (ESTILO CLÁSSICO .IO) ---
+        ctx.strokeStyle = "#000000"; ctx.lineWidth = 3; 
+        
+        // Nadadeiras
+        ctx.fillStyle = f.color || "#3498db";
+        [1, -1].forEach(lado => {
+            ctx.beginPath(); ctx.arc(-2, f.r * lado, f.r * 0.4, 0, Math.PI * 2);
+            ctx.fill(); ctx.stroke();
+        });
+
+        // Corpo
+        ctx.beginPath(); ctx.arc(0, 0, f.r, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+
+        // Rabo
+        ctx.beginPath(); ctx.moveTo(-f.r, 0); ctx.lineTo(-f.r - 10, -8);
+        ctx.lineTo(-f.r - 10, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+        // Olhos
+        ctx.fillStyle = "white";
+        ctx.beginPath(); ctx.arc(f.r * 0.5, -f.r * 0.4, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(f.r * 0.5, f.r * 0.4, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "black";
+        ctx.beginPath(); ctx.arc(f.r * 0.65, -f.r * 0.4, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(f.r * 0.65, f.r * 0.4, 2, 0, Math.PI * 2); ctx.fill();
+        
         ctx.restore();
     }
 });

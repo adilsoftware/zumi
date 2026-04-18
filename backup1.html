@@ -1116,61 +1116,68 @@ canvas.addEventListener("mousedown", e => {
         return; 
     }
 
-    // 3. Se o Inventário estiver aberto, processa o EQUIPAR e PARA
+    // 3. LÓGICA DO INVENTÁRIO (Ajustada para 21 slots e deslocada para a esquerda)
     if (inventoryOpen) {
         const slotSize = 110;
         const gap = 15;
         const cols = 7;
-        const centerX = canvas.width / 2;
-        const startX = centerX - ((slotSize + gap) * cols) / 2;
+        const startX = 100; // IGUAL ao que colocamos no draw para alinhar o clique
+        const startY = 150;
 
-        for (let i = 0; i < 14; i++) {
+        // Aumentamos para 21 para pegar a nova fileira de baixo
+        for (let i = 0; i < 21; i++) {
             const x = startX + (i % cols) * (slotSize + gap);
-            const y = 150 + Math.floor(i / cols) * (slotSize + gap); // 150 é o Y inicial do draw
+            const y = startY + Math.floor(i / cols) * (slotSize + gap);
 
-            // ... dentro do loop for (let i = 0; i < 14; i++) ...
+            if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
+                console.log("Slot clicado:", i);
 
-if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
-    console.log("Slot clicado:", i);
-
-    // 1. Ferramentas de Madeira e Pedra
-    if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
-    else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
-    else if (i === 8 && player.inventory.axe_stone > 0) player.weapon = 3;
-    else if (i === 9 && player.inventory.pickaxe_stone > 0) player.weapon = 4;
-    
-    // 2. Armas e Utilitários
-    else if (i === 5 && player.inventory.spear > 0) player.weapon = 5;
-    
-    // 🌟 AQUI ESTAVA O ERRO: Adicionando a TOCHA (Slot 11)
-    else if (i === 11 && player.inventory.torch > 0) {
-        player.weapon = 6; 
-        inventoryOpen = false; // Fecha para mostrar a luz
-    }
-    // 🎣 NOVO: Adicionando a VARA DE PESCA (Slot 12)
-    else if (i === 12 && player.inventory.fishing_rod > 0) {
-        player.weapon = 7; // Índice 7 na lista 'weapons'
-        inventoryOpen = false; // Fecha para o jogador ver a vara na mão
-        console.log("Vara equipada via Inventário!");
-    }
-    // 3. Fogueira (Slot 4)
-    else if (i === 4 && player.inventory.campfire > 0) {
-         placingCampfire = true;
-         inventoryOpen = false;
-    }
-    
-    // 4. Recursos ou Slots vazios (Mão)
-    else if (i <= 3 || i === 10 || i >= 12) {
-        player.weapon = 0; 
-    }
-    
-    return; 
-}
+                // --- Lógica de Equipar (Mantendo suas funções originais) ---
+                if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
+                else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
+                else if (i === 8 && player.inventory.axe_stone > 0) player.weapon = 3;
+                else if (i === 9 && player.inventory.pickaxe_stone > 0) player.weapon = 4;
+                else if (i === 5 && player.inventory.spear > 0) player.weapon = 5;
+                
+                // Tocha (Slot 11)
+                else if (i === 11 && player.inventory.torch > 0) {
+                    player.weapon = 6; 
+                    inventoryOpen = false;
+                }
+                // Vara de Pesca (Slot 12)
+                else if (i === 12 && player.inventory.fishing_rod > 0) {
+                    player.weapon = 7;
+                    inventoryOpen = false;
+                }
+                // Fogueira (Slot 4)
+                else if (i === 4 && player.inventory.campfire > 0) {
+                     placingCampfire = true;
+                     inventoryOpen = false;
+                }
+                // Mão vazia / Recursos
+                else if (i <= 3 || i === 10 || i >= 13) {
+                    player.weapon = 0; 
+                }
+                
+                return; // Bloqueia o ataque se clicou em qualquer slot
+            }
         }
-        return; // Se clicou no inventário mas fora de um slot, também não ataca
+
+        // --- CLIQUE NA TOCHA RÁPIDA (Lado Direito) ---
+        const torchX = canvas.width - 200;
+        const torchY = canvas.height / 2 - 55;
+        if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + slotSize) {
+            if (player.inventory.torch > 0) {
+                player.weapon = 6;
+                inventoryOpen = false;
+                return;
+            }
+        }
+
+        return; // Se clicar no fundo do inventário, não ataca
     }
 
-    // 4. LÓGICA DE LANÇAR O ANZOL OU ATACAR
+    // 4. LÓGICA DE LANÇAR O ANZOL, COLOCAR FOGUEIRA OU ATACAR
     if (placingCampfire && player.inventory.campfire > 0) {
         const worldX = mx + camX();
         const worldY = my + camY();
@@ -1181,7 +1188,7 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
         player.inventory.campfire--;
         placingCampfire = false;
     } else {
-        // --- LÓGICA DE ATAQUE / PESCA ---
+      
         const worldMouseX = mx + camX();
         const worldMouseY = my + camY();
 
@@ -1199,10 +1206,10 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
                 
                 mouse.down = true; 
             } else {
-                // TRAVA CRÍTICA: Se clicar na terra, reseta tudo da vara
+
                 mouse.down = false;
                 player.attacking = false;
-                player.attackProgress = 0; // Para a animação na hora
+                player.attackProgress = 0;
                 isFishing = false;
             }
         } else {
@@ -1217,13 +1224,21 @@ function drawFullscreenInventory() {
   ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // --- POSICIONAMENTO DO TÍTULO (Centralizado) ---
   const centerX = canvas.width / 2;
   ctx.fillStyle = "#2ecc71";
   ctx.font = "bold 40px Arial Black";
-  ctx.textAlign = "center";
-  ctx.fillText("INVENTÁRIO (CAPACIDADE)", centerX, 70);
+  ctx.textAlign = "center"; 
+  ctx.fillText("INVENTÁRIO (CAPACIDADE)", centerX, 70); // Título continua no meio
 
-  // Mapeamento dos 14 itens/slots
+  // --- CONFIGURAÇÃO DOS SLOTS (Puxado para a esquerda) ---
+  const slotSize = 110;
+  const gap = 15;
+  const cols = 7; 
+  const startX = 100; // Apenas os botões começam aqui
+  const startY = 150;
+
+  // Itens originais + 7 slots vazios novos (Total 21)
   const items = [
     { label: "MADEIRA", value: player.wood, color: "#8d6e63", detail: "#5d4037", max: LIMITES.recursos },
     { label: "PEDRA", value: player.stone, color: "#757575", detail: "#4a4a4a", max: LIMITES.recursos },
@@ -1238,21 +1253,26 @@ function drawFullscreenInventory() {
     { label: "COMIDA", value: Math.floor(player.food), color: "#e74c3c", detail: "#c0392b", max: 100 },
     { label: "TOCHA", value: player.inventory.torch || 0, color: "#f39c12", detail: "#d35400", max: 1 },
     { label: "VARA PESCA", value: player.inventory.fishing_rod || 0, color: "#8b4513", detail: "#fff", max: 1 },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    // Terceira fileira (vazia)
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
     { label: "SLOT VAZIO", value: 0, empty: true }
   ];
 
-  const slotSize = 110;
-  const gap = 15;
-  const cols = 7; // 7 colunas para dar 14 slots (7x2)
-  const startX = centerX - ((slotSize + gap) * cols) / 2;
+
 
   items.forEach((res, index) => {
     const x = startX + (index % cols) * (slotSize + gap);
-    const y = 150 + Math.floor(index / cols) * (slotSize + gap);
+    const y = startY + Math.floor(index / cols) * (slotSize + gap);
 
     // Fundo do Slot
     ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
-    ctx.strokeStyle = (res.value >= res.max && !res.empty) ? "#e74c3c" : "#2ecc71"; // Vermelho se estiver cheio
+    ctx.strokeStyle = (res.value >= res.max && !res.empty) ? "#e74c3c" : "#2ecc71";
     ctx.lineWidth = 2;
     ctx.fillRect(x, y, slotSize, slotSize);
     ctx.strokeRect(x, y, slotSize, slotSize);
@@ -1260,7 +1280,7 @@ function drawFullscreenInventory() {
     if (!res.empty) {
       const iconCenterX = x + slotSize / 2;
       const iconCenterY = y + slotSize / 2 - 10;
-
+      
       // Desenho do Graveto
       if (res.label === "GRAVETO") {
         ctx.save();
@@ -3074,6 +3094,9 @@ flowers.forEach(f => {
   resources.forEach(res => {
   if(!res.alive) return;
 
+if (res.x < camX() - 100 || res.x > camX() + canvas.width + 100 ||
+      res.y < camY() - 100 || res.y > camY() + canvas.height + 100) return;
+
 const rx = res.x - camX();
   const ry = res.y - camY();
 
@@ -3201,6 +3224,9 @@ else if(res.type === "campfire"){
 zombies.forEach(z => {
   if(!z.active) return;
 
+if (z.x > camX() - 100 && z.x < camX() + canvas.width + 100 &&
+      z.y > camY() - 100 && z.y < camY() + canvas.height + 100) {
+
   ctx.beginPath();
   ctx.arc(z.x - camX(), z.y - camY(), z.r, 0, Math.PI * 2);
 
@@ -3213,7 +3239,7 @@ zombies.forEach(z => {
   }
 
   ctx.fill();
-});
+}});
 drawBloodMoonText();
  const viewMargin = 120;
  const all = [
@@ -3264,6 +3290,9 @@ if(obj.hp < obj.maxHp){
   particles.forEach(p=>{ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x-camX(), p.y-camY(), p.r, 0, Math.PI*2); ctx.fill();});
 // --- DESENHO DAS TOCAS ---
 rabbitHoles.forEach(h => {
+  if (h.x > camX() - 100 && h.x < camX() + canvas.width + 100 &&
+      h.y > camY() - 100 && h.y < camY() + canvas.height + 100) {
+
     ctx.fillStyle = "#4e342e"; // Marrom bem escuro
     ctx.beginPath();
     ctx.ellipse(h.x - camX(), h.y - camY() + 5, h.r, h.r * 0.6, 0, 0, Math.PI * 2);
@@ -3273,9 +3302,12 @@ rabbitHoles.forEach(h => {
     ctx.strokeStyle = "#3e2723";
     ctx.lineWidth = 2;
     ctx.stroke();
-});
+}});
   animals.forEach(a => {
     if (!a.alive) return;
+    if (a.x > camX() - 100 && a.x < camX() + canvas.width + 100 && 
+        a.y > camY() - 100 && a.y < camY() + canvas.height + 100) {
+
     // --- NOVO: SE ESTIVER NA TOCA, FICA ESCONDIDO ---
     if (a.isInHole) {
         // Checa se é dia e se o player está longe para poder sair
@@ -3328,7 +3360,7 @@ rabbitHoles.forEach(h => {
     ctx.fill();
 
     ctx.restore();
-});
+}});
 // --- DESENHO DOS PÁSSAROS MoMoo STYLE ---
 birds.forEach(b => {
     if (!b.active) return;
@@ -3885,7 +3917,7 @@ if (!player.dead) {
                 drawCraftingMenu(); 
             } else {
                 // Se não estiver craftando, mostra recursos e inventário normal
-                drawInventory(); 
+                
                 if (inventoryOpen) {
                     drawFullscreenInventory();
                 }
@@ -3934,59 +3966,7 @@ function drawHotbar() {
     }
   });
 }
-function drawInventory(){
-  if (!inventoryOpen) return;
 
-  ctx.save();
-    
-    // 🚩 ISSO FAZ O INVENTÁRIO APARECER NO CELULAR:
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  const slotSize = 80;
-  const padding = 15;
-  const items = [
-    { label: "🪵", qty: player.wood },
-    { label: "🪨", qty: player.stone },
-    { label: "✨", qty: player.gold },
-    { label: "🪓", owned: player.weapon === 1 || player.weapon === 3 }, // Machados
-    { label: "⛏️", owned: player.weapon === 2 || player.weapon === 4 }, // Picaretas
-    { label: "⚔️", owned: player.weapon === 5 } // Lança
-  ];
-
-  const width = items.length * (slotSize + padding) - padding;
-  const startX = canvas.width/2 - width/2;
-  const y = canvas.height - slotSize - 120;
-
-  // Fundo do Painel
-  ctx.fillStyle = "rgba(0,0,0,0.7)";
-  ctx.roundRect(startX - 10, y - 10, width + 20, slotSize + 20, 10);
-  ctx.fill();
-
-  items.forEach((item, i) => {
-    const x = startX + i * (slotSize + padding);
-
-    // Fundo do Slot
-    ctx.fillStyle = "rgba(255,255,255,0.1)";
-    ctx.fillRect(x, y, slotSize, slotSize);
-    
-    // Borda de seleção (se for a arma atual)
-    ctx.strokeStyle = (player.weapon === i) ? "#2ecc71" : "#555";
-    ctx.lineWidth = (player.weapon === i) ? 3 : 1;
-    ctx.strokeRect(x, y, slotSize, slotSize);
-
-    // Desenho do ícone/quantidade
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#fff";
-    ctx.font = "20px Arial";
-    ctx.fillText(item.label, x + slotSize/2, y + slotSize/2 + 5);
-
-    if(item.qty !== undefined) {
-      ctx.font = "bold 14px Arial";
-      ctx.fillText(item.qty, x + slotSize/2, y + slotSize - 5);
-    
-    }
-  });
-  ctx.restore();
-}
 
 let running=false;
 function loop(){if(!running) return; update(); draw(); requestAnimationFrame(loop);}
