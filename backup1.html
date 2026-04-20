@@ -187,34 +187,38 @@ if(isMobile){
 
 // --- 1. SE O INVENTÁRIO ESTIVER ABERTO ---
 if (inventoryOpen) {
-    // A) Botão FECHAR (Meio Esquerda)
-    const sw_close = 140, sh_close = 80, sx_close = 20, sy_close = canvas.height / 2 - 40;
+    // A) Botão FECHAR (Topo Esquerdo)
+    const sw_close = 140, sh_close = 80;
+    const sx_close = 20; 
+    const sy_close = 20; // Mudei o sy_close para 20
+    
+    // Se tocou dentro da área do botão Fechar
     if (tx > sx_close && tx < sx_close + sw_close && ty > sy_close && ty < sy_close + sh_close) {
         inventoryOpen = false;
-        continue;
+        continue; 
     }
 
     // B) DETECTAR TOQUE NOS SLOTS
     const slotSize = 110, gap = 15, cols = 7;
-    const centerX = canvas.width / 2;
-    const startX = centerX - ((slotSize + gap) * cols) / 2;
+    const startX = 100;
     const startY = 150;
 
-    for (let i = 0; i < 14; i++) {
+    // Ajustado para 21, pois sua array 'items' tem 21 posições (3 fileiras)
+    for (let i = 0; i < 21; i++) {
         const row = Math.floor(i / cols);
         const col = i % cols;
         const slotX = startX + col * (slotSize + gap);
         const slotY = startY + row * (slotSize + gap);
 
-        // Se o toque foi dentro deste slot (i)
+        // Se o toque foi dentro deste slot específico
         if (tx >= slotX && tx <= slotX + slotSize && ty >= slotY && ty <= slotY + slotSize) {
-            equiparItemPorIndice(i); // Função que vamos criar abaixo
-            return; // Sai para não clicar em nada atrás
+            equiparItemPorIndice(i); 
+            continue; 
         }
     }
-    continue; // Bloqueia outros toques enquanto o inventário está aberto
+    continue; // Bloqueia toques no joystick/chão enquanto o inventário está aberto
 }
-        
+
     // --- A) SE O CRAFT ESTIVER ABERTO ---
 if (craftingOpen) {
     // 1. Botão FECHAR (Meio Esquerda)
@@ -541,6 +545,8 @@ const LIMITES = {
 const player = {
   x: MAP / 2, 
   y: MAP / 2 - 2500, 
+  temp: 100,      // <--- Coloque aqui dentro
+  coldSlow: 1.0,  // <--- Adicione isso também para evitar erros
   r: 20,
   speed: 4, 
   hp: 100, 
@@ -550,6 +556,7 @@ const player = {
   attacking: false, 
   atkTimer: 0,
   weapon: 0, // 0 é a "Mão" na sua lista de weapons
+  accessory: null,
   hitTimer: 0,
   attackProgress: 0,
   stamina: 100, 
@@ -1123,7 +1130,20 @@ canvas.addEventListener("mousedown", e => {
         const cols = 7;
         const startX = 100; // IGUAL ao que colocamos no draw para alinhar o clique
         const startY = 150;
+const slotAccX = canvas.width - 220; 
+const slotAccY = 300;
+const sSize = 100;
 
+if (mx >= slotAccX && mx <= slotAccX + sSize && my >= slotAccY && my <= slotAccY + sSize) {
+    if (player.accessory === "torch") {
+        player.accessory = null;
+        player.weapon = 6; 
+    } else if (player.weapon === 6) {
+        player.accessory = "torch";
+        player.weapon = 0;
+    }
+    return;
+}
         // Aumentamos para 21 para pegar a nova fileira de baixo
         for (let i = 0; i < 21; i++) {
             const x = startX + (i % cols) * (slotSize + gap);
@@ -1139,11 +1159,23 @@ canvas.addEventListener("mousedown", e => {
                 else if (i === 9 && player.inventory.pickaxe_stone > 0) player.weapon = 4;
                 else if (i === 5 && player.inventory.spear > 0) player.weapon = 5;
                 
-                // Tocha (Slot 11)
-                else if (i === 11 && player.inventory.torch > 0) {
-                    player.weapon = 6; 
-                    inventoryOpen = false;
-                }
+                // Tocha (Slot 11) - Dentro do loop de slots
+else if (i === 11 && player.inventory.torch > 0) {
+    if (player.weapon === 6) {
+        // Se já está na mão, manda para o acessório (costas)
+        player.weapon = 0;
+        player.accessory = "torch";
+    } else if (player.accessory === "torch") {
+        // Se está no acessório, volta para a mão
+        player.accessory = null;
+        player.weapon = 6;
+    } else {
+        // Se estava guardada, equipa na mão primeiro
+        player.weapon = 6;
+        player.accessory = null;
+    }
+    // Removi o inventoryOpen = false para você ver o item mudando de lugar sem fechar o menu
+}
                 // Vara de Pesca (Slot 12)
                 else if (i === 12 && player.inventory.fishing_rod > 0) {
                     player.weapon = 7;
@@ -1164,15 +1196,17 @@ canvas.addEventListener("mousedown", e => {
         }
 
         // --- CLIQUE NA TOCHA RÁPIDA (Lado Direito) ---
-        const torchX = canvas.width - 200;
-        const torchY = canvas.height / 2 - 55;
-        if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + slotSize) {
-            if (player.inventory.torch > 0) {
-                player.weapon = 6;
-                inventoryOpen = false;
-                return;
-            }
-        }
+const torchX = canvas.width - 200;
+const torchY = canvas.height / 2 - 55;
+if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + slotSize) {
+    if (player.inventory.torch > 0) {
+        // Se clicar aqui, ela SEMPRE vem para a mão e sai das costas
+        player.weapon = 6;
+        player.accessory = null; // Garante que saiu das costas
+        inventoryOpen = false;
+        return;
+    }
+}
 
         return; // Se clicar no fundo do inventário, não ataca
     }
@@ -1367,9 +1401,9 @@ else if (res.label === "VARA PESCA") {
 
   drawHotbar(); // Chama a barra de baixo junto com o inventário grande
 
-  // Botão de Fechar Mobile (Meio Esquerda)
+ // Botão de Fechar Mobile (Topo Esquerdo)
   if (isMobile) {
-    const sw = 140, sh = 80, sx = 20, sy = canvas.height / 2 - 40;
+    const sw = 140, sh = 80, sx = 20, sy = 20; // Mudei o sy para 20
     ctx.fillStyle = "#e74c3c";
     ctx.fillRect(sx, sy, sw, sh);
     ctx.strokeStyle = "#fff";
@@ -1380,7 +1414,60 @@ else if (res.label === "VARA PESCA") {
     ctx.textAlign = "center";
     ctx.fillText("FECHAR", sx + sw/2, sy + sh/2 + 8);
   }
+ // --- SLOT DE ACESSÓRIO (Lado Direito e Estilizado) ---
+const slotX = canvas.width - 220; // Mais para a direita
+const slotY = 300; 
+const sSize = 100;
 
+// Sombra/Brilho externo se estiver ocupado
+if (player.accessory) {
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#f1c40f";
+}
+
+// Fundo do Slot
+ctx.fillStyle = "rgba(44, 62, 80, 0.8)";
+ctx.strokeStyle = player.accessory ? "#f1c40f" : "#95a5a6";
+ctx.lineWidth = 4;
+ctx.beginPath();
+ctx.roundRect(slotX, slotY, sSize, sSize, 10); // Borda arredondada
+ctx.fill();
+ctx.stroke();
+ctx.shadowBlur = 0; // Reseta sombra
+
+// Título do Slot
+ctx.fillStyle = "#bdc3c7";
+ctx.font = "bold 14px Arial";
+ctx.textAlign = "center";
+ctx.fillText("ACESSÓRIO", slotX + sSize/2, slotY - 15);
+
+if (player.accessory === "torch") {
+    const iconX = slotX + sSize/2;
+    const iconY = slotY + sSize/2;
+    
+    // Desenha a tocha IGUAL ao inventário
+    ctx.fillStyle = "#5d4037";
+    ctx.fillRect(iconX - 4, iconY - 5, 8, 30); // Cabo
+    ctx.fillStyle = "#37474f";
+    ctx.fillRect(iconX - 6, iconY - 8, 12, 5); // Metal
+
+    const flicker = Math.sin(Date.now() * 0.01) * 4;
+    ctx.fillStyle = "#ff7043";
+    ctx.beginPath();
+    ctx.arc(iconX, iconY - 15, 12 + flicker/2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff176";
+    ctx.beginPath();
+    ctx.arc(iconX, iconY - 15, 5, 0, Math.PI * 2);
+    ctx.fill();
+} else {
+    // Ícone fantasma quando vazio
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = "#fff";
+    ctx.font = "40px Arial";
+    ctx.fillText("🛡️", slotX + sSize/2, slotY + sSize/2 + 15);
+    ctx.globalAlpha = 1.0;
+}
   ctx.restore();
 }
 function getCraftItemPos(index) {
@@ -1526,13 +1613,18 @@ function equiparItemPorIndice(index) {
             }
             break;
         case 11: // TOCHA
-            if (player.inventory.torch > 0) player.weapon = 6;
-            break;
-        default:
-            // Índices 0, 1, 2, 3 são recursos (Madeira, Pedra, Ouro, Graveto)
-            // Geralmente não equipam nada, mas você pode colocar um som de clique.
-            console.log("Clicou no recurso: " + index);
-            break;
+    if (player.inventory.torch > 0) {
+        if (player.weapon === 6) {
+            // Já está na mão? Vai pro acessório
+            player.accessory = "torch";
+            player.weapon = 0; 
+        } else {
+            // Estava guardada ou no acessório? Vem pra mão
+            player.weapon = 6;
+            player.accessory = null;
+        }
+    }
+    break;
             
             case 12: // VARA DE PESCA (Novo!)
             if (player.inventory.fishing_rod > 0) {
@@ -1563,15 +1655,15 @@ bushes.forEach(b => {
     if (craftingOpen) return;
     if (inventoryOpen) return;
 
-    // 2. TROCA DE CICLO (DIA <-> NOITE)
+    // --- 2. TROCA DE CICLO (DIA <-> NOITE) ---
 if (isDay && worldTime >= DAY_DURATION) {
     isDay = false;
     worldTime = 0;
-    jaTestouSorteNoPeriodo = false; 
-    isRaining = false;              // Para a chuva ao anoitecer
+    jaTestouSorteNoPeriodo = false; // Reset para sortear chuva na NOITE
+    isRaining = false;             
     zombieSpawnTimer = 0;
 
-    // Lógica da Lua de Sangue
+    
     if (dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE) {
         isBloodMoon = true;
         bloodMoonTimer = 0;
@@ -1585,82 +1677,49 @@ else if (!isDay && worldTime >= NIGHT_DURATION) {
     isDay = true;
     worldTime = 0;
     dayCount++;
-    jaTestouSorteNoPeriodo = false; // Permite novo sorteio ao amanhecer
-    isRaining = false;              // Para a chuva ao amanhecer
+    jaTestouSorteNoPeriodo = false; // Reset para sortear chuva no DIA
+    isRaining = false;             
     zombies.length = 0;
     zombieSpawnTimer = 0;
     isBloodMoon = false;
 }
 
-// 3. ATUALIZA TIMER LUA DE SANGUE
-if (isBloodMoon && passouUmSegundo) {
-    bloodMoonTimer++;
-    if (bloodMoonTimer >= BLOOD_MOON_DURATION) isBloodMoon = false;
-}
-
-// 4. SORTEIO ÚNICO DA CHUVA (30% Chance)
+// --- 3. GATILHO DA CHUVA (Sorteio Único por Ciclo) ---
+// Se ainda não testamos a sorte neste período (dia ou noite)
 if (!jaTestouSorteNoPeriodo) {
     jaTestouSorteNoPeriodo = true; 
     
-    // Regra: Começa a sortear a partir do Dia 2 (dayCount > 1)
+    // Regra: 30% de chance a partir do Dia 2
     if (dayCount > 1 && Math.random() < 0.30) { 
         isRaining = true;
         rainTextTimer = 300; 
         console.log("A tempestade começou e durará o ciclo todo!");
+        
+        // Se você quiser que ela pare ANTES do ciclo acabar, use o setTimeout:
+        // Mas como resetamos isRaining na troca de ciclo ali em cima, 
+        // ela já para naturalmente quando amanhece ou anoitece.
     }
 }
 
-// ===== SPAWN DE ZUMBIS AJUSTADO COM LUA DE SANGUE =====
-if(!isDay && passouUmSegundo){
+// --- 4. SPAWN DE ZUMBIS (Somente à Noite) ---
+if (!isDay && passouUmSegundo) {
     zombieSpawnTimer++;
-}
-if(zombieSpawnTimer >= 120){
-    let normalCount = (dayCount >= 3) ? 10 : 0;
-    let bloodCount = isBloodMoon ? 3 : 0;
-
-    for(let i = 0; i < normalCount; i++){
-        spawnZombie("normal");
-    }
-    for(let i = 0; i < bloodCount; i++){
-        spawnZombie("blood");
-    }
-
-    zombieSpawnTimer = 0;
-}
-else if(!isDay && worldTime >= NIGHT_DURATION){
-    isDay = true;
-    worldTime = 0;
-    dayCount++;
-    jaTestouSorteNoPeriodo = false; // <-- RESET AQUI: O dia começou, pode testar sorte pra chuva
     
-    zombies.length = 0;
-    zombieSpawnTimer = 0;
-    isBloodMoon = false;
-}
-
-// Atualiza timer da Lua de Sangue
-if(isBloodMoon && passouUmSegundo){
-    bloodMoonTimer++;
-
-    if(bloodMoonTimer >= BLOOD_MOON_DURATION){
-        isBloodMoon = false;
+    // Atualiza timer da Lua de Sangue se estiver ativa
+    if (isBloodMoon) {
+        bloodMoonTimer++;
+        if (bloodMoonTimer >= BLOOD_MOON_DURATION) isBloodMoon = false;
     }
-}
 
-// ===== GATILHO DA CHUVA (30% de chance, mas só após o 1º dia) =====
-if (!jaTestouSorteNoPeriodo) {
-    jaTestouSorteNoPeriodo = true; 
-    
-    // Só permite sortear chuva se o contador de dias for maior que 0
-    // (Ou seja, já passou pelo menos o primeiro dia)
-    if (dayCount > 1 && Math.random() < 0.30) { 
-        isRaining = true;
-        rainTextTimer = 300; 
-        console.log("A tempestade começou!");
+    // Spawn a cada 120 segundos (ou conforme sua lógica)
+    if (zombieSpawnTimer >= 120) {
+        let normalCount = (dayCount >= 3) ? 10 : 0;
+        let bloodCount = isBloodMoon ? 3 : 0;
 
-        setTimeout(() => {
-            isRaining = false;
-        }, 20000);
+        for (let i = 0; i < normalCount; i++) spawnZombie("normal");
+        for (let i = 0; i < bloodCount; i++) spawnZombie("blood");
+
+        zombieSpawnTimer = 0;
     }
 }
 zombies.forEach(z => {
@@ -1733,7 +1792,41 @@ zombies.forEach(z => {
   player.food -= foodDrain;
 }
 
+// --- LÓGICA DE TEMPERATURA ---
+if (passouUmSegundo) {
+    let seAquecendo = false;
 
+    // 1. Checar Fogueiras próximas
+    resources.forEach(res => {
+        if (res.type === "campfire" && res.alive) {
+            const dist = Math.hypot(player.x - res.x, player.y - res.y);
+            if (dist < 150) seAquecendo = true;
+        }
+    });
+
+    // 2. Checar Tocha na mão
+    if ((player.weapon === 6 || player.accessory === "torch") && player.inventory.torch > 0) {
+        seAquecendo = true;
+    }
+
+    // 3. Checar se é Dia (Sol aquece)
+    // Se for dia e não estiver chovendo, o player se aquece naturalmente
+    if (isDay && !isRaining) {
+        seAquecendo = true;
+    }
+
+    // Aplicar a mudança
+    if (seAquecendo) {
+        player.temp = Math.min(100, player.temp + 2); // Aquece rápido
+    } else {
+        // Esfria mais rápido se estiver chovendo E for noite
+        let perda = (isRaining && !isDay) ? 1.5 : 0.8;
+        player.temp = Math.max(0, player.temp - perda);
+    }
+
+    // Aplicar lentidão se estiver com muito frio (temp < 30)
+    player.coldSlow = (player.temp < 30) ? 0.85 : 1.0; 
+}
 
   // 🍗 FOME → DANO OU REGENERAÇÃO
 
@@ -1767,13 +1860,18 @@ if (player.exhausted && player.stamina >= player.maxStamina - 0.1) {
   if(isSprinting) player.stamina -= 0.8;
   else if(player.stamina < player.maxStamina) player.stamina = Math.min(player.stamina + 0.4, player.maxStamina);
 
- let moveSpeed = isSprinting ? player.speed*1.8 : player.speed;
-  if(inWater) moveSpeed /= 2;
+ let moveSpeed = (isSprinting && !player.exhausted && isMoving) ? player.speed * 1.8 : player.speed;
 
-  if(keys.w) player.y-=moveSpeed;
-  if(keys.s) player.y+=moveSpeed;
-  if(keys.a) player.x-=moveSpeed;
-  if(keys.d) player.x+=moveSpeed;
+// Aplica os redutores de ambiente (Frio e Água)
+moveSpeed *= (player.coldSlow || 1.0);
+if (inWater) moveSpeed /= 2;
+
+// --- APLICAÇÃO DO MOVIMENTO ---
+if (keys.w) player.y -= moveSpeed;
+if (keys.s) player.y += moveSpeed;
+if (keys.a) player.x -= moveSpeed;
+if (keys.d) player.x += moveSpeed;
+
 if(isMobile && touchMove.active){
   const len = Math.hypot(touchMove.dx, touchMove.dy) || 1;
   const nx = touchMove.dx / len;
@@ -2704,7 +2802,34 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
   // Pega a arma atual baseada no índice (0 a 5)
   const w = weapons[player.weapon] || weapons[0]; 
   const off = player.attackProgress * 25; 
+// --- 1. ACESSÓRIO (Lanterna de Ombro/Cabeça) ---
+  if (player.accessory === "torch" && player.weapon !== 6) {
+     ctxRef.save();
+      
+      // Se estiver na mão, ela fica um pouco à frente. 
+      // Se for acessório (barriga), recua para dentro do player.
+      const torchX = (player.weapon === 6) ? player.r - 5 : player.r - 15;
+      const torchY = 0; 
 
+      // Cabo (Mais curto para não tapar as ferramentas)
+      ctxRef.fillStyle = "#5d4037";
+      ctxRef.fillRect(torchX, torchY - 3, 15, 6);
+      
+      // Brilho da Chama
+      const flicker = Math.sin(Date.now() * 0.02) * 4;
+      ctxRef.fillStyle = "#ff7043";
+      ctxRef.beginPath();
+      ctxRef.arc(torchX + 15, torchY, 8 + flicker/2, 0, Math.PI * 2);
+      ctxRef.fill();
+      
+      // Miolo da chama
+      ctxRef.fillStyle = "#fff176";
+      ctxRef.beginPath();
+      ctxRef.arc(torchX + 15, torchY, 4, 0, Math.PI * 2);
+      ctxRef.fill();
+      
+      ctxRef.restore();
+  }
   if(w.style !== "hand") {
     // Definir cores: 3, 4 e 5 são de Pedra/Metal (Cinza)
     const isStone = (player.weapon >= 3);
@@ -2810,7 +2935,7 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
   ctxRef.beginPath(); 
   ctxRef.arc(0, 0, player.r, 0, Math.PI*2); 
   ctxRef.fill();
-
+  
   // MÃOS
   const hands = [{x: player.r, y: -14}, {x: player.r, y: 14}];
   hands.forEach(h => {
@@ -3337,26 +3462,48 @@ rabbitHoles.forEach(h => {
     }
     ctx.rotate(a.angle);
 
-    // Corpo (bolinha marrom)
-    ctx.fillStyle = "#8d6e63";
+    // --- ORELHAS (Marrom original) ---
+    ctx.fillStyle = "#8d6e63"; // Cor marrom original do coelho
+    
+    // Orelha Esquerda (Oval inclinada)
     ctx.beginPath();
-    ctx.arc(0, 0, a.r, 0, Math.PI * 2);
+    ctx.ellipse(-8, -10, 10, 4, -Math.PI/3, 0, Math.PI * 2);
+    ctx.fill();
+    // Interior da orelha (Rosa clarinho sutil)
+    ctx.fillStyle = "#ffcdd2";
+    ctx.beginPath();
+    ctx.ellipse(-8, -10, 7, 2, -Math.PI/3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Olhinhos (na frente)
-    ctx.fillStyle = "black";
+    // Orelha Direita (Oval inclinada)
+    ctx.fillStyle = "#8d6e63"; // Reseta cor para marrom
     ctx.beginPath();
-    ctx.arc(a.r * 0.5, -3, 2, 0, Math.PI * 2);
-    ctx.arc(a.r * 0.5, 3, 2, 0, Math.PI * 2);
+    ctx.ellipse(-8, 10, 10, 4, Math.PI/3, 0, Math.PI * 2);
+    ctx.fill();
+    // Interior da orelha
+    ctx.fillStyle = "#ffcdd2";
+    ctx.beginPath();
+    ctx.ellipse(-8, 10, 7, 2, Math.PI/3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Orelhinhas atrás
-    ctx.fillStyle = "#8d6e63";
+    // --- CORPO (O "Formato Original" ovalizado) ---
+    ctx.fillStyle = "#8d6e63"; // Marrom original
     ctx.beginPath();
-    // Orelha 1
-    ctx.ellipse(-5, -5, 8, 3, 0, 0, Math.PI * 2);
-    // Orelha 2
-    ctx.ellipse(-5, 5, 8, 3, 0, 0, Math.PI * 2);
+    // Usamos ellipse em vez de arc para dar um formato mais orgânico, mas mantendo o tamanho original (~30px total)
+    ctx.ellipse(0, 0, 16, 12, 0, 0, Math.PI * 2); 
+    ctx.fill();
+
+    // --- RABINHO (Pompom branco sutil) ---
+    ctx.fillStyle = "#fafafa";
+    ctx.beginPath();
+    ctx.arc(-14, 0, 5, 0, Math.PI * 2); // Um pequeno pompom nas costas
+    ctx.fill();
+
+    // --- OLHOS (Do tamanho original) ---
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc(10, -5, 1.8, 0, Math.PI * 2); // Olho esquerdo
+    ctx.arc(10, 5, 1.8, 0, Math.PI * 2);  // Olho direito
     ctx.fill();
 
     ctx.restore();
@@ -3660,7 +3807,7 @@ if(!isDay) {
     }
   });
   // ✨ LUZ DA TOCHA NA PENUMBRA
-  if (player.weapon === 6) {
+  if (player.weapon === 6 || player.accessory === "torch") {
     const px = player.x - camX();
     const py = player.y - camY();
     const raioTochaP = 300; // Um pouco menor que a fogueira
@@ -3687,7 +3834,7 @@ if(!isDay) {
     }
   });
 // ✨ LUZ DA TOCHA NO BREU
-  if (player.weapon === 6) {
+  if (player.weapon === 6 || player.accessory === "torch") {
     const px = player.x - camX();
     const py = player.y - camY();
     // Se chover, a luz da tocha diminui
@@ -3899,6 +4046,7 @@ particles.forEach((p, index) => {
     ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
   }
 if (!player.dead) {
+  drawTemperatureUI();
         if (isMobile) {
             // HUD de Mobile (JoySticks e Botões)
             drawMobileHUD();
@@ -3925,6 +4073,41 @@ if (!player.dead) {
         }
     }
   }
+  function drawTemperatureUI() {
+    const x = 20, y = canvas.height - 150, w = 200, h = 15;
+     // Título
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "left";
+    ctx.fillText("MEDIDOR DE TEMPERATURA", x, y - 10);
+    // Fundo do Termômetro
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(x, y, w, h);
+
+    // Cor dinâmica: Vermelho (quente) para Azul (frio)
+    // Interpolação simples de cor baseada na temp
+    const red = Math.floor((player.temp / 100) * 255);
+    const blue = Math.floor(((100 - player.temp) / 100) * 255);
+    ctx.fillStyle = `rgb(${red}, 100, ${blue})`;
+    
+    ctx.fillRect(x, y, (player.temp / 100) * w, h);
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(x, y, w, h);
+
+    // --- EFEITO DE VINHETA (BORDA CONGELADA) ---
+    if (player.temp < 50) {
+        const opacidade = (50 - player.temp) / 50 * 0.5; // No máximo 50% de opacidade
+        const grad = ctx.createRadialGradient(
+            canvas.width/2, canvas.height/2, canvas.width * 0.2, 
+            canvas.width/2, canvas.height/2, canvas.width * 0.7
+        );
+        grad.addColorStop(0, "transparent");
+        grad.addColorStop(1, `rgba(100, 200, 255, ${opacidade})`); // Azul gelo
+
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+}
 function drawHotbar() {
   const slots = [
     { id: "hand", name: "Mão", weapon: 0 },
