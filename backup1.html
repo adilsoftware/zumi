@@ -156,6 +156,22 @@ const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+function entrarFullscreen() {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+    } else if (elem.webkitRequestFullscreen) { // Safari/iOS
+        elem.webkitRequestFullscreen();
+    } else if (elem.msRequestFullscreen) { // IE11
+        elem.msRequestFullscreen();
+    }
+    
+    // Tenta travar a tela deitada no celular
+    if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(e => console.log("Rotação bloqueada"));
+    }
+}
 function getTouchPos(touch){
   const rect = canvas.getBoundingClientRect();
   return {
@@ -205,6 +221,7 @@ if (inventoryOpen) {
 
     // Ajustado para 21, pois sua array 'items' tem 21 posições (3 fileiras)
     for (let i = 0; i < 21; i++) {
+    if (i === 10) continue;
         const row = Math.floor(i / cols);
         const col = i % cols;
         const slotX = startX + col * (slotSize + gap);
@@ -250,6 +267,7 @@ for (let i = 0; i < displayKeys.length; i++) {
 
     if (tx >= pos.x && tx <= pos.x + pos.w && ty >= pos.y && ty <= pos.y + pos.h) {
         tryCraft(displayKeys[i]); // Compra o item correto da lista filtrada
+        
         return; 
     }
 }
@@ -459,6 +477,7 @@ if (moveuX > 1.2 || moveuY > 1.2) {
     }
   },  { passive: false });
 }
+
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 720;
 
@@ -617,7 +636,42 @@ const weapons = [
 ];
 
 let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [], fishes = [];
+let running = false;
+let lastTime = 0;
+let dt = 1; // Multiplicador de velocidade
 
+function loop(timestamp) {
+  if (!running) return;
+
+  // Calcula quanto tempo passou desde o último frame
+  // 16.67ms é o tempo ideal para 60 FPS
+  if (!lastTime) lastTime = timestamp;
+  const deltaTimeMS = timestamp - lastTime;
+  lastTime = timestamp;
+
+  // Define o 'dt'. Se o jogo rodar a 60fps, dt será 1. 
+  // Se rodar a 120fps, dt será 0.5 (compensando a velocidade).
+  dt = deltaTimeMS / 16.67;
+
+  update(); 
+  draw(); 
+
+  requestAnimationFrame(loop);
+}
+
+document.getElementById("startBtn").onclick = () => {
+    // 1. Esconde o menu
+    document.getElementById("overlay").style.display = "none";
+    
+    // 2. Tenta entrar em Fullscreen (Só funciona aqui no clique!)
+    if (isMobile) {
+        entrarFullscreen();
+    }
+    
+    // 3. Inicia o jogo
+    running = true;
+    requestAnimationFrame(loop);
+};
 function makeRock(x, y, radius, color, type="stone") {
   const points = [];
   const n = 6 + Math.floor(Math.random() * 5);
@@ -1605,13 +1659,7 @@ function equiparItemPorIndice(index) {
         case 9: // PICARETA PEDRA
             if (player.inventory.pickaxe_stone > 0) player.weapon = 4;
             break;
-        case 10: // COMIDA (Cura o jogador se ele tiver fome)
-            if (player.food < player.maxFood) {
-                // Lógica de comer: você pode adicionar som ou efeito aqui
-                player.food = Math.min(player.maxFood, player.food + 20);
-                player.hp = Math.min(player.maxHp, player.hp + 5); 
-            }
-            break;
+            
         case 11: // TOCHA
     if (player.inventory.torch > 0) {
         if (player.weapon === 6) {
@@ -1789,7 +1837,7 @@ zombies.forEach(z => {
   if(player.foodCooldown > 0){
   player.foodCooldown--;
 } else {
-  player.food -= foodDrain;
+  player.food -= foodDrain * dt;
 }
 
 // --- LÓGICA DE TEMPERATURA ---
@@ -1833,12 +1881,12 @@ if (passouUmSegundo) {
 // dano por fome (2x mais lento)
 if(player.food <= 0){
   player.food = 0;
-  player.hp -= 0.075; // antes era 0.15
+  player.hp -= 0.075 * dt;
 }
 
 // regeneração se estiver bem alimentado
 if(player.food > player.maxFood * 0.75 && player.hp < player.maxHp){
-  player.hp += 0.04; // regeneração lenta
+  player.hp += 0.04 * dt;
 }
 
   if(player.hp <= 0 && !player.dead) {
@@ -1858,7 +1906,7 @@ if (player.exhausted && player.stamina >= player.maxStamina - 0.1) {
 }
 
   if(isSprinting) player.stamina -= 0.8;
-  else if(player.stamina < player.maxStamina) player.stamina = Math.min(player.stamina + 0.4, player.maxStamina);
+  else if(player.stamina < player.maxStamina) player.stamina = Math.min(player.stamina + 0.4 * dt, player.maxStamina);
 
  let moveSpeed = (isSprinting && !player.exhausted && isMoving) ? player.speed * 1.8 : player.speed;
 
@@ -1867,18 +1915,18 @@ moveSpeed *= (player.coldSlow || 1.0);
 if (inWater) moveSpeed /= 2;
 
 // --- APLICAÇÃO DO MOVIMENTO ---
-if (keys.w) player.y -= moveSpeed;
-if (keys.s) player.y += moveSpeed;
-if (keys.a) player.x -= moveSpeed;
-if (keys.d) player.x += moveSpeed;
+if (keys.w) player.y -= moveSpeed * dt;
+if (keys.s) player.y += moveSpeed * dt;
+if (keys.a) player.x -= moveSpeed * dt;
+if (keys.d) player.x += moveSpeed * dt;
 
 if(isMobile && touchMove.active){
   const len = Math.hypot(touchMove.dx, touchMove.dy) || 1;
   const nx = touchMove.dx / len;
   const ny = touchMove.dy / len;
   const speedFactor = Math.min(len / joystick.radius, 1);
-player.x += nx * moveSpeed * speedFactor;
-player.y += ny * moveSpeed * speedFactor;
+    player.x += nx * moveSpeed * speedFactor * dt;
+    player.y += ny * moveSpeed * speedFactor * dt;
 }
 
   player.x = Math.max(player.r, Math.min(MAP - player.r, player.x));
@@ -4151,9 +4199,7 @@ function drawHotbar() {
 }
 
 
-let running=false;
-function loop(){if(!running) return; update(); draw(); requestAnimationFrame(loop);}
-document.getElementById("startBtn").onclick=()=>{document.getElementById("overlay").style.display="none"; running=true; loop();};
+
 </script>
 </body>
 </html>
