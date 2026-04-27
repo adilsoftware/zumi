@@ -1931,55 +1931,30 @@ if(isMobile && touchMove.active){
 
   player.x = Math.max(player.r, Math.min(MAP - player.r, player.x));
   player.y = Math.max(player.r, Math.min(MAP - player.r, player.y));
-// 🌳 COLISÃO AJUSTADA PARA O NOVO TRONCO
+// --- UNIFICAÇÃO DE TODAS AS COLISÕES SÓLIDAS ---
+// Este bloco substitui as colisões de Árvore, Pedra, Ouro e Fogueira.
 resources.forEach(res => {
-  if(!res.alive) return;
-  if(res.type !== "tree" && res.type !== "palm") return;
+    if (!res.alive || res.type === "stick") return;
 
-  const dx = player.x - res.x;
-  // Ajustamos o Y da colisão para o centro do novo tronco (mais para baixo)
-  const dy = player.y - (res.type === "palm" ? res.y + 10 : res.y);
-  const dist = Math.hypot(dx, dy);
-  
-  // Raio um pouco maior (8) para o tronco que engrossou para 16
-  const colRadius = (res.type === "palm") ? 20 : res.r;
+    // FILTRO RÁPIDO: Se a distância for maior que 80px, ignora (Muito mais leve!)
+    if (Math.abs(player.x - res.x) > 150 || Math.abs(player.y - res.y) > 150) return;
 
-  if(dist < player.r + colRadius){
-    const angle = Math.atan2(dy, dx);
-    const overlap = (player.r + colRadius) - dist;
-    player.x += Math.cos(angle) * overlap;
-    player.y += Math.sin(angle) * overlap;
-  }
-});
-// COLISÃO COM PEDRA E OURO (UNIFICAÇÃO 3 — ETAPA 2)
-resources.forEach(res => {
-  if(!res.alive) return;
-  if(res.type !== "stone" && res.type !== "gold") return;
-
-  const dx = player.x - res.x;
-  const dy = player.y - res.y;
-  const dist = Math.hypot(dx, dy);
-
-  if(dist < player.r + res.r){
-    const angle = Math.atan2(dy, dx);
-    const overlap = (player.r + res.r) - dist;
-    player.x += Math.cos(angle) * overlap;
-    player.y += Math.sin(angle) * overlap;
-  }
-});
-// Colisão com a Fogueira
-resources.forEach(res => {
-  if(res.type === "campfire" && res.alive){
     const dx = player.x - res.x;
-    const dy = player.y - res.y;
+    // Ajuste especial para o tronco da palmeira
+    const dy = player.y - (res.type === "palm" ? res.y + 10 : res.y);
     const dist = Math.hypot(dx, dy);
-    if(dist < player.r + res.r){
-      const angle = Math.atan2(dy, dx);
-      const overlap = (player.r + res.r) - dist;
-      player.x += Math.cos(angle) * overlap;
-      player.y += Math.sin(angle) * overlap;
+    
+    // Define o raio baseado no tipo
+    let colRadius = res.r || 20;
+    if (res.type === "palm") colRadius = 20;
+    if (res.type === "tree") colRadius = res.r; // Seu raio de árvore ajustado
+
+    if (dist < player.r + colRadius) {
+        const angle = Math.atan2(dy, dx);
+        const overlap = (player.r + colRadius) - dist;
+        player.x += Math.cos(angle) * overlap;
+        player.y += Math.sin(angle) * overlap;
     }
-  }
 });
 // 🐇 COLISÃO FÍSICA COM COELHOS
 animals.forEach(ani => {
