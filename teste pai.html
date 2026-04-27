@@ -531,7 +531,7 @@ const SAFE_SPAWN_DIST = 1200;
 const ZOMBIE_SPREAD_DIST = 150;
 
 // CONFIGURAÇÕES
-const DAY_DURATION = 300;
+const DAY_DURATION = 60;
 const NIGHT_DURATION = 240;
 let zombieSpawnTimer = 0;
 let worldTime = 0;
@@ -1264,7 +1264,7 @@ if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + sl
 
         return; // Se clicar no fundo do inventário, não ataca
     }
-
+    
     // 4. LÓGICA DE LANÇAR O ANZOL, COLOCAR FOGUEIRA OU ATACAR
     if (placingCampfire && player.inventory.campfire > 0) {
         const worldX = mx + camX();
@@ -3805,9 +3805,16 @@ jaguars.forEach(j => {
         ctx.restore();
       }
 });
-// 🌙 NOITE COM DUPLO RECORTE + FUMAÇA (ESTÁVEL)
+// 🌙 NOITE COM MÁSCARA DE LUZ (TOCHA NÃO BUGAR A FOGUEIRA)
 if(!isDay) {
-  // 1. ESTRELAS
+  // --- 1. PROGRESSÃO DE OPACIDADE (0.75, 0.80, 0.85) ---
+  let opacidadeNoite = 0.85; 
+  if (typeof dayCount !== 'undefined') {
+      if (dayCount === 1) opacidadeNoite = 0.75; 
+      else if (dayCount === 2) opacidadeNoite = 0.80; 
+  }
+
+  // 2. ESTRELAS
   ctx.save();
   stars.forEach(s => {
     ctx.globalAlpha = s.a; ctx.fillStyle = "white";
@@ -3815,91 +3822,99 @@ if(!isDay) {
   });
   ctx.restore();
 
-  // --- ETAPA A: A PENUMBRA (O furo maior) ---
+  // --- 3. ETAPA A: PENUMBRA (Sua Etapa A original) ---
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, canvas.width, canvas.height); 
-
   resources.forEach(res => {
     if(res.type === "campfire" && res.alive) {
-      const fx = res.x - camX();
-      const fy = res.y - camY();
-      const raioPenumbra = 650; 
-      ctx.moveTo(fx + raioPenumbra, fy);
-      ctx.arc(fx, fy, raioPenumbra, 0, Math.PI * 2, true); 
+      const fx = res.x - camX(); const fy = res.y - camY();
+      ctx.moveTo(fx + 650, fy);
+      ctx.arc(fx, fy, 650, 0, Math.PI * 2, true); 
     }
   });
-  // ✨ LUZ DA TOCHA NA PENUMBRA
   if (player.weapon === 6 || player.accessory === "torch") {
-    const px = player.x - camX();
-    const py = player.y - camY();
-    const raioTochaP = 300; // Um pouco menor que a fogueira
-    ctx.moveTo(px + raioTochaP, py);
-    ctx.arc(px, py, raioTochaP, 0, Math.PI * 2, true);
+    const px = player.x - camX(); const py = player.y - camY();
+    ctx.moveTo(px + 300, py);
+    ctx.arc(px, py, 300, 0, Math.PI * 2, true);
   }
   ctx.clip(); 
   ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; 
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.restore();
 
-  // --- ETAPA B: O BREU (O furo menor) ---
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, canvas.width, canvas.height); 
+  // --- 4. ETAPA B: A MÁSCARA DE LUZ (O SEGREDO) ---
+  const lightCanvas = document.createElement('canvas');
+  lightCanvas.width = canvas.width;
+  lightCanvas.height = canvas.height;
+  const lCtx = lightCanvas.getContext('2d');
 
+  // Desenhamos as luzes como FORMAS BRANCAS no canvas invisível
   resources.forEach(res => {
     if(res.type === "campfire" && res.alive) {
-      const fx = res.x - camX();
-      const fy = res.y - camY();
-      const raioDia = 350; 
-      ctx.moveTo(fx + raioDia, fy);
-      ctx.arc(fx, fy, raioDia, 0, Math.PI * 2, true); 
+      const fx = res.x - camX(); const fy = res.y - camY();
+      let grad = lCtx.createRadialGradient(fx, fy, 150, fx, fy, 350);
+      grad.addColorStop(0, "rgba(255, 255, 255, 1)");   // Centro total luz
+      grad.addColorStop(0.4, "rgba(255, 255, 255, 0.6)");
+      grad.addColorStop(1, "rgba(255, 255, 255, 0)");
+      lCtx.fillStyle = grad;
+      lCtx.beginPath(); lCtx.arc(fx, fy, 350, 0, Math.PI * 2); lCtx.fill();
     }
   });
-// ✨ LUZ DA TOCHA NO BREU
-  if (player.weapon === 6 || player.accessory === "torch") {
-    const px = player.x - camX();
-    const py = player.y - camY();
-    // Se chover, a luz da tocha diminui
-    const raioTochaB = isRaining ? 150 : 160; 
-    ctx.moveTo(px + raioTochaB, py);
-    ctx.arc(px, py, raioTochaB, 0, Math.PI * 2, true);
-  }
-  ctx.clip();
-  ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  const viguette = ctx.createRadialGradient(cx, cy, 100, cx, cy, 700);
-  viguette.addColorStop(0, "rgba(0, 0, 0, 0)"); 
-  viguette.addColorStop(1, "rgba(0, 0, 0, 0.95)"); 
+  if (player.weapon === 6 || player.accessory === "torch") {
+    const px = player.x - camX(); const py = player.y - camY();
+    const rInner = isRaining ? 60 : 70;
+    const rOuter = isRaining ? 150 : 160;
+    let gradT = lCtx.createRadialGradient(px, py, rInner, px, py, rOuter);
+    gradT.addColorStop(0, "rgba(255, 255, 255, 1)");
+    gradT.addColorStop(1, "rgba(255, 255, 255, 0)");
+    lCtx.fillStyle = gradT;
+    lCtx.beginPath(); lCtx.arc(px, py, rOuter, 0, Math.PI * 2); lCtx.fill();
+  }
+
+  // Agora criamos o Breu e usamos a Máscara para furar
+  const breuCanvas = document.createElement('canvas');
+  breuCanvas.width = canvas.width;
+  breuCanvas.height = canvas.height;
+  const bCtx = breuCanvas.getContext('2d');
+
+  bCtx.fillStyle = `rgba(0, 0, 0, ${opacidadeNoite})`;
+  bCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // USA A MÁSCARA PARA FURAR O BREU DE UMA VEZ SÓ
+  bCtx.globalCompositeOperation = 'destination-out';
+  bCtx.drawImage(lightCanvas, 0, 0);
+
+  // Desenha no jogo
+  ctx.drawImage(breuCanvas, 0, 0);
+
+  // --- 5. ETAPA C: CALOR, FUMAÇA E VINHETA ---
+  ctx.save();
+  const viguette = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 100, canvas.width/2, canvas.height/2, 700);
+  viguette.addColorStop(0, "transparent"); 
+  viguette.addColorStop(1, "rgba(0, 0, 0, 0.5)"); 
   ctx.fillStyle = viguette;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.restore();
 
-  // --- ETAPA C: EFEITOS DA FOGUEIRA (LUZ CENTRO 10% + FUMAÇA) ---
-  ctx.save();
   resources.forEach(res => {
     if(res.type === "campfire" && res.alive) {
-      const fx = res.x - camX();
-      const fy = res.y - camY();
+      const fx = res.x - camX(); const fy = res.y - camY();
       
-      // Filtro de 10% no centro (deixa 90% da claridade do dia)
-      ctx.fillStyle = "rgba(0, 0, 0, 0.1)"; 
-      ctx.beginPath();
-      ctx.arc(fx, fy, 350, 0, Math.PI * 2);
-      ctx.fill();
+      // ✨ CALOR LARANJA (Cor por cima da luz)
+      let calor = ctx.createRadialGradient(fx, fy, 0, fx, fy, 150);
+      calor.addColorStop(0, "rgba(255, 150, 50, 0.15)"); 
+      calor.addColorStop(1, "transparent");
+      ctx.fillStyle = calor;
+      ctx.beginPath(); ctx.arc(fx, fy, 150, 0, Math.PI * 2); ctx.fill();
 
-      // 💨 FUMAÇA PRETA
+      // Fumaça original
       ctx.fillStyle = "rgba(15, 15, 15, 0.6)";
       for(let i = 0; i < 3; i++) {
         let tempo = Date.now() * 0.002;
         let ox = Math.sin(tempo + i) * 10; 
         let oy = (Date.now() * 0.05 + i * 25) % 100;
-        ctx.beginPath();
-        ctx.arc(fx + ox, (fy - 20) - oy, 7 + i*2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(fx + ox, (fy - 20) - oy, 7 + i*2, 0, Math.PI * 2); ctx.fill();
       }
     }
   });
@@ -4096,37 +4111,48 @@ if (!player.dead) {
         }
     }
   }
-  function drawTemperatureUI() {
-    const x = 20, y = canvas.height - 150, w = 200, h = 15;
-     // Título
+function drawTemperatureUI() {
+    let x = 20;
+    let y = isMobile ? 125 : 265; // Ajustado para não bater nas barras
+
+    if (isMobile) {
+        // Abaixo das 3 barras de status (que terminam em barY + 28*3)
+        // E acima do botão ITENS (que começa em canvas.height / 2 - 35)
+        y = 120; // Posição calculada para mobile
+    } else {
+        // No PC, logo abaixo da FOME
+        y = 260; 
+    }
+
+    const w = 200, h = 18; // Barra um pouco mais alta
+
+    // Título maior com Emoji
     ctx.fillStyle = "#fff";
-    ctx.font = "bold 14px Arial";
+    ctx.font = "bold 13px Arial"; // Texto maior como pedido
     ctx.textAlign = "left";
-    ctx.fillText("MEDIDOR DE TEMPERATURA", x, y - 10);
-    // Fundo do Termômetro
+    ctx.fillText("🌡️ MEDIDOR DE TEMPERATURA", x, y - 8);
+    // Fundo
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(x, y, w, h);
 
-    // Cor dinâmica: Vermelho (quente) para Azul (frio)
-    // Interpolação simples de cor baseada na temp
+    // Cor dinâmica
     const red = Math.floor((player.temp / 100) * 255);
     const blue = Math.floor(((100 - player.temp) / 100) * 255);
     ctx.fillStyle = `rgb(${red}, 100, ${blue})`;
     
     ctx.fillRect(x, y, (player.temp / 100) * w, h);
-    ctx.strokeStyle = "#fff";
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
     ctx.strokeRect(x, y, w, h);
 
-    // --- EFEITO DE VINHETA (BORDA CONGELADA) ---
+    // Efeito de Vinheta (Mantém sua lógica)
     if (player.temp < 50) {
-        const opacidade = (50 - player.temp) / 50 * 0.5; // No máximo 50% de opacidade
+        const opacidade = (50 - player.temp) / 50 * 0.5;
         const grad = ctx.createRadialGradient(
             canvas.width/2, canvas.height/2, canvas.width * 0.2, 
             canvas.width/2, canvas.height/2, canvas.width * 0.7
         );
         grad.addColorStop(0, "transparent");
-        grad.addColorStop(1, `rgba(100, 200, 255, ${opacidade})`); // Azul gelo
-
+        grad.addColorStop(1, `rgba(100, 200, 255, ${opacidade})`);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
