@@ -531,7 +531,7 @@ const SAFE_SPAWN_DIST = 1200;
 const ZOMBIE_SPREAD_DIST = 150;
 
 // CONFIGURAÇÕES
-const DAY_DURATION = 60;
+const DAY_DURATION = 300;
 const NIGHT_DURATION = 240;
 let zombieSpawnTimer = 0;
 let worldTime = 0;
@@ -1682,6 +1682,83 @@ function equiparItemPorIndice(index) {
             break;
     }
 }
+// Localize onde você definiu o hintSystem e adicione/atualize estes pontos:
+const hintSystem = {
+    currentText: "",
+    displayText: "",
+    type: "tip", 
+    opacity: 0,
+    timer: 0,
+    charIndex: 0,
+    lastCharTime: 0,
+    nextCycleTime: Date.now() + 5000,
+    activeAlert: false, // Nova trava para não repetir alerta toda hora
+
+    randomTips: [
+        "DICA: Pegue gravetos no chão e depois fabrique ferramentas.",
+        "DICA: Colete madeira para manter sua fogueira acesa.",
+        "DICA: A noite é perigosa, não fique sem luz!",
+        "DICA: As rochas nas montanhas são essenciais para ferramentas melhores.",
+        "DICA: Frutas, peixes e animais recuperam sua fome.",
+        "DICA: Use a vara de pesca perto de rios para conseguir alimento.",
+        "DICA: A chuva e a noite faz sua temperatura cair mais rápido.",
+        "DICA: Em noites de Lua de Sangue, os zumbis são muito mais agressivos.",
+        "DICA: Correr consome muita stamina, use o Shift com sabedoria.",
+        "DICA: Ficar perto de uma fogueira recupera sua temperatura rapidamente.",
+        "DICA: Se ficar exausto, você andará mais devagar até recuperar fôlego.",
+        "DICA: Onças são agressivas; evite se aproximar se estiver fraco.",
+        "DICA: O ouro é raro e necessário para as melhores ferramentas no jogo.",
+        "DICA: Comer frutas ajuda na fome, mas não recupera tanta fome quanto carne.",
+        "DICA: Não ataque a onça se caso estiver sem ferramentas fortes.",
+        "DICA: Durante o dia, o sol ajuda a manter sua temperatura estável.",
+        "DICA: Nadar em rios reduz drasticamente sua velocidade de movimento.",
+        "DICA: Arbustos de frutas levam 2 minutos para crescer novamente.",
+        "DICA: Estar bem alimentado ajuda seu HP a regenerar sozinho.",
+        "DICA: Se estiver com muito frio, sua velocidade de movimento será reduzida.",
+        "DICA: Use a tocha para explorar e se manter aquecido durante a noite.",
+        "DICA: Clique na tocha duas vezes para equipar ela e conseguir equipar outra ferramenta.",
+        "DICA: Zumbis param de nascer e fogem assim que o sol nasce.",
+        "DICA: Construir uma base perto de recursos facilita sua sobrevivência.",
+        "DICA: Se esconder em arbustos pode te ajudar a evitar a onça.",
+        "DICA: Creia em Jesus como único e suficiente salvador! se quiser sobreviver."
+    ],
+    show: function(txt, type = "tip") {
+        if (this.currentText === txt && this.opacity > 0) return; // Evita repetir o mesmo texto se já estiver na tela
+        this.currentText = txt;
+        this.displayText = "";
+        this.charIndex = 0;
+        this.type = type;
+        this.opacity = 1;
+        this.timer = Date.now() + 9000;
+        if (type === "alert") this.activeAlert = true;
+    },
+
+    update: function() {
+        let agora = Date.now();
+
+        // Efeito Letra por Letra
+        if (this.charIndex < this.currentText.length) {
+            if (agora - this.lastCharTime > 40) { // Velocidade da digitação
+                this.displayText += this.currentText[this.charIndex];
+                this.charIndex++;
+                this.lastCharTime = agora;
+            }
+        }
+
+        // Fade out
+        if (agora > this.timer && this.opacity > 0) {
+            this.opacity -= 0.02;
+            if (this.opacity <= 0) this.activeAlert = false;
+        }
+
+        // Dicas Cíclicas (Lado esquerdo)
+        if (agora > this.nextCycleTime && this.opacity <= 0) {
+            let dicaAleatoria = this.randomTips[Math.floor(Math.random() * this.randomTips.length)];
+            this.show(dicaAleatoria, "tip");
+            this.nextCycleTime = agora + (Math.random() * 20000 + 25000);
+        }
+    }
+};
 function update(){
 const agora = Date.now();
     let passouUmSegundo = false;
@@ -1874,6 +1951,11 @@ if (passouUmSegundo) {
 
     // Aplicar lentidão se estiver com muito frio (temp < 30)
     player.coldSlow = (player.temp < 30) ? 0.85 : 1.0; 
+    
+    // 1. Alerta de Frio (Adicione logo após o cálculo de player.temp)
+if (player.temp < 30 && !hintSystem.activeAlert) {
+    hintSystem.show("AVISO: Você está com frio! Procure uma fogueira ou use uma tocha.", "alert");
+}
 }
 
   // 🍗 FOME → DANO OU REGENERAÇÃO
@@ -1888,7 +1970,12 @@ if(player.food <= 0){
 if(player.food > player.maxFood * 0.75 && player.hp < player.maxHp){
   player.hp += 0.04 * dt;
 }
-
+// 2. Alerta de Fome (Adicione logo após o cálculo de player.food)
+if (player.food <= 0 && !hintSystem.activeAlert) {
+    hintSystem.show("PERIGO: Você está morrendo de fome!", "alert");
+} else if (player.food < 25 && !hintSystem.activeAlert) {
+    hintSystem.show("AVISO: Você está ficando com fome. Procure frutas ou peixes.", "alert");
+}
   if(player.hp <= 0 && !player.dead) {
   player.hp = 0;
   player.dead = true;
@@ -2781,6 +2868,7 @@ player.oldY = player.y;
 
 handleFishRespawn();
 cleanDeadFishes();
+hintSystem.update();
 }
 function drawBloodMoonText(){
     if(showBloodMoonText > 0){
@@ -3201,6 +3289,49 @@ ctx.fillText("ITENS", btnX + btnW / 2, btnY + btnH / 2 + 7);
     mountains.forEach(m => { ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, m.r*sc, 0, Math.PI*2); ctx.fill(); });
     ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 4, 0, Math.PI*2); ctx.fill();
 
+    ctx.restore();
+}
+function drawHints() {
+    hintSystem.update();
+    if (hintSystem.opacity <= 0) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Garante que ignore o scroll da câmera
+    ctx.globalAlpha = hintSystem.opacity;
+    
+    if (hintSystem.type === "alert") {
+        // --- ALERTA: SEMPRE NO MEIO ---
+        ctx.font = "bold 28px Arial";
+        ctx.textAlign = "center";
+        
+        // Sombra
+        ctx.fillStyle = "black";
+        ctx.fillText(hintSystem.displayText, canvas.width / 2 + 2, 152);
+        
+        // Texto Piscante
+        ctx.fillStyle = (Date.now() % 500 < 250) ? "#ff4444" : "#ffffff";
+        ctx.fillText(hintSystem.displayText, canvas.width / 2, 150);
+
+    } else {
+        // --- DICA: LADO ESQUERDO (Abaixo das Barras/Temperatura) ---
+        ctx.font = "bold 16px Arial";
+        ctx.textAlign = "left";
+
+        // Define o X e Y baseado no dispositivo
+        let tipX = 20; 
+        let tipY = isMobile ? 250 : 320; // No mobile fica abaixo do medidor de temp (120) e botões. No PC abaixo da temp (260).
+
+        // Fundo para facilitar leitura
+        let textWidth = ctx.measureText(hintSystem.displayText).width;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.roundRect(tipX - 5, tipY - 20, textWidth + 15, 30, 5);
+        ctx.fill();
+
+        // Cor da Dica (Amarelo claro para destacar do branco das barras)
+        ctx.fillStyle = "#f1c40f"; 
+        ctx.fillText(hintSystem.displayText, tipX, tipY);
+    }
+    
     ctx.restore();
 }
 function draw(){
@@ -4084,7 +4215,9 @@ particles.forEach((p, index) => {
     ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
   }
 if (!player.dead) {
+    drawHints();
   drawTemperatureUI();
+
         if (isMobile) {
             // HUD de Mobile (JoySticks e Botões)
             drawMobileHUD();
