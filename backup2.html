@@ -106,26 +106,15 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
       </div>
   </div>
 
-  <div id="manualPanel" style="display:none; position:fixed; inset:0; background:rgba(11, 18, 32, 0.98); z-index:20; padding:40px; color:white; flex-direction:column; align-items:center; justify-content:center; overflow-y: auto;">
-      <h2 style="color:#2ecc71; font-size:48px; margin-bottom:20px;">GUIA DE SOBREVIVÊNCIA</h2>
-      
-      <div style="display:flex; gap:20px; text-align:left; max-width:1100px; flex-wrap: wrap;">
-          <div style="flex:1; min-width:300px; background:rgba(255,255,255,0.05); padding:20px; border-radius:15px;">
-              <h3 style="color:#3498db; border-bottom:2px solid #3498db;">🕹️ MECÂNICAS</h3>
-              <p><strong>Evolução:</strong> Comece coletando gravetos. Fabrique um machado para derrubar árvores e uma picareta para minerar pedras e ouro.</p>
-              <p><strong>Combate:</strong> A Lança tem o dobro do alcance da mão. Use-a para manter as Onças e Zumbis longe.</p>
-              <p><strong>Stamina:</strong> Correr (Shift/Joystick longe) gasta energia. Se chegar a 0, você fica exausto e lento.</p>
-          </div>
-          <div style="flex:1; min-width:300px; background:rgba(255,255,255,0.05); padding:20px; border-radius:15px;">
-              <h3 style="color:#e67e22; border-bottom:2px solid #e67e22;">🐆 PERIGOS</h3>
-              <p><strong>A Noite:</strong> Sem uma fogueira ou tocha, você ficará na escuridão.</p>
-              <p><strong>Onças:</strong> São rápidas e silenciosas. Elas costumam caçar perto das bordas das florestas.</p>
-              <p><strong>Fome:</strong> Mantenha a barra de comida alta colhendo frutas ou usando o inventário para comer.</p>
-          </div>
-      </div>
-      
-      <button id="closeManualBtn" style="margin-top:40px; background:#e74c3c;">ENTENDI, VOU SOBREVIVER!</button>
-  </div>
+  <div id="manualPanel" style="display:none; position:fixed; inset:0; background:rgba(11, 18, 32, 0.98); z-index:20; padding:20px; color:white; flex-direction:column; align-items:center; justify-content:center; overflow-y: auto;">
+    
+    <h2 style="color:#2ecc71; font-size: 40px; margin-bottom:10px;">COMO JOGAR</h2>
+
+    <div id="guiaConteudo" style="width: 100%; max-width: 900px; text-align: left;">
+        </div>
+
+    <button id="closeManualBtn" style="margin-top:30px; background:#2ecc71; padding: 15px 40px; border-radius: 30px; border: none; color: white; font-weight: bold; cursor: pointer; font-size: 20px;">ENTENDI!</button>
+</div>
 </div>
 
 <div id="gameOver">
@@ -143,9 +132,49 @@ const manualPanel = document.getElementById("manualPanel");
 const closeManualBtn = document.getElementById("closeManualBtn");
 
 // Quando clicar em "Como Jogar", mostra o painel
-manualBtn.addEventListener("click", () => {
-    manualPanel.style.display = "flex";
-});
+function mostrarManual() {
+    const guia = document.getElementById("guiaConteudo");
+    
+    if (isMobile) {
+        // --- TEXTO PARA CELULAR ---
+        guia.innerHTML = `
+            <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:15px;">
+                <h3 style="color:#3498db;">📱 CONTROLES TOUCH</h3>
+                <p>• <b>Andar:</b> Use o lado esquerdo da tela.</p>
+                <p>• <b>Atacar/Ação:</b> Toque no lado direito.</p>
+                <p>• <b>Equipar Tocha:</b> No Inventário, toque 2x nela para usar como acessório.</p>
+                <hr>
+                <h3 style="color:#e67e22;">🌳 SOBREVIVÊNCIA</h3>
+                <p>• <b>Esconder:</b> Entre em arbustos para fugir da Onça.</p>
+                <p>• <b>Crafting:</b> Use o botão verde no topo para fabricar itens.</p>
+                <p>• <b>Dica:</b> Pegue gravetos no chão antes de tentar fabricar o Machado.</p>
+            </div>
+        `;
+    } else {
+        // --- TEXTO PARA PC ---
+        guia.innerHTML = `
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:15px;">
+                    <h3 style="color:#3498db;">⌨️ TECLADO</h3>
+                    <p>• <b>WASD:</b> Movimentação.</p>
+                    <p>• <b>E:</b> Abrir Inventário.</p>
+                    <p>• <b>C:</b> Menu de Crafting (Construções).</p>
+                    <p>• <b>Shift:</b> Correr (Cuidado com a Stamina!).</p>
+                </div>
+                <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:15px;">
+                    <h3 style="color:#e67e22;">💡 DICAS REAIS</h3>
+                    <p>• <b>Fuga:</b> A Onça perde você de vista se você entrar em um <b>Arbusto</b>.</p>
+                    <p>• <b>Tocha:</b> No inventário, aperte 2x na tocha para iluminar ao redor enquanto anda.</p>
+                    <p>• <b>Recursos:</b> Gravetos são o primeiro passo para qualquer ferramenta.</p>
+                </div>
+            </div>
+        `;
+    }
+    document.getElementById("manualPanel").style.display = "flex";
+}
+
+// Substitua o listener do manualBtn por este:
+manualBtn.addEventListener("click", mostrarManual);
 
 // Quando clicar em "Entendi!", esconde o painel
 closeManualBtn.addEventListener("click", () => {
@@ -156,6 +185,22 @@ const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+function entrarFullscreen() {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+    } else if (elem.webkitRequestFullscreen) { // Safari/iOS
+        elem.webkitRequestFullscreen();
+    } else if (elem.msRequestFullscreen) { // IE11
+        elem.msRequestFullscreen();
+    }
+    
+    // Tenta travar a tela deitada no celular
+    if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(e => console.log("Rotação bloqueada"));
+    }
+}
 function getTouchPos(touch){
   const rect = canvas.getBoundingClientRect();
   return {
@@ -187,34 +232,39 @@ if(isMobile){
 
 // --- 1. SE O INVENTÁRIO ESTIVER ABERTO ---
 if (inventoryOpen) {
-    // A) Botão FECHAR (Meio Esquerda)
-    const sw_close = 140, sh_close = 80, sx_close = 20, sy_close = canvas.height / 2 - 40;
+    // A) Botão FECHAR (Topo Esquerdo)
+    const sw_close = 140, sh_close = 80;
+    const sx_close = 20; 
+    const sy_close = 20; // Mudei o sy_close para 20
+    
+    // Se tocou dentro da área do botão Fechar
     if (tx > sx_close && tx < sx_close + sw_close && ty > sy_close && ty < sy_close + sh_close) {
         inventoryOpen = false;
-        continue;
+        continue; 
     }
 
     // B) DETECTAR TOQUE NOS SLOTS
     const slotSize = 110, gap = 15, cols = 7;
-    const centerX = canvas.width / 2;
-    const startX = centerX - ((slotSize + gap) * cols) / 2;
+    const startX = 100;
     const startY = 150;
 
-    for (let i = 0; i < 14; i++) {
+    // Ajustado para 21, pois sua array 'items' tem 21 posições (3 fileiras)
+    for (let i = 0; i < 21; i++) {
+    if (i === 10) continue;
         const row = Math.floor(i / cols);
         const col = i % cols;
         const slotX = startX + col * (slotSize + gap);
         const slotY = startY + row * (slotSize + gap);
 
-        // Se o toque foi dentro deste slot (i)
+        // Se o toque foi dentro deste slot específico
         if (tx >= slotX && tx <= slotX + slotSize && ty >= slotY && ty <= slotY + slotSize) {
-            equiparItemPorIndice(i); // Função que vamos criar abaixo
-            return; // Sai para não clicar em nada atrás
+            equiparItemPorIndice(i); 
+            continue; 
         }
     }
-    continue; // Bloqueia outros toques enquanto o inventário está aberto
+    continue; // Bloqueia toques no joystick/chão enquanto o inventário está aberto
 }
-        
+
     // --- A) SE O CRAFT ESTIVER ABERTO ---
 if (craftingOpen) {
     // 1. Botão FECHAR (Meio Esquerda)
@@ -246,6 +296,7 @@ for (let i = 0; i < displayKeys.length; i++) {
 
     if (tx >= pos.x && tx <= pos.x + pos.w && ty >= pos.y && ty <= pos.y + pos.h) {
         tryCraft(displayKeys[i]); // Compra o item correto da lista filtrada
+        
         return; 
     }
 }
@@ -455,6 +506,7 @@ if (moveuX > 1.2 || moveuY > 1.2) {
     }
   },  { passive: false });
 }
+
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 720;
 
@@ -541,6 +593,8 @@ const LIMITES = {
 const player = {
   x: MAP / 2, 
   y: MAP / 2 - 2500, 
+  temp: 100,      // <--- Coloque aqui dentro
+  coldSlow: 1.0,  // <--- Adicione isso também para evitar erros
   r: 20,
   speed: 4, 
   hp: 100, 
@@ -550,6 +604,7 @@ const player = {
   attacking: false, 
   atkTimer: 0,
   weapon: 0, // 0 é a "Mão" na sua lista de weapons
+  accessory: null,
   hitTimer: 0,
   attackProgress: 0,
   stamina: 100, 
@@ -610,7 +665,42 @@ const weapons = [
 ];
 
 let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [], fishes = [];
+let running = false;
+let lastTime = 0;
+let dt = 1; // Multiplicador de velocidade
 
+function loop(timestamp) {
+  if (!running) return;
+
+  // Calcula quanto tempo passou desde o último frame
+  // 16.67ms é o tempo ideal para 60 FPS
+  if (!lastTime) lastTime = timestamp;
+  const deltaTimeMS = timestamp - lastTime;
+  lastTime = timestamp;
+
+  // Define o 'dt'. Se o jogo rodar a 60fps, dt será 1. 
+  // Se rodar a 120fps, dt será 0.5 (compensando a velocidade).
+  dt = deltaTimeMS / 16.67;
+
+  update(); 
+  draw(); 
+
+  requestAnimationFrame(loop);
+}
+
+document.getElementById("startBtn").onclick = () => {
+    // 1. Esconde o menu
+    document.getElementById("overlay").style.display = "none";
+    
+    // 2. Tenta entrar em Fullscreen (Só funciona aqui no clique!)
+    if (isMobile) {
+        entrarFullscreen();
+    }
+    
+    // 3. Inicia o jogo
+    running = true;
+    requestAnimationFrame(loop);
+};
 function makeRock(x, y, radius, color, type="stone") {
   const points = [];
   const n = 6 + Math.floor(Math.random() * 5);
@@ -1116,61 +1206,95 @@ canvas.addEventListener("mousedown", e => {
         return; 
     }
 
-    // 3. Se o Inventário estiver aberto, processa o EQUIPAR e PARA
+    // 3. LÓGICA DO INVENTÁRIO (Ajustada para 21 slots e deslocada para a esquerda)
     if (inventoryOpen) {
         const slotSize = 110;
         const gap = 15;
         const cols = 7;
-        const centerX = canvas.width / 2;
-        const startX = centerX - ((slotSize + gap) * cols) / 2;
+        const startX = 100; // IGUAL ao que colocamos no draw para alinhar o clique
+        const startY = 150;
+const slotAccX = canvas.width - 220; 
+const slotAccY = 300;
+const sSize = 100;
 
-        for (let i = 0; i < 14; i++) {
-            const x = startX + (i % cols) * (slotSize + gap);
-            const y = 150 + Math.floor(i / cols) * (slotSize + gap); // 150 é o Y inicial do draw
-
-            // ... dentro do loop for (let i = 0; i < 14; i++) ...
-
-if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
-    console.log("Slot clicado:", i);
-
-    // 1. Ferramentas de Madeira e Pedra
-    if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
-    else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
-    else if (i === 8 && player.inventory.axe_stone > 0) player.weapon = 3;
-    else if (i === 9 && player.inventory.pickaxe_stone > 0) player.weapon = 4;
-    
-    // 2. Armas e Utilitários
-    else if (i === 5 && player.inventory.spear > 0) player.weapon = 5;
-    
-    // 🌟 AQUI ESTAVA O ERRO: Adicionando a TOCHA (Slot 11)
-    else if (i === 11 && player.inventory.torch > 0) {
+if (mx >= slotAccX && mx <= slotAccX + sSize && my >= slotAccY && my <= slotAccY + sSize) {
+    if (player.accessory === "torch") {
+        player.accessory = null;
         player.weapon = 6; 
-        inventoryOpen = false; // Fecha para mostrar a luz
+    } else if (player.weapon === 6) {
+        player.accessory = "torch";
+        player.weapon = 0;
     }
-    // 🎣 NOVO: Adicionando a VARA DE PESCA (Slot 12)
-    else if (i === 12 && player.inventory.fishing_rod > 0) {
-        player.weapon = 7; // Índice 7 na lista 'weapons'
-        inventoryOpen = false; // Fecha para o jogador ver a vara na mão
-        console.log("Vara equipada via Inventário!");
-    }
-    // 3. Fogueira (Slot 4)
-    else if (i === 4 && player.inventory.campfire > 0) {
-         placingCampfire = true;
-         inventoryOpen = false;
-    }
-    
-    // 4. Recursos ou Slots vazios (Mão)
-    else if (i <= 3 || i === 10 || i >= 12) {
-        player.weapon = 0; 
-    }
-    
-    return; 
+    return;
 }
-        }
-        return; // Se clicou no inventário mas fora de um slot, também não ataca
-    }
+        // Aumentamos para 21 para pegar a nova fileira de baixo
+        for (let i = 0; i < 21; i++) {
+            const x = startX + (i % cols) * (slotSize + gap);
+            const y = startY + Math.floor(i / cols) * (slotSize + gap);
 
-    // 4. LÓGICA DE LANÇAR O ANZOL OU ATACAR
+            if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
+                console.log("Slot clicado:", i);
+
+                // --- Lógica de Equipar (Mantendo suas funções originais) ---
+                if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
+                else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
+                else if (i === 8 && player.inventory.axe_stone > 0) player.weapon = 3;
+                else if (i === 9 && player.inventory.pickaxe_stone > 0) player.weapon = 4;
+                else if (i === 5 && player.inventory.spear > 0) player.weapon = 5;
+                
+                // Tocha (Slot 11) - Dentro do loop de slots
+else if (i === 11 && player.inventory.torch > 0) {
+    if (player.weapon === 6) {
+        // Se já está na mão, manda para o acessório (costas)
+        player.weapon = 0;
+        player.accessory = "torch";
+    } else if (player.accessory === "torch") {
+        // Se está no acessório, volta para a mão
+        player.accessory = null;
+        player.weapon = 6;
+    } else {
+        // Se estava guardada, equipa na mão primeiro
+        player.weapon = 6;
+        player.accessory = null;
+    }
+    // Removi o inventoryOpen = false para você ver o item mudando de lugar sem fechar o menu
+}
+                // Vara de Pesca (Slot 12)
+                else if (i === 12 && player.inventory.fishing_rod > 0) {
+                    player.weapon = 7;
+                    inventoryOpen = false;
+                }
+                // Fogueira (Slot 4)
+                else if (i === 4 && player.inventory.campfire > 0) {
+                     placingCampfire = true;
+                     inventoryOpen = false;
+                }
+                // Mão vazia / Recursos
+                else if (i <= 3 || i === 10 || i >= 13) {
+                    player.weapon = 0; 
+                }
+                
+                return; // Bloqueia o ataque se clicou em qualquer slot
+            }
+        }
+
+        // --- CLIQUE NA TOCHA RÁPIDA (Lado Direito) ---
+const torchX = canvas.width - 200;
+const torchY = canvas.height / 2 - 55;
+if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + slotSize) {
+    if (player.inventory.torch > 0) {
+        // Se clicar aqui, ela SEMPRE vem para a mão e sai das costas
+        player.weapon = 6;
+        player.accessory = null; // Garante que saiu das costas
+        inventoryOpen = false;
+        return;
+    }
+}
+
+        return; // Se clicar no fundo do inventário, não ataca
+    }
+    
+    // 4. LÓGICA DE LANÇAR O ANZOL, COLOCAR FOGUEIRA OU ATACAR
     if (placingCampfire && player.inventory.campfire > 0) {
         const worldX = mx + camX();
         const worldY = my + camY();
@@ -1181,7 +1305,7 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
         player.inventory.campfire--;
         placingCampfire = false;
     } else {
-        // --- LÓGICA DE ATAQUE / PESCA ---
+      
         const worldMouseX = mx + camX();
         const worldMouseY = my + camY();
 
@@ -1199,10 +1323,10 @@ if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
                 
                 mouse.down = true; 
             } else {
-                // TRAVA CRÍTICA: Se clicar na terra, reseta tudo da vara
+
                 mouse.down = false;
                 player.attacking = false;
-                player.attackProgress = 0; // Para a animação na hora
+                player.attackProgress = 0;
                 isFishing = false;
             }
         } else {
@@ -1217,13 +1341,21 @@ function drawFullscreenInventory() {
   ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // --- POSICIONAMENTO DO TÍTULO (Centralizado) ---
   const centerX = canvas.width / 2;
   ctx.fillStyle = "#2ecc71";
   ctx.font = "bold 40px Arial Black";
-  ctx.textAlign = "center";
-  ctx.fillText("INVENTÁRIO (CAPACIDADE)", centerX, 70);
+  ctx.textAlign = "center"; 
+  ctx.fillText("INVENTÁRIO (CAPACIDADE)", centerX, 70); // Título continua no meio
 
-  // Mapeamento dos 14 itens/slots
+  // --- CONFIGURAÇÃO DOS SLOTS (Puxado para a esquerda) ---
+  const slotSize = 110;
+  const gap = 15;
+  const cols = 7; 
+  const startX = 100; // Apenas os botões começam aqui
+  const startY = 150;
+
+  // Itens originais + 7 slots vazios novos (Total 21)
   const items = [
     { label: "MADEIRA", value: player.wood, color: "#8d6e63", detail: "#5d4037", max: LIMITES.recursos },
     { label: "PEDRA", value: player.stone, color: "#757575", detail: "#4a4a4a", max: LIMITES.recursos },
@@ -1238,21 +1370,26 @@ function drawFullscreenInventory() {
     { label: "COMIDA", value: Math.floor(player.food), color: "#e74c3c", detail: "#c0392b", max: 100 },
     { label: "TOCHA", value: player.inventory.torch || 0, color: "#f39c12", detail: "#d35400", max: 1 },
     { label: "VARA PESCA", value: player.inventory.fishing_rod || 0, color: "#8b4513", detail: "#fff", max: 1 },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    // Terceira fileira (vazia)
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "SLOT VAZIO", value: 0, empty: true },
     { label: "SLOT VAZIO", value: 0, empty: true }
   ];
 
-  const slotSize = 110;
-  const gap = 15;
-  const cols = 7; // 7 colunas para dar 14 slots (7x2)
-  const startX = centerX - ((slotSize + gap) * cols) / 2;
+
 
   items.forEach((res, index) => {
     const x = startX + (index % cols) * (slotSize + gap);
-    const y = 150 + Math.floor(index / cols) * (slotSize + gap);
+    const y = startY + Math.floor(index / cols) * (slotSize + gap);
 
     // Fundo do Slot
     ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
-    ctx.strokeStyle = (res.value >= res.max && !res.empty) ? "#e74c3c" : "#2ecc71"; // Vermelho se estiver cheio
+    ctx.strokeStyle = (res.value >= res.max && !res.empty) ? "#e74c3c" : "#2ecc71";
     ctx.lineWidth = 2;
     ctx.fillRect(x, y, slotSize, slotSize);
     ctx.strokeRect(x, y, slotSize, slotSize);
@@ -1260,7 +1397,7 @@ function drawFullscreenInventory() {
     if (!res.empty) {
       const iconCenterX = x + slotSize / 2;
       const iconCenterY = y + slotSize / 2 - 10;
-
+      
       // Desenho do Graveto
       if (res.label === "GRAVETO") {
         ctx.save();
@@ -1347,9 +1484,9 @@ else if (res.label === "VARA PESCA") {
 
   drawHotbar(); // Chama a barra de baixo junto com o inventário grande
 
-  // Botão de Fechar Mobile (Meio Esquerda)
+ // Botão de Fechar Mobile (Topo Esquerdo)
   if (isMobile) {
-    const sw = 140, sh = 80, sx = 20, sy = canvas.height / 2 - 40;
+    const sw = 140, sh = 80, sx = 20, sy = 20; // Mudei o sy para 20
     ctx.fillStyle = "#e74c3c";
     ctx.fillRect(sx, sy, sw, sh);
     ctx.strokeStyle = "#fff";
@@ -1360,7 +1497,60 @@ else if (res.label === "VARA PESCA") {
     ctx.textAlign = "center";
     ctx.fillText("FECHAR", sx + sw/2, sy + sh/2 + 8);
   }
+ // --- SLOT DE ACESSÓRIO (Lado Direito e Estilizado) ---
+const slotX = canvas.width - 220; // Mais para a direita
+const slotY = 300; 
+const sSize = 100;
 
+// Sombra/Brilho externo se estiver ocupado
+if (player.accessory) {
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#f1c40f";
+}
+
+// Fundo do Slot
+ctx.fillStyle = "rgba(44, 62, 80, 0.8)";
+ctx.strokeStyle = player.accessory ? "#f1c40f" : "#95a5a6";
+ctx.lineWidth = 4;
+ctx.beginPath();
+ctx.roundRect(slotX, slotY, sSize, sSize, 10); // Borda arredondada
+ctx.fill();
+ctx.stroke();
+ctx.shadowBlur = 0; // Reseta sombra
+
+// Título do Slot
+ctx.fillStyle = "#bdc3c7";
+ctx.font = "bold 14px Arial";
+ctx.textAlign = "center";
+ctx.fillText("ACESSÓRIO", slotX + sSize/2, slotY - 15);
+
+if (player.accessory === "torch") {
+    const iconX = slotX + sSize/2;
+    const iconY = slotY + sSize/2;
+    
+    // Desenha a tocha IGUAL ao inventário
+    ctx.fillStyle = "#5d4037";
+    ctx.fillRect(iconX - 4, iconY - 5, 8, 30); // Cabo
+    ctx.fillStyle = "#37474f";
+    ctx.fillRect(iconX - 6, iconY - 8, 12, 5); // Metal
+
+    const flicker = Math.sin(Date.now() * 0.01) * 4;
+    ctx.fillStyle = "#ff7043";
+    ctx.beginPath();
+    ctx.arc(iconX, iconY - 15, 12 + flicker/2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff176";
+    ctx.beginPath();
+    ctx.arc(iconX, iconY - 15, 5, 0, Math.PI * 2);
+    ctx.fill();
+} else {
+    // Ícone fantasma quando vazio
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = "#fff";
+    ctx.font = "40px Arial";
+    ctx.fillText("🛡️", slotX + sSize/2, slotY + sSize/2 + 15);
+    ctx.globalAlpha = 1.0;
+}
   ctx.restore();
 }
 function getCraftItemPos(index) {
@@ -1498,21 +1688,20 @@ function equiparItemPorIndice(index) {
         case 9: // PICARETA PEDRA
             if (player.inventory.pickaxe_stone > 0) player.weapon = 4;
             break;
-        case 10: // COMIDA (Cura o jogador se ele tiver fome)
-            if (player.food < player.maxFood) {
-                // Lógica de comer: você pode adicionar som ou efeito aqui
-                player.food = Math.min(player.maxFood, player.food + 20);
-                player.hp = Math.min(player.maxHp, player.hp + 5); 
-            }
-            break;
+            
         case 11: // TOCHA
-            if (player.inventory.torch > 0) player.weapon = 6;
-            break;
-        default:
-            // Índices 0, 1, 2, 3 são recursos (Madeira, Pedra, Ouro, Graveto)
-            // Geralmente não equipam nada, mas você pode colocar um som de clique.
-            console.log("Clicou no recurso: " + index);
-            break;
+    if (player.inventory.torch > 0) {
+        if (player.weapon === 6) {
+            // Já está na mão? Vai pro acessório
+            player.accessory = "torch";
+            player.weapon = 0; 
+        } else {
+            // Estava guardada ou no acessório? Vem pra mão
+            player.weapon = 6;
+            player.accessory = null;
+        }
+    }
+    break;
             
             case 12: // VARA DE PESCA (Novo!)
             if (player.inventory.fishing_rod > 0) {
@@ -1522,6 +1711,83 @@ function equiparItemPorIndice(index) {
             break;
     }
 }
+// Localize onde você definiu o hintSystem e adicione/atualize estes pontos:
+const hintSystem = {
+    currentText: "",
+    displayText: "",
+    type: "tip", 
+    opacity: 0,
+    timer: 0,
+    charIndex: 0,
+    lastCharTime: 0,
+    nextCycleTime: Date.now() + 5000,
+    activeAlert: false, // Nova trava para não repetir alerta toda hora
+
+    randomTips: [
+        "DICA: Pegue gravetos no chão e depois fabrique ferramentas.",
+        "DICA: Colete madeira para manter sua fogueira acesa.",
+        "DICA: A noite é perigosa, não fique sem luz!",
+        "DICA: As rochas nas montanhas são essenciais para ferramentas melhores.",
+        "DICA: Frutas, peixes e animais recuperam sua fome.",
+        "DICA: Use a vara de pesca perto de rios para conseguir alimento.",
+        "DICA: A chuva e a noite faz sua temperatura cair mais rápido.",
+        "DICA: Em noites de Lua de Sangue, os zumbis são muito mais agressivos.",
+        "DICA: Correr consome muita stamina, use o Shift com sabedoria.",
+        "DICA: Ficar perto de uma fogueira recupera sua temperatura rapidamente.",
+        "DICA: Se ficar exausto, você andará mais devagar até recuperar fôlego.",
+        "DICA: Onças são agressivas; evite se aproximar se estiver fraco.",
+        "DICA: O ouro é raro e necessário para as melhores ferramentas no jogo.",
+        "DICA: Comer frutas ajuda na fome, mas não recupera tanta fome quanto carne.",
+        "DICA: Não ataque a onça se caso estiver sem ferramentas fortes.",
+        "DICA: Durante o dia, o sol ajuda a manter sua temperatura estável.",
+        "DICA: Nadar em rios reduz drasticamente sua velocidade de movimento.",
+        "DICA: Arbustos de frutas levam 2 minutos para crescer novamente.",
+        "DICA: Estar bem alimentado ajuda seu HP a regenerar sozinho.",
+        "DICA: Se estiver com muito frio, sua velocidade de movimento será reduzida.",
+        "DICA: Use a tocha para explorar e se manter aquecido durante a noite.",
+        "DICA: Clique na tocha duas vezes para equipar ela e conseguir equipar outra ferramenta.",
+        "DICA: Zumbis param de nascer e fogem assim que o sol nasce.",
+        "DICA: Construir uma base perto de recursos facilita sua sobrevivência.",
+        "DICA: Se esconder em arbustos pode te ajudar a evitar a onça.",
+        "DICA: Creia em Jesus como único e suficiente salvador! se quiser sobreviver."
+    ],
+    show: function(txt, type = "tip") {
+        if (this.currentText === txt && this.opacity > 0) return; // Evita repetir o mesmo texto se já estiver na tela
+        this.currentText = txt;
+        this.displayText = "";
+        this.charIndex = 0;
+        this.type = type;
+        this.opacity = 1;
+        this.timer = Date.now() + 9000;
+        if (type === "alert") this.activeAlert = true;
+    },
+
+    update: function() {
+        let agora = Date.now();
+
+        // Efeito Letra por Letra
+        if (this.charIndex < this.currentText.length) {
+            if (agora - this.lastCharTime > 40) { // Velocidade da digitação
+                this.displayText += this.currentText[this.charIndex];
+                this.charIndex++;
+                this.lastCharTime = agora;
+            }
+        }
+
+        // Fade out
+        if (agora > this.timer && this.opacity > 0) {
+            this.opacity -= 0.02;
+            if (this.opacity <= 0) this.activeAlert = false;
+        }
+
+        // Dicas Cíclicas (Lado esquerdo)
+        if (agora > this.nextCycleTime && this.opacity <= 0) {
+            let dicaAleatoria = this.randomTips[Math.floor(Math.random() * this.randomTips.length)];
+            this.show(dicaAleatoria, "tip");
+            this.nextCycleTime = agora + (Math.random() * 20000 + 25000);
+        }
+    }
+};
 function update(){
 const agora = Date.now();
     let passouUmSegundo = false;
@@ -1543,15 +1809,15 @@ bushes.forEach(b => {
     if (craftingOpen) return;
     if (inventoryOpen) return;
 
-    // 2. TROCA DE CICLO (DIA <-> NOITE)
+    // --- 2. TROCA DE CICLO (DIA <-> NOITE) ---
 if (isDay && worldTime >= DAY_DURATION) {
     isDay = false;
     worldTime = 0;
-    jaTestouSorteNoPeriodo = false; 
-    isRaining = false;              // Para a chuva ao anoitecer
+    jaTestouSorteNoPeriodo = false; // Reset para sortear chuva na NOITE
+    isRaining = false;             
     zombieSpawnTimer = 0;
 
-    // Lógica da Lua de Sangue
+    
     if (dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE) {
         isBloodMoon = true;
         bloodMoonTimer = 0;
@@ -1565,82 +1831,49 @@ else if (!isDay && worldTime >= NIGHT_DURATION) {
     isDay = true;
     worldTime = 0;
     dayCount++;
-    jaTestouSorteNoPeriodo = false; // Permite novo sorteio ao amanhecer
-    isRaining = false;              // Para a chuva ao amanhecer
+    jaTestouSorteNoPeriodo = false; // Reset para sortear chuva no DIA
+    isRaining = false;             
     zombies.length = 0;
     zombieSpawnTimer = 0;
     isBloodMoon = false;
 }
 
-// 3. ATUALIZA TIMER LUA DE SANGUE
-if (isBloodMoon && passouUmSegundo) {
-    bloodMoonTimer++;
-    if (bloodMoonTimer >= BLOOD_MOON_DURATION) isBloodMoon = false;
-}
-
-// 4. SORTEIO ÚNICO DA CHUVA (30% Chance)
+// --- 3. GATILHO DA CHUVA (Sorteio Único por Ciclo) ---
+// Se ainda não testamos a sorte neste período (dia ou noite)
 if (!jaTestouSorteNoPeriodo) {
     jaTestouSorteNoPeriodo = true; 
     
-    // Regra: Começa a sortear a partir do Dia 2 (dayCount > 1)
+    // Regra: 30% de chance a partir do Dia 2
     if (dayCount > 1 && Math.random() < 0.30) { 
         isRaining = true;
         rainTextTimer = 300; 
         console.log("A tempestade começou e durará o ciclo todo!");
+        
+        // Se você quiser que ela pare ANTES do ciclo acabar, use o setTimeout:
+        // Mas como resetamos isRaining na troca de ciclo ali em cima, 
+        // ela já para naturalmente quando amanhece ou anoitece.
     }
 }
 
-// ===== SPAWN DE ZUMBIS AJUSTADO COM LUA DE SANGUE =====
-if(!isDay && passouUmSegundo){
+// --- 4. SPAWN DE ZUMBIS (Somente à Noite) ---
+if (!isDay && passouUmSegundo) {
     zombieSpawnTimer++;
-}
-if(zombieSpawnTimer >= 120){
-    let normalCount = (dayCount >= 3) ? 10 : 0;
-    let bloodCount = isBloodMoon ? 3 : 0;
-
-    for(let i = 0; i < normalCount; i++){
-        spawnZombie("normal");
-    }
-    for(let i = 0; i < bloodCount; i++){
-        spawnZombie("blood");
-    }
-
-    zombieSpawnTimer = 0;
-}
-else if(!isDay && worldTime >= NIGHT_DURATION){
-    isDay = true;
-    worldTime = 0;
-    dayCount++;
-    jaTestouSorteNoPeriodo = false; // <-- RESET AQUI: O dia começou, pode testar sorte pra chuva
     
-    zombies.length = 0;
-    zombieSpawnTimer = 0;
-    isBloodMoon = false;
-}
-
-// Atualiza timer da Lua de Sangue
-if(isBloodMoon && passouUmSegundo){
-    bloodMoonTimer++;
-
-    if(bloodMoonTimer >= BLOOD_MOON_DURATION){
-        isBloodMoon = false;
+    // Atualiza timer da Lua de Sangue se estiver ativa
+    if (isBloodMoon) {
+        bloodMoonTimer++;
+        if (bloodMoonTimer >= BLOOD_MOON_DURATION) isBloodMoon = false;
     }
-}
 
-// ===== GATILHO DA CHUVA (30% de chance, mas só após o 1º dia) =====
-if (!jaTestouSorteNoPeriodo) {
-    jaTestouSorteNoPeriodo = true; 
-    
-    // Só permite sortear chuva se o contador de dias for maior que 0
-    // (Ou seja, já passou pelo menos o primeiro dia)
-    if (dayCount > 1 && Math.random() < 0.30) { 
-        isRaining = true;
-        rainTextTimer = 300; 
-        console.log("A tempestade começou!");
+    // Spawn a cada 120 segundos (ou conforme sua lógica)
+    if (zombieSpawnTimer >= 120) {
+        let normalCount = (dayCount >= 3) ? 10 : 0;
+        let bloodCount = isBloodMoon ? 3 : 0;
 
-        setTimeout(() => {
-            isRaining = false;
-        }, 20000);
+        for (let i = 0; i < normalCount; i++) spawnZombie("normal");
+        for (let i = 0; i < bloodCount; i++) spawnZombie("blood");
+
+        zombieSpawnTimer = 0;
     }
 }
 zombies.forEach(z => {
@@ -1710,24 +1943,68 @@ zombies.forEach(z => {
   if(player.foodCooldown > 0){
   player.foodCooldown--;
 } else {
-  player.food -= foodDrain;
+  player.food -= foodDrain * dt;
 }
 
+// --- LÓGICA DE TEMPERATURA ---
+if (passouUmSegundo) {
+    let seAquecendo = false;
 
+    // 1. Checar Fogueiras próximas
+    resources.forEach(res => {
+        if (res.type === "campfire" && res.alive) {
+            const dist = Math.hypot(player.x - res.x, player.y - res.y);
+            if (dist < 150) seAquecendo = true;
+        }
+    });
+
+    // 2. Checar Tocha na mão
+    if ((player.weapon === 6 || player.accessory === "torch") && player.inventory.torch > 0) {
+        seAquecendo = true;
+    }
+
+    // 3. Checar se é Dia (Sol aquece)
+    // Se for dia e não estiver chovendo, o player se aquece naturalmente
+    if (isDay && !isRaining) {
+        seAquecendo = true;
+    }
+
+    // Aplicar a mudança
+    if (seAquecendo) {
+        player.temp = Math.min(100, player.temp + 2); // Aquece rápido
+    } else {
+        // Esfria mais rápido se estiver chovendo E for noite
+        let perda = (isRaining && !isDay) ? 1.5 : 0.8;
+        player.temp = Math.max(0, player.temp - perda);
+    }
+
+    // Aplicar lentidão se estiver com muito frio (temp < 30)
+    player.coldSlow = (player.temp < 30) ? 0.85 : 1.0; 
+    
+    // 1. Alerta de Frio (Adicione logo após o cálculo de player.temp)
+if (player.temp < 30 && !hintSystem.activeAlert) {
+    hintSystem.show("AVISO: Você está com frio! Procure uma fogueira ou use uma tocha.", "alert");
+}
+}
 
   // 🍗 FOME → DANO OU REGENERAÇÃO
 
 // dano por fome (2x mais lento)
 if(player.food <= 0){
   player.food = 0;
-  player.hp -= 0.075; // antes era 0.15
+  player.hp -= 0.075 * dt;
 }
 
 // regeneração se estiver bem alimentado
 if(player.food > player.maxFood * 0.75 && player.hp < player.maxHp){
-  player.hp += 0.04; // regeneração lenta
+  player.hp += 0.04 * dt;
 }
-
+// 2. Alerta de Fome (Adicione logo após o cálculo de player.food)
+if (player.food <= 0 && !hintSystem.activeAlert) {
+    hintSystem.show("PERIGO: Você está morrendo de fome!", "alert");
+} else if (player.food < 25 && !hintSystem.activeAlert) {
+    hintSystem.show("AVISO: Você está ficando com fome. Procure frutas ou peixes.", "alert");
+}
   if(player.hp <= 0 && !player.dead) {
   player.hp = 0;
   player.dead = true;
@@ -1745,75 +2022,55 @@ if (player.exhausted && player.stamina >= player.maxStamina - 0.1) {
 }
 
   if(isSprinting) player.stamina -= 0.8;
-  else if(player.stamina < player.maxStamina) player.stamina = Math.min(player.stamina + 0.4, player.maxStamina);
+  else if(player.stamina < player.maxStamina) player.stamina = Math.min(player.stamina + 0.4 * dt, player.maxStamina);
 
- let moveSpeed = isSprinting ? player.speed*1.8 : player.speed;
-  if(inWater) moveSpeed /= 2;
+ let moveSpeed = (isSprinting && !player.exhausted && isMoving) ? player.speed * 1.8 : player.speed;
 
-  if(keys.w) player.y-=moveSpeed;
-  if(keys.s) player.y+=moveSpeed;
-  if(keys.a) player.x-=moveSpeed;
-  if(keys.d) player.x+=moveSpeed;
+// Aplica os redutores de ambiente (Frio e Água)
+moveSpeed *= (player.coldSlow || 1.0);
+if (inWater) moveSpeed /= 2;
+
+// --- APLICAÇÃO DO MOVIMENTO ---
+if (keys.w) player.y -= moveSpeed * dt;
+if (keys.s) player.y += moveSpeed * dt;
+if (keys.a) player.x -= moveSpeed * dt;
+if (keys.d) player.x += moveSpeed * dt;
+
 if(isMobile && touchMove.active){
   const len = Math.hypot(touchMove.dx, touchMove.dy) || 1;
   const nx = touchMove.dx / len;
   const ny = touchMove.dy / len;
   const speedFactor = Math.min(len / joystick.radius, 1);
-player.x += nx * moveSpeed * speedFactor;
-player.y += ny * moveSpeed * speedFactor;
+    player.x += nx * moveSpeed * speedFactor * dt;
+    player.y += ny * moveSpeed * speedFactor * dt;
 }
 
   player.x = Math.max(player.r, Math.min(MAP - player.r, player.x));
   player.y = Math.max(player.r, Math.min(MAP - player.r, player.y));
-// 🌳 COLISÃO AJUSTADA PARA O NOVO TRONCO
+// --- UNIFICAÇÃO DE TODAS AS COLISÕES SÓLIDAS ---
+// Este bloco substitui as colisões de Árvore, Pedra, Ouro e Fogueira.
 resources.forEach(res => {
-  if(!res.alive) return;
-  if(res.type !== "tree" && res.type !== "palm") return;
+    if (!res.alive || res.type === "stick") return;
 
-  const dx = player.x - res.x;
-  // Ajustamos o Y da colisão para o centro do novo tronco (mais para baixo)
-  const dy = player.y - (res.type === "palm" ? res.y + 10 : res.y);
-  const dist = Math.hypot(dx, dy);
-  
-  // Raio um pouco maior (8) para o tronco que engrossou para 16
-  const colRadius = (res.type === "palm") ? 20 : res.r;
+    // FILTRO RÁPIDO: Se a distância for maior que 80px, ignora (Muito mais leve!)
+    if (Math.abs(player.x - res.x) > 150 || Math.abs(player.y - res.y) > 150) return;
 
-  if(dist < player.r + colRadius){
-    const angle = Math.atan2(dy, dx);
-    const overlap = (player.r + colRadius) - dist;
-    player.x += Math.cos(angle) * overlap;
-    player.y += Math.sin(angle) * overlap;
-  }
-});
-// COLISÃO COM PEDRA E OURO (UNIFICAÇÃO 3 — ETAPA 2)
-resources.forEach(res => {
-  if(!res.alive) return;
-  if(res.type !== "stone" && res.type !== "gold") return;
-
-  const dx = player.x - res.x;
-  const dy = player.y - res.y;
-  const dist = Math.hypot(dx, dy);
-
-  if(dist < player.r + res.r){
-    const angle = Math.atan2(dy, dx);
-    const overlap = (player.r + res.r) - dist;
-    player.x += Math.cos(angle) * overlap;
-    player.y += Math.sin(angle) * overlap;
-  }
-});
-// Colisão com a Fogueira
-resources.forEach(res => {
-  if(res.type === "campfire" && res.alive){
     const dx = player.x - res.x;
-    const dy = player.y - res.y;
+    // Ajuste especial para o tronco da palmeira
+    const dy = player.y - (res.type === "palm" ? res.y + 10 : res.y);
     const dist = Math.hypot(dx, dy);
-    if(dist < player.r + res.r){
-      const angle = Math.atan2(dy, dx);
-      const overlap = (player.r + res.r) - dist;
-      player.x += Math.cos(angle) * overlap;
-      player.y += Math.sin(angle) * overlap;
+    
+    // Define o raio baseado no tipo
+    let colRadius = res.r || 20;
+    if (res.type === "palm") colRadius = 20;
+    if (res.type === "tree") colRadius = res.r; // Seu raio de árvore ajustado
+
+    if (dist < player.r + colRadius) {
+        const angle = Math.atan2(dy, dx);
+        const overlap = (player.r + colRadius) - dist;
+        player.x += Math.cos(angle) * overlap;
+        player.y += Math.sin(angle) * overlap;
     }
-  }
 });
 // 🐇 COLISÃO FÍSICA COM COELHOS
 animals.forEach(ani => {
@@ -2640,6 +2897,7 @@ player.oldY = player.y;
 
 handleFishRespawn();
 cleanDeadFishes();
+hintSystem.update();
 }
 function drawBloodMoonText(){
     if(showBloodMoonText > 0){
@@ -2684,7 +2942,34 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
   // Pega a arma atual baseada no índice (0 a 5)
   const w = weapons[player.weapon] || weapons[0]; 
   const off = player.attackProgress * 25; 
+// --- 1. ACESSÓRIO (Lanterna de Ombro/Cabeça) ---
+  if (player.accessory === "torch" && player.weapon !== 6) {
+     ctxRef.save();
+      
+      // Se estiver na mão, ela fica um pouco à frente. 
+      // Se for acessório (barriga), recua para dentro do player.
+      const torchX = (player.weapon === 6) ? player.r - 5 : player.r - 15;
+      const torchY = 0; 
 
+      // Cabo (Mais curto para não tapar as ferramentas)
+      ctxRef.fillStyle = "#5d4037";
+      ctxRef.fillRect(torchX, torchY - 3, 15, 6);
+      
+      // Brilho da Chama
+      const flicker = Math.sin(Date.now() * 0.02) * 4;
+      ctxRef.fillStyle = "#ff7043";
+      ctxRef.beginPath();
+      ctxRef.arc(torchX + 15, torchY, 8 + flicker/2, 0, Math.PI * 2);
+      ctxRef.fill();
+      
+      // Miolo da chama
+      ctxRef.fillStyle = "#fff176";
+      ctxRef.beginPath();
+      ctxRef.arc(torchX + 15, torchY, 4, 0, Math.PI * 2);
+      ctxRef.fill();
+      
+      ctxRef.restore();
+  }
   if(w.style !== "hand") {
     // Definir cores: 3, 4 e 5 são de Pedra/Metal (Cinza)
     const isStone = (player.weapon >= 3);
@@ -2790,7 +3075,7 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
   ctxRef.beginPath(); 
   ctxRef.arc(0, 0, player.r, 0, Math.PI*2); 
   ctxRef.fill();
-
+  
   // MÃOS
   const hands = [{x: player.r, y: -14}, {x: player.r, y: 14}];
   hands.forEach(h => {
@@ -3035,6 +3320,49 @@ ctx.fillText("ITENS", btnX + btnW / 2, btnY + btnH / 2 + 7);
 
     ctx.restore();
 }
+function drawHints() {
+    hintSystem.update();
+    if (hintSystem.opacity <= 0) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Garante que ignore o scroll da câmera
+    ctx.globalAlpha = hintSystem.opacity;
+    
+    if (hintSystem.type === "alert") {
+        // --- ALERTA: SEMPRE NO MEIO ---
+        ctx.font = "bold 28px Arial";
+        ctx.textAlign = "center";
+        
+        // Sombra
+        ctx.fillStyle = "black";
+        ctx.fillText(hintSystem.displayText, canvas.width / 2 + 2, 152);
+        
+        // Texto Piscante
+        ctx.fillStyle = (Date.now() % 500 < 250) ? "#ff4444" : "#ffffff";
+        ctx.fillText(hintSystem.displayText, canvas.width / 2, 150);
+
+    } else {
+        // --- DICA: LADO ESQUERDO (Abaixo das Barras/Temperatura) ---
+        ctx.font = "bold 16px Arial";
+        ctx.textAlign = "left";
+
+        // Define o X e Y baseado no dispositivo
+        let tipX = 20; 
+        let tipY = isMobile ? 250 : 320; // No mobile fica abaixo do medidor de temp (120) e botões. No PC abaixo da temp (260).
+
+        // Fundo para facilitar leitura
+        let textWidth = ctx.measureText(hintSystem.displayText).width;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.roundRect(tipX - 5, tipY - 20, textWidth + 15, 30, 5);
+        ctx.fill();
+
+        // Cor da Dica (Amarelo claro para destacar do branco das barras)
+        ctx.fillStyle = "#f1c40f"; 
+        ctx.fillText(hintSystem.displayText, tipX, tipY);
+    }
+    
+    ctx.restore();
+}
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle="#3f8f4d"; ctx.fillRect(-camX(),-camY(),MAP,MAP);
@@ -3073,6 +3401,9 @@ flowers.forEach(f => {
   ctx.beginPath(); ctx.arc(circularRiver.x-camX(), circularRiver.y-camY(), circularRiver.r, 0, Math.PI*2); ctx.fill();
   resources.forEach(res => {
   if(!res.alive) return;
+
+if (res.x < camX() - 100 || res.x > camX() + canvas.width + 100 ||
+      res.y < camY() - 100 || res.y > camY() + canvas.height + 100) return;
 
 const rx = res.x - camX();
   const ry = res.y - camY();
@@ -3201,6 +3532,9 @@ else if(res.type === "campfire"){
 zombies.forEach(z => {
   if(!z.active) return;
 
+if (z.x > camX() - 100 && z.x < camX() + canvas.width + 100 &&
+      z.y > camY() - 100 && z.y < camY() + canvas.height + 100) {
+
   ctx.beginPath();
   ctx.arc(z.x - camX(), z.y - camY(), z.r, 0, Math.PI * 2);
 
@@ -3213,7 +3547,7 @@ zombies.forEach(z => {
   }
 
   ctx.fill();
-});
+}});
 drawBloodMoonText();
  const viewMargin = 120;
  const all = [
@@ -3264,6 +3598,9 @@ if(obj.hp < obj.maxHp){
   particles.forEach(p=>{ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x-camX(), p.y-camY(), p.r, 0, Math.PI*2); ctx.fill();});
 // --- DESENHO DAS TOCAS ---
 rabbitHoles.forEach(h => {
+  if (h.x > camX() - 100 && h.x < camX() + canvas.width + 100 &&
+      h.y > camY() - 100 && h.y < camY() + canvas.height + 100) {
+
     ctx.fillStyle = "#4e342e"; // Marrom bem escuro
     ctx.beginPath();
     ctx.ellipse(h.x - camX(), h.y - camY() + 5, h.r, h.r * 0.6, 0, 0, Math.PI * 2);
@@ -3273,9 +3610,12 @@ rabbitHoles.forEach(h => {
     ctx.strokeStyle = "#3e2723";
     ctx.lineWidth = 2;
     ctx.stroke();
-});
+}});
   animals.forEach(a => {
     if (!a.alive) return;
+    if (a.x > camX() - 100 && a.x < camX() + canvas.width + 100 && 
+        a.y > camY() - 100 && a.y < camY() + canvas.height + 100) {
+
     // --- NOVO: SE ESTIVER NA TOCA, FICA ESCONDIDO ---
     if (a.isInHole) {
         // Checa se é dia e se o player está longe para poder sair
@@ -3305,30 +3645,52 @@ rabbitHoles.forEach(h => {
     }
     ctx.rotate(a.angle);
 
-    // Corpo (bolinha marrom)
-    ctx.fillStyle = "#8d6e63";
+    // --- ORELHAS (Marrom original) ---
+    ctx.fillStyle = "#8d6e63"; // Cor marrom original do coelho
+    
+    // Orelha Esquerda (Oval inclinada)
     ctx.beginPath();
-    ctx.arc(0, 0, a.r, 0, Math.PI * 2);
+    ctx.ellipse(-8, -10, 10, 4, -Math.PI/3, 0, Math.PI * 2);
+    ctx.fill();
+    // Interior da orelha (Rosa clarinho sutil)
+    ctx.fillStyle = "#ffcdd2";
+    ctx.beginPath();
+    ctx.ellipse(-8, -10, 7, 2, -Math.PI/3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Olhinhos (na frente)
-    ctx.fillStyle = "black";
+    // Orelha Direita (Oval inclinada)
+    ctx.fillStyle = "#8d6e63"; // Reseta cor para marrom
     ctx.beginPath();
-    ctx.arc(a.r * 0.5, -3, 2, 0, Math.PI * 2);
-    ctx.arc(a.r * 0.5, 3, 2, 0, Math.PI * 2);
+    ctx.ellipse(-8, 10, 10, 4, Math.PI/3, 0, Math.PI * 2);
+    ctx.fill();
+    // Interior da orelha
+    ctx.fillStyle = "#ffcdd2";
+    ctx.beginPath();
+    ctx.ellipse(-8, 10, 7, 2, Math.PI/3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Orelhinhas atrás
-    ctx.fillStyle = "#8d6e63";
+    // --- CORPO (O "Formato Original" ovalizado) ---
+    ctx.fillStyle = "#8d6e63"; // Marrom original
     ctx.beginPath();
-    // Orelha 1
-    ctx.ellipse(-5, -5, 8, 3, 0, 0, Math.PI * 2);
-    // Orelha 2
-    ctx.ellipse(-5, 5, 8, 3, 0, 0, Math.PI * 2);
+    // Usamos ellipse em vez de arc para dar um formato mais orgânico, mas mantendo o tamanho original (~30px total)
+    ctx.ellipse(0, 0, 16, 12, 0, 0, Math.PI * 2); 
+    ctx.fill();
+
+    // --- RABINHO (Pompom branco sutil) ---
+    ctx.fillStyle = "#fafafa";
+    ctx.beginPath();
+    ctx.arc(-14, 0, 5, 0, Math.PI * 2); // Um pequeno pompom nas costas
+    ctx.fill();
+
+    // --- OLHOS (Do tamanho original) ---
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc(10, -5, 1.8, 0, Math.PI * 2); // Olho esquerdo
+    ctx.arc(10, 5, 1.8, 0, Math.PI * 2);  // Olho direito
     ctx.fill();
 
     ctx.restore();
-});
+}});
 // --- DESENHO DOS PÁSSAROS MoMoo STYLE ---
 birds.forEach(b => {
     if (!b.active) return;
@@ -3603,9 +3965,16 @@ jaguars.forEach(j => {
         ctx.restore();
       }
 });
-// 🌙 NOITE COM DUPLO RECORTE + FUMAÇA (ESTÁVEL)
+// 🌙 NOITE COM MÁSCARA DE LUZ (TOCHA NÃO BUGAR A FOGUEIRA)
 if(!isDay) {
-  // 1. ESTRELAS
+  // --- 1. PROGRESSÃO DE OPACIDADE (0.75, 0.80, 0.85) ---
+  let opacidadeNoite = 0.85; 
+  if (typeof dayCount !== 'undefined') {
+      if (dayCount === 1) opacidadeNoite = 0.75; 
+      else if (dayCount === 2) opacidadeNoite = 0.80; 
+  }
+
+  // 2. ESTRELAS
   ctx.save();
   stars.forEach(s => {
     ctx.globalAlpha = s.a; ctx.fillStyle = "white";
@@ -3613,91 +3982,99 @@ if(!isDay) {
   });
   ctx.restore();
 
-  // --- ETAPA A: A PENUMBRA (O furo maior) ---
+  // --- 3. ETAPA A: PENUMBRA (Sua Etapa A original) ---
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, canvas.width, canvas.height); 
-
   resources.forEach(res => {
     if(res.type === "campfire" && res.alive) {
-      const fx = res.x - camX();
-      const fy = res.y - camY();
-      const raioPenumbra = 650; 
-      ctx.moveTo(fx + raioPenumbra, fy);
-      ctx.arc(fx, fy, raioPenumbra, 0, Math.PI * 2, true); 
+      const fx = res.x - camX(); const fy = res.y - camY();
+      ctx.moveTo(fx + 650, fy);
+      ctx.arc(fx, fy, 650, 0, Math.PI * 2, true); 
     }
   });
-  // ✨ LUZ DA TOCHA NA PENUMBRA
-  if (player.weapon === 6) {
-    const px = player.x - camX();
-    const py = player.y - camY();
-    const raioTochaP = 300; // Um pouco menor que a fogueira
-    ctx.moveTo(px + raioTochaP, py);
-    ctx.arc(px, py, raioTochaP, 0, Math.PI * 2, true);
+  if (player.weapon === 6 || player.accessory === "torch") {
+    const px = player.x - camX(); const py = player.y - camY();
+    ctx.moveTo(px + 300, py);
+    ctx.arc(px, py, 300, 0, Math.PI * 2, true);
   }
   ctx.clip(); 
   ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; 
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.restore();
 
-  // --- ETAPA B: O BREU (O furo menor) ---
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, canvas.width, canvas.height); 
+  // --- 4. ETAPA B: A MÁSCARA DE LUZ (O SEGREDO) ---
+  const lightCanvas = document.createElement('canvas');
+  lightCanvas.width = canvas.width;
+  lightCanvas.height = canvas.height;
+  const lCtx = lightCanvas.getContext('2d');
 
+  // Desenhamos as luzes como FORMAS BRANCAS no canvas invisível
   resources.forEach(res => {
     if(res.type === "campfire" && res.alive) {
-      const fx = res.x - camX();
-      const fy = res.y - camY();
-      const raioDia = 350; 
-      ctx.moveTo(fx + raioDia, fy);
-      ctx.arc(fx, fy, raioDia, 0, Math.PI * 2, true); 
+      const fx = res.x - camX(); const fy = res.y - camY();
+      let grad = lCtx.createRadialGradient(fx, fy, 150, fx, fy, 350);
+      grad.addColorStop(0, "rgba(255, 255, 255, 1)");   // Centro total luz
+      grad.addColorStop(0.4, "rgba(255, 255, 255, 0.6)");
+      grad.addColorStop(1, "rgba(255, 255, 255, 0)");
+      lCtx.fillStyle = grad;
+      lCtx.beginPath(); lCtx.arc(fx, fy, 350, 0, Math.PI * 2); lCtx.fill();
     }
   });
-// ✨ LUZ DA TOCHA NO BREU
-  if (player.weapon === 6) {
-    const px = player.x - camX();
-    const py = player.y - camY();
-    // Se chover, a luz da tocha diminui
-    const raioTochaB = isRaining ? 150 : 160; 
-    ctx.moveTo(px + raioTochaB, py);
-    ctx.arc(px, py, raioTochaB, 0, Math.PI * 2, true);
-  }
-  ctx.clip();
-  ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  const viguette = ctx.createRadialGradient(cx, cy, 100, cx, cy, 700);
-  viguette.addColorStop(0, "rgba(0, 0, 0, 0)"); 
-  viguette.addColorStop(1, "rgba(0, 0, 0, 0.95)"); 
+  if (player.weapon === 6 || player.accessory === "torch") {
+    const px = player.x - camX(); const py = player.y - camY();
+    const rInner = isRaining ? 60 : 70;
+    const rOuter = isRaining ? 150 : 160;
+    let gradT = lCtx.createRadialGradient(px, py, rInner, px, py, rOuter);
+    gradT.addColorStop(0, "rgba(255, 255, 255, 1)");
+    gradT.addColorStop(1, "rgba(255, 255, 255, 0)");
+    lCtx.fillStyle = gradT;
+    lCtx.beginPath(); lCtx.arc(px, py, rOuter, 0, Math.PI * 2); lCtx.fill();
+  }
+
+  // Agora criamos o Breu e usamos a Máscara para furar
+  const breuCanvas = document.createElement('canvas');
+  breuCanvas.width = canvas.width;
+  breuCanvas.height = canvas.height;
+  const bCtx = breuCanvas.getContext('2d');
+
+  bCtx.fillStyle = `rgba(0, 0, 0, ${opacidadeNoite})`;
+  bCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // USA A MÁSCARA PARA FURAR O BREU DE UMA VEZ SÓ
+  bCtx.globalCompositeOperation = 'destination-out';
+  bCtx.drawImage(lightCanvas, 0, 0);
+
+  // Desenha no jogo
+  ctx.drawImage(breuCanvas, 0, 0);
+
+  // --- 5. ETAPA C: CALOR, FUMAÇA E VINHETA ---
+  ctx.save();
+  const viguette = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 100, canvas.width/2, canvas.height/2, 700);
+  viguette.addColorStop(0, "transparent"); 
+  viguette.addColorStop(1, "rgba(0, 0, 0, 0.5)"); 
   ctx.fillStyle = viguette;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.restore();
 
-  // --- ETAPA C: EFEITOS DA FOGUEIRA (LUZ CENTRO 10% + FUMAÇA) ---
-  ctx.save();
   resources.forEach(res => {
     if(res.type === "campfire" && res.alive) {
-      const fx = res.x - camX();
-      const fy = res.y - camY();
+      const fx = res.x - camX(); const fy = res.y - camY();
       
-      // Filtro de 10% no centro (deixa 90% da claridade do dia)
-      ctx.fillStyle = "rgba(0, 0, 0, 0.1)"; 
-      ctx.beginPath();
-      ctx.arc(fx, fy, 350, 0, Math.PI * 2);
-      ctx.fill();
+      // ✨ CALOR LARANJA (Cor por cima da luz)
+      let calor = ctx.createRadialGradient(fx, fy, 0, fx, fy, 150);
+      calor.addColorStop(0, "rgba(255, 150, 50, 0.15)"); 
+      calor.addColorStop(1, "transparent");
+      ctx.fillStyle = calor;
+      ctx.beginPath(); ctx.arc(fx, fy, 150, 0, Math.PI * 2); ctx.fill();
 
-      // 💨 FUMAÇA PRETA
+      // Fumaça original
       ctx.fillStyle = "rgba(15, 15, 15, 0.6)";
       for(let i = 0; i < 3; i++) {
         let tempo = Date.now() * 0.002;
         let ox = Math.sin(tempo + i) * 10; 
         let oy = (Date.now() * 0.05 + i * 25) % 100;
-        ctx.beginPath();
-        ctx.arc(fx + ox, (fy - 20) - oy, 7 + i*2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(fx + ox, (fy - 20) - oy, 7 + i*2, 0, Math.PI * 2); ctx.fill();
       }
     }
   });
@@ -3867,6 +4244,9 @@ particles.forEach((p, index) => {
     ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
   }
 if (!player.dead) {
+    drawHints();
+  drawTemperatureUI();
+
         if (isMobile) {
             // HUD de Mobile (JoySticks e Botões)
             drawMobileHUD();
@@ -3885,7 +4265,7 @@ if (!player.dead) {
                 drawCraftingMenu(); 
             } else {
                 // Se não estiver craftando, mostra recursos e inventário normal
-                drawInventory(); 
+                
                 if (inventoryOpen) {
                     drawFullscreenInventory();
                 }
@@ -3893,6 +4273,52 @@ if (!player.dead) {
         }
     }
   }
+function drawTemperatureUI() {
+    let x = 20;
+    let y = isMobile ? 125 : 265; // Ajustado para não bater nas barras
+
+    if (isMobile) {
+        // Abaixo das 3 barras de status (que terminam em barY + 28*3)
+        // E acima do botão ITENS (que começa em canvas.height / 2 - 35)
+        y = 120; // Posição calculada para mobile
+    } else {
+        // No PC, logo abaixo da FOME
+        y = 260; 
+    }
+
+    const w = 200, h = 18; // Barra um pouco mais alta
+
+    // Título maior com Emoji
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 13px Arial"; // Texto maior como pedido
+    ctx.textAlign = "left";
+    ctx.fillText("🌡️ MEDIDOR DE TEMPERATURA", x, y - 8);
+    // Fundo
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(x, y, w, h);
+
+    // Cor dinâmica
+    const red = Math.floor((player.temp / 100) * 255);
+    const blue = Math.floor(((100 - player.temp) / 100) * 255);
+    ctx.fillStyle = `rgb(${red}, 100, ${blue})`;
+    
+    ctx.fillRect(x, y, (player.temp / 100) * w, h);
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.strokeRect(x, y, w, h);
+
+    // Efeito de Vinheta (Mantém sua lógica)
+    if (player.temp < 50) {
+        const opacidade = (50 - player.temp) / 50 * 0.5;
+        const grad = ctx.createRadialGradient(
+            canvas.width/2, canvas.height/2, canvas.width * 0.2, 
+            canvas.width/2, canvas.height/2, canvas.width * 0.7
+        );
+        grad.addColorStop(0, "transparent");
+        grad.addColorStop(1, `rgba(100, 200, 255, ${opacidade})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+}
 function drawHotbar() {
   const slots = [
     { id: "hand", name: "Mão", weapon: 0 },
@@ -3934,63 +4360,9 @@ function drawHotbar() {
     }
   });
 }
-function drawInventory(){
-  if (!inventoryOpen) return;
 
-  ctx.save();
-    
-    // 🚩 ISSO FAZ O INVENTÁRIO APARECER NO CELULAR:
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  const slotSize = 80;
-  const padding = 15;
-  const items = [
-    { label: "🪵", qty: player.wood },
-    { label: "🪨", qty: player.stone },
-    { label: "✨", qty: player.gold },
-    { label: "🪓", owned: player.weapon === 1 || player.weapon === 3 }, // Machados
-    { label: "⛏️", owned: player.weapon === 2 || player.weapon === 4 }, // Picaretas
-    { label: "⚔️", owned: player.weapon === 5 } // Lança
-  ];
 
-  const width = items.length * (slotSize + padding) - padding;
-  const startX = canvas.width/2 - width/2;
-  const y = canvas.height - slotSize - 120;
 
-  // Fundo do Painel
-  ctx.fillStyle = "rgba(0,0,0,0.7)";
-  ctx.roundRect(startX - 10, y - 10, width + 20, slotSize + 20, 10);
-  ctx.fill();
-
-  items.forEach((item, i) => {
-    const x = startX + i * (slotSize + padding);
-
-    // Fundo do Slot
-    ctx.fillStyle = "rgba(255,255,255,0.1)";
-    ctx.fillRect(x, y, slotSize, slotSize);
-    
-    // Borda de seleção (se for a arma atual)
-    ctx.strokeStyle = (player.weapon === i) ? "#2ecc71" : "#555";
-    ctx.lineWidth = (player.weapon === i) ? 3 : 1;
-    ctx.strokeRect(x, y, slotSize, slotSize);
-
-    // Desenho do ícone/quantidade
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#fff";
-    ctx.font = "20px Arial";
-    ctx.fillText(item.label, x + slotSize/2, y + slotSize/2 + 5);
-
-    if(item.qty !== undefined) {
-      ctx.font = "bold 14px Arial";
-      ctx.fillText(item.qty, x + slotSize/2, y + slotSize - 5);
-    
-    }
-  });
-  ctx.restore();
-}
-
-let running=false;
-function loop(){if(!running) return; update(); draw(); requestAnimationFrame(loop);}
-document.getElementById("startBtn").onclick=()=>{document.getElementById("overlay").style.display="none"; running=true; loop();};
 </script>
 </body>
 </html>
