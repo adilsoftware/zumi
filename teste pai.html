@@ -243,7 +243,7 @@ if (inventoryOpen) {
         continue; 
     }
 
-    // B) DETECTAR TOQUE NOS SLOTS
+// B) DETECTAR TOQUE NOS SLOTS (Dentro do if(inventoryOpen))
     const slotSize = 110, gap = 15, cols = 7;
     const startX = 100;
     const startY = 150;
@@ -282,21 +282,21 @@ if (craftingOpen) {
     }
 
    // 3. CLIQUE NOS ITENS FILTRADOS
+// Dentro do if (craftingOpen) no seu touchstart
 const allKeys = Object.keys(recipes);
 let displayKeys;
 
 if (craftPage === 0) {
-    displayKeys = allKeys.filter(k => k !== "fishing_rod");
+    displayKeys = allKeys.filter(k => k !== "fishing_rod" && k !== "arrow" && k !== "bow");
 } else {
-    displayKeys = allKeys.filter(k => k === "fishing_rod");
+    displayKeys = allKeys.filter(k => k === "fishing_rod" || k === "arrow" || k === "bow");
 }
 
+// Loop de clique corrigido
 for (let i = 0; i < displayKeys.length; i++) {
-    const pos = getCraftItemPos(i); // i é a posição visual na tela (0, 1, 2...)
-
+    const pos = getCraftItemPos(i); 
     if (tx >= pos.x && tx <= pos.x + pos.w && ty >= pos.y && ty <= pos.y + pos.h) {
-        tryCraft(displayKeys[i]); // Compra o item correto da lista filtrada
-        
+        tryCraft(displayKeys[i]); // Agora compra o item certo da página 2
         return; 
     }
 }
@@ -871,27 +871,24 @@ function spawnJaguar() {
 for(let i=0; i<10; i++) spawnJaguar();
 
 function shootArrow() {
-    // Verifica se tem munição
-    if (player.arrows > 0) {
-        player.arrows--; // Gasta 1 flecha
-        
-        // Adiciona a flecha no mundo
-        arrows.push({
-            x: player.x,
-            y: player.y,
-            angle: player.angle,
-            speed: 15,     // Velocidade do projétil
-            damage: 25,    // Dano causado
-            active: true,
-            dist: 0,       // Distância percorrida
-            maxDist: 400   // Alcance máximo antes de sumir
-        });
-        
-        return true; // Disparo com sucesso
-    } else {
-        // Opcional: Tocar um som de "clique" ou mostrar mensagem de sem munição
-        return false; 
-    }
+    if (player.arrows <= 0) return false;
+
+    const arrowSpeed = 12;
+    arrows.push({
+        x: player.x,
+        y: player.y,
+        angle: player.angle,
+        // Isso aqui faz a flecha saber para que lado ir:
+        vx: Math.cos(player.angle) * arrowSpeed,
+        vy: Math.sin(player.angle) * arrowSpeed,
+        dist: 0,
+        maxDist: 600,
+        active: true,
+        damage: 25 // Dano fixo da flecha
+    });
+
+    player.arrows--;
+    return true; // Retorna true para o sistema de ataque saber que disparou
 }
 function drawRock(rock, offsetX=0, offsetY=0, scale=1){
   if(!rock.active) return;
@@ -931,22 +928,28 @@ function isInSand(x,y){
   return false;
 }
 function shootArrow() {
-    // Só atira se tiver munição (se você tiver esse controle)
-    if (player.arrows <= 0) return;
+    // 1. Só atira se tiver mais que 0 flechas
+    if (player.arrows > 0) {
+        const arrowSpeed = 12;
+        
+        arrows.push({
+            x: player.x,
+            y: player.y,
+            angle: player.angle,
+            vx: Math.cos(player.angle) * arrowSpeed,
+            vy: Math.sin(player.angle) * arrowSpeed,
+            dist: 0,
+            maxDist: 700, // Distância para sumir (cerca de uma tela)
+            active: true,
+            damage: 25
+        });
 
-    const arrowSpeed = 12;
-    arrows.push({
-        x: player.x,
-        y: player.y,
-        angle: player.angle, // A direção que o player está olhando
-        vx: Math.cos(player.angle) * arrowSpeed,
-        vy: Math.sin(player.angle) * arrowSpeed,
-        dist: 0,          // Para saber o alcance máximo
-        maxDist: 600,     // A flecha "some" depois de percorrer isso
-        active: true
-    });
-
-    player.arrows--; // Remove do inventário
+        player.arrows--; // 2. Gasta a munição aqui!
+        return true; 
+    }
+    
+    console.log("Sem flechas!");
+    return false; // Retorna falso se não tiver munição
 }
 // MONTANHAS AMPLIADAS EM 50% (1250 -> 1875)
 const M_RADIUS = 1875;
@@ -1478,92 +1481,131 @@ function drawFullscreenInventory() {
     ctx.fillRect(x, y, slotSize, slotSize);
     ctx.strokeRect(x, y, slotSize, slotSize);
 
-    if (!res.empty) {
-      const iconCenterX = x + slotSize / 2;
-      const iconCenterY = y + slotSize / 2 - 10;
-      
-      // Desenho do Graveto
-      if (res.label === "GRAVETO") {
+// --- DENTRO DO SEU items.forEach ---
+if (!res.empty) {
+    const iconCenterX = x + slotSize / 2;
+    const iconCenterY = y + slotSize / 2 - 10;
+
+    // 1. ATUALIZE A DETECÇÃO DE STYLE (Adicionando os novos itens)
+    let style = "";
+    if (res.label.includes("LANÇA")) style = "spear";
+    else if (res.label.includes("MACHADO")) style = "axe";
+    else if (res.label.includes("PICARETA")) style = "pickaxe";
+    else if (res.label.includes("TOCHA")) style = "torch";
+    else if (res.label.includes("ARCO")) style = "bow";
+    else if (res.label.includes("VARA")) style = "fishing_rod";
+    else if (res.label === "FOGUEIRA") style = "campfire"; // <--- Novo
+    else if (res.label === "FLECHAS") style = "arrow";    // <--- Novo
+    else if (res.label === "PENAS") style = "feather";    // <--- Novo
+    else if (res.label === "GRAVETO") style = "stick";    // <--- Novo
+
+    if (style !== "") {
         ctx.save();
         ctx.translate(iconCenterX, iconCenterY);
-        ctx.rotate(-Math.PI / 4);
-        ctx.fillStyle = "#8b5a2b";
-        ctx.fillRect(-5, -15, 10, 30);
+        const offset = -15; 
+        const isStone = res.label.includes(" P."); 
+        const headColor = isStone ? "#7f8c8d" : "#a1887f";
+        const woodColor = "#5d4037";
+
+        // DESENHOS EXISTENTES
+        if (style === "spear") {
+            ctx.fillStyle = woodColor;
+            ctx.fillRect(offset, -2, 45, 4); 
+            ctx.fillStyle = "#3e2723"; 
+            ctx.beginPath();
+            ctx.moveTo(offset + 45, -6); ctx.lineTo(offset + 60, 0); ctx.lineTo(offset + 45, 6);
+            ctx.fill();
+        } 
+        else if (style === "torch") {
+            ctx.fillStyle = woodColor;
+            ctx.fillRect(offset, -3, 25, 6);
+            const flicker = Math.sin(Date.now() * 0.02) * 4;
+            ctx.fillStyle = "#ff7043"; ctx.beginPath();
+            ctx.arc(offset + 25, 0, 8 + flicker/2, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "#fff176"; ctx.beginPath();
+            ctx.arc(offset + 25, 0, 4, 0, Math.PI * 2); ctx.fill();
+        }
+        else if (style === "axe") {
+            ctx.fillStyle = woodColor;
+            ctx.fillRect(offset, -3, 30, 6);
+            ctx.fillStyle = headColor;
+            ctx.beginPath();
+            ctx.moveTo(offset + 20, -15); ctx.lineTo(offset + 35, -20); ctx.lineTo(offset + 35, 20); ctx.lineTo(offset + 20, 15);
+            ctx.fill();
+        } 
+        else if (style === "pickaxe") {
+            ctx.fillStyle = woodColor;
+            ctx.fillRect(offset, -3, 30, 6);
+            ctx.strokeStyle = headColor; ctx.lineWidth = 6; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.arc(offset + 15, 0, 20, -Math.PI/2, Math.PI/2); ctx.stroke();
+        }
+        else if (style === "bow") {
+            ctx.strokeStyle = "#8b4513"; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(0, 0, 20, -Math.PI/2, Math.PI/2); ctx.stroke();
+            ctx.strokeStyle = "#eee"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, 20); ctx.stroke();
+        }
+        else if (style === "fishing_rod") {
+            ctx.fillStyle = "#8b4513"; ctx.fillRect(offset - 10, -2, 50, 4); 
+            ctx.fillStyle = woodColor; ctx.fillRect(offset + 40, -1, 10, 2);
+            ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.beginPath();
+            ctx.moveTo(offset + 50, 0); ctx.lineTo(offset + 55, 15); ctx.stroke();
+        }
+
+        // --- NOVOS DESENHOS BASEADOS NO QUE VOCÊ PASSOU ---
+        else if (style === "campfire") {
+            ctx.scale(0.6, 0.6); // Para caber no slot
+            ctx.fillStyle = woodColor; 
+            for(let i = 0; i < 8; i++) {
+                ctx.save();
+                ctx.rotate((i * 45) * Math.PI / 180); 
+                ctx.fillRect(-22.5, -4.5, 45, 9); 
+                ctx.fillStyle = "#4e342e"; ctx.fillRect(-22.5, 0, 45, 3);
+                ctx.restore();
+            }
+            const pulo = Math.sin(Date.now() * 0.01) * 5;
+            ctx.fillStyle = "#e67e22"; ctx.beginPath();
+            ctx.arc(0, -8, 15 + pulo, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "#f1c40f"; ctx.beginPath();
+            ctx.arc(0, -8, 8 + pulo * 0.5, 0, Math.PI * 2); ctx.fill();
+        }
+        else if (style === "arrow") {
+            ctx.rotate(-Math.PI / 4);
+            ctx.strokeStyle = woodColor; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(20, 0); ctx.stroke();
+            ctx.fillStyle = "#90a4ae"; ctx.beginPath();
+            ctx.moveTo(22, 0); ctx.lineTo(12, -7); ctx.lineTo(12, 7); ctx.fill();
+            ctx.fillStyle = "#eceff1"; ctx.fillRect(-20, -4, 6, 8);
+        }
+        else if (style === "stick") {
+            ctx.rotate(-Math.PI / 4);
+            ctx.fillStyle = "#8b5a2b";
+            ctx.fillRect(-5, -15, 10, 30);
+        }
+        else if (style === "feather") {
+            ctx.fillStyle = "#eceff1"; ctx.beginPath();
+            ctx.ellipse(0, 0, 6, 15, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = "#bdc3c7"; ctx.lineWidth = 1; ctx.stroke();
+        }
+
         ctx.restore();
-      } 
-      else if (res.label === "TOCHA") {
-    ctx.save();
-    // Efeito de brilho atrás da tocha
-    const glow = ctx.createRadialGradient(iconCenterX, iconCenterY, 2, iconCenterX, iconCenterY, 25);
-    glow.addColorStop(0, "rgba(255, 165, 0, 0.3)");
-    glow.addColorStop(1, "rgba(255, 165, 0, 0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(iconCenterX, iconCenterY, 25, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Cabo de Madeira
-    ctx.fillStyle = "#5d4037"; // Marrom escuro
-    ctx.fillRect(iconCenterX - 3, iconCenterY - 5, 6, 25);
-    
-    // Suporte de Metal
-    ctx.fillStyle = "#37474f"; 
-    ctx.fillRect(iconCenterX - 5, iconCenterY - 8, 10, 4);
-
-    // Chama Pulsante (Usa o tempo para animar o tamanho)
-    const flicker = Math.sin(Date.now() * 0.01) * 3;
-    ctx.fillStyle = "#ff7043"; // Laranja fogo
-    ctx.beginPath();
-    ctx.moveTo(iconCenterX - 6, iconCenterY - 8);
-    ctx.quadraticCurveTo(iconCenterX, iconCenterY - 25 - flicker, iconCenterX + 6, iconCenterY - 8);
-    ctx.fill();
-
-    // Miolo da chama (Amarelo)
-    ctx.fillStyle = "#fff176";
-    ctx.beginPath();
-    ctx.moveTo(iconCenterX - 3, iconCenterY - 8);
-    ctx.quadraticCurveTo(iconCenterX, iconCenterY - 18 - flicker, iconCenterX + 3, iconCenterY - 8);
-    ctx.fill();
-    ctx.restore();
-}
-else if (res.label === "VARA PESCA") {
-        ctx.save();
-        ctx.translate(iconCenterX, iconCenterY);
-        // Haste da vara
-        ctx.strokeStyle = "#8b4513";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(-15, 15);
-        ctx.lineTo(15, -15);
-        ctx.stroke();
-        // Linha pendurada
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(15, -15);
-        ctx.lineTo(20, 10);
-        ctx.stroke();
-        ctx.restore();
-      }
-      // Outros ícones (Madeira, Pedra, Ouro, Ferramentas)
-      else if (res.color) {
+    } 
+    // --- RECURSOS BÁSICOS (QUADRADOS) ---
+    else if (res.color) {
         ctx.fillStyle = res.color;
         ctx.fillRect(iconCenterX - 15, iconCenterY - 15, 30, 30);
-        ctx.strokeStyle = res.detail;
+        ctx.strokeStyle = res.detail || "#fff";
         ctx.lineWidth = 2;
         ctx.strokeRect(iconCenterX - 15, iconCenterY - 15, 30, 30);
-      }
-
-      // Texto de quantidade e limite
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 11px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(res.label, iconCenterX, y + slotSize - 30);
-      
-      ctx.fillStyle = (res.value >= res.max) ? "#ff4d4d" : "#2ecc71";
-      ctx.font = "bold 14px Arial";
-      ctx.fillText(`${res.value} / ${res.max || 0}`, iconCenterX, y + slotSize - 10);
     }
+
+    // TEXTOS (Mantidos)
+    ctx.fillStyle = "#fff"; ctx.font = "bold 11px Arial"; ctx.textAlign = "center";
+    ctx.fillText(res.label, iconCenterX, y + slotSize - 30);
+    ctx.fillStyle = (res.value >= res.max) ? "#ff4d4d" : "#2ecc71";
+    ctx.font = "bold 14px Arial";
+    ctx.fillText(`${res.value} / ${res.max || 0}`, iconCenterX, y + slotSize - 10);
+}
   });
 
   drawHotbar(); // Chama a barra de baixo junto com o inventário grande
@@ -1799,8 +1841,8 @@ function equiparItemPorIndice(index) {
                 console.log("Vara equipada!");
             }
             break;
-
-            case 13: // Slot do Arco
+//16-1=15 por algum motivo esse calculo da certo 
+            case 15: // Slot do Arco
     if (player.inventory.bow > 0) {
         player.weapon = 8; // ID 8 na lista 'weapons' é o Arco
         console.log("Arco equipado!");
@@ -2480,202 +2522,216 @@ if(isMobile){
 }
 
 // --- 3. SISTEMA DE ATAQUE UNIFICADO ---
-if ((!isMobile && mouse.down && !player.attacking) || (isMobile && touchAttack && !player.attacking)) {
+const tentandoAtacar = (!isMobile && mouse.down) || (isMobile && touchAttack);
 
-  player.attacking = true;
-  player.atkTimer = weapons[player.weapon].speed;
-  player.attackProgress = 1;
+// 1. GATILHO DE ATAQUE (Clique/Toque)
+if (tentandoAtacar && !player.attacking) {
+    const w = weapons[player.weapon];
 
-  const w = weapons[player.weapon];
-  const hx = player.x + Math.cos(player.angle) * w.range;
-  const hy = player.y + Math.sin(player.angle) * w.range;
-
-  // --- COLETA DE FRUTAS ---
-  bushes.forEach(b => {
-    if (b.hasFruit && Math.hypot(hx - b.x, hy - b.y) < b.r + 20) {
-      b.hasFruit = false;
-      player.food = Math.min(player.maxFood, player.food + 10);
-      player.foodCooldown = 180;
-      createParticles(hx, hy, "#ff4d4d", 8);
-    }
-  });
-
-  // --- NOVO SISTEMA DE DANO E PROGRESSÃO ---
-resources.forEach(res => {
-    if(!res.alive) return;
-    const dist = Math.hypot(hx - res.x, hy - res.y);
-    if(dist > res.r + 15) return;
-
-    // --- MADEIRA / COQUEIRO ---
-    if(res.type === "tree" || res.type === "palm") {
-        if(w.style !== "axe") return;
-
-        // BLOQUEIO: Machado de Madeira (1) não quebra Árvore Grande (HP 300)
-        if(player.weapon === 1 && res.hp >= 300) {
-            console.log("Este machado é muito fraco para esta árvore!");
-            return; 
+    // Se for arco, tenta atirar
+    if (w.style === "bow") {
+        if (shootArrow()) {
+            player.attacking = true;
+            player.atkTimer = w.speed;
+            player.attackProgress = 1;
         }
+    } else {
+        // Se for Corpo-a-Corpo (Lança, Machado, etc)
+        player.attacking = true;
+        player.atkTimer = w.speed;
+        player.attackProgress = 1;
 
-        res.hp -= w.damage;
-        createParticles(hx, hy, res.type === "tree" ? "#6d4c41" : "#27ae60", 6);
+        // Ponto de impacto da arma
+        const hx = player.x + Math.cos(player.angle) * w.range;
+        const hy = player.y + Math.sin(player.angle) * w.range;
 
-        if(res.hp <= 0) {
-            res.alive = false;
-            res.respawnTimer = 0;
-            if(res.type === "tree") {
-                player.wood = Math.min(LIMITES.recursos, player.wood + (res.yield || 1));
-                player.sticks = Math.min(LIMITES.recursos, player.sticks + 2);
-            } else { // PALM
-                player.wood = Math.min(LIMITES.recursos, player.wood + 2);
-                player.sticks = Math.min(LIMITES.recursos, player.sticks + 1);
-                player.food = Math.min(player.maxFood, player.food + 20);
-                createParticles(res.x, res.y, "#ffffff", 12, 1.5);
+        // --- A. COLETA DE FRUTAS ---
+        bushes.forEach(b => {
+            if (b.hasFruit && Math.hypot(hx - b.x, hy - b.y) < b.r + 20) {
+                b.hasFruit = false;
+                player.food = Math.min(player.maxFood, player.food + 10);
+                player.foodCooldown = 180;
+                createParticles(hx, hy, "#ff4d4d", 8);
             }
-        }
+        });
+
+        // --- B. RECURSOS (Madeira, Pedra, Ouro) ---
+        resources.forEach(res => {
+            if (!res.alive) return;
+            if (Math.hypot(hx - res.x, hy - res.y) > res.r + 15) return;
+
+            // Madeira / Coqueiro
+            if (res.type === "tree" || res.type === "palm") {
+                if (w.style !== "axe") return;
+                
+                // Bloqueio de machado fraco
+                if (player.weapon === 1 && res.hp >= 300) {
+                    console.log("Este machado é muito fraco para esta árvore!");
+                    return; 
+                }
+
+                res.hp -= w.damage;
+                createParticles(hx, hy, res.type === "tree" ? "#6d4c41" : "#27ae60", 6);
+
+                if (res.hp <= 0) {
+                    res.alive = false;
+                    res.respawnTimer = 0;
+                    if (res.type === "tree") {
+                        player.wood = Math.min(LIMITES.recursos, player.wood + (res.yield || 1));
+                        player.sticks = Math.min(LIMITES.recursos, player.sticks + 2);
+                    } else { 
+                        player.wood = Math.min(LIMITES.recursos, player.wood + 2);
+                        player.sticks = Math.min(LIMITES.recursos, player.sticks + 1);
+                        player.food = Math.min(player.maxFood, player.food + 20);
+                        createParticles(res.x, res.y, "#ffffff", 12, 1.5);
+                    }
+                }
+            }
+
+            // Pedra / Ouro
+            if (res.type === "stone" || res.type === "gold") {
+                if (w.style !== "pickaxe") return;
+                
+                // Bloqueio de picareta fraca
+                if (player.weapon === 2 && res.type === "gold") {
+                    console.log("Você precisa de uma picareta de pedra para minerar ouro!");
+                    return;
+                }
+
+                res.hp -= w.damage;
+                createParticles(hx, hy, res.type === "gold" ? "#FFD700" : "#7f8c8d", 8);
+
+                if (res.hp <= 0) {
+                    res.alive = false;
+                    res.respawnTimer = 0;
+                    if (res.type === "gold") player.gold = Math.min(LIMITES.recursos, player.gold + 1);
+                    if (res.type === "stone") player.stone = Math.min(LIMITES.recursos, player.stone + 1);
+                    if (res.ref) res.ref.active = false;
+                }
+            }
+        });
+
+        // --- C. INIMIGOS E ANIMAIS (Corpo-a-Corpo) ---
+        zombies.forEach(z => {
+            if (!z.active) return;
+            if (Math.hypot(hx - z.x, hy - z.y) < z.r + 15) {
+                z.hp -= 20; // Dano fixo que já estava no seu código
+                createParticles(hx, hy, "#6aff6a", 6);
+                if (z.hp <= 0) z.active = false;
+            }
+        });
+
+        jaguars.forEach(j => {
+            if (!j.alive) return;
+            if (Math.hypot(hx - j.x, hy - j.y) < j.r + 15) {
+                j.hp -= w.damage; 
+                createParticles(hx, hy, "#d3a625", 6); 
+                if (j.hp <= 0) {
+                    j.alive = false;
+                    player.food = Math.min(player.maxFood, player.food + 100); 
+                    player.gold = Math.min(LIMITES.recursos, player.gold + 5); 
+                }
+            }
+        });
+
+        birds.forEach(b => {
+            if (!b.active || !b.resting) return; // Só bate se estiver no chão
+            if (Math.hypot(hx - b.x, hy - b.y) < b.r + 15) { 
+                b.hp -= w.damage; 
+                createParticles(b.x, b.y, "#ff0000", 8);
+                if (b.hp <= 0) {
+                    b.active = false;
+                    player.food = Math.min(player.maxFood, player.food + (b.foodValue || 12));
+                    let qtdPenas = Math.random() < 0.5 ? 8 : 10;
+                    player.feather = Math.min(LIMITES.penas, player.feather + qtdPenas);
+                    console.log(`Pássaro abatido! Penas +${qtdPenas}`);
+                } else {
+                    b.resting = false; 
+                    b.stamina = 5; 
+                    b.angle = Math.atan2(b.y - player.y, b.x - player.x);
+                }
+            }
+        });
+
+        animals.forEach(ani => {
+            if (!ani.alive) return;
+            if (Math.hypot(hx - ani.x, hy - ani.y) < ani.r + 15) {
+                ani.hp -= w.damage; 
+                createParticles(hx, hy, "#fce4ec", 6); 
+                if (ani.hp <= 0) {
+                    ani.alive = false; 
+                    player.food = Math.min(player.maxFood, player.food + 50); 
+                }
+            }
+        });
     }
+}
 
-    // --- PEDRA / OURO ---
-    if(res.type === "stone" || res.type === "gold") {
-        if(w.style !== "pickaxe") return;
+// ==================================================================
+// LÓGICAS QUE DEVEM RODAR TODO FRAME (Independente do clique)
+// ==================================================================
 
-        // BLOQUEIO: Picareta de Madeira (2) não quebra Ouro
-        if(player.weapon === 2 && res.type === "gold") {
-            console.log("Você precisa de uma picareta de pedra para minerar ouro!");
-            return;
-        }
+// 2. TIMERS DE ATAQUE E PARTÍCULAS
+if (player.attacking) { 
+    player.atkTimer--; 
+    if (player.atkTimer <= 0) player.attacking = false; 
+}
 
-        res.hp -= w.damage;
-        createParticles(hx, hy, res.type === "gold" ? "#FFD700" : "#7f8c8d", 8);
+if (player.attackProgress > 0) { 
+    player.attackProgress -= 0.15; 
+    if (player.attackProgress < 0) player.attackProgress = 0; 
+}
 
-        if(res.hp <= 0) {
-            res.alive = false;
-            res.respawnTimer = 0;
-            if(res.type === "gold") player.gold = Math.min(LIMITES.recursos, player.gold + 1);
-            if(res.type === "stone") player.stone = Math.min(LIMITES.recursos, player.stone + 1);
-            if(res.ref) res.ref.active = false;
-        }
-    }
-});
+for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i]; 
+    p.x += p.vx; 
+    p.y += p.vy; 
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+}
 
-if(player.attacking){
-  const hx = player.x + Math.cos(player.angle) * weapons[player.weapon].range;
-  const hy = player.y + Math.sin(player.angle) * weapons[player.weapon].range;
-  
-zombies.forEach(z => {
-  if(!z.active) return;
-
-  if(Math.hypot(hx - z.x, hy - z.y) < z.r + 15){
-    z.hp -= 20;
-    createParticles(hx, hy, "#6aff6a", 6);
-    if(z.hp <= 0){
-      z.active = false;
-    }
-  }
-});
-jaguars.forEach(j => {
-    if(!j.alive) return;
-
-    if(Math.hypot(hx - j.x, hy - j.y) < j.r + 15){
-        // Tira dano baseado na arma atual
-        j.hp -= weapons[player.weapon].damage; 
-        
-        // Partículas cor de "onça/sangue"
-        createParticles(hx, hy, "#d3a625", 6); 
-        
-        if(j.hp <= 0){
-            j.alive = false;
-            // O Jaguar dá muito mais comida que o coelho!
-            player.food = Math.min(player.maxFood, player.food + 100); 
-            player.gold = Math.min(LIMITES.recursos, player.gold + 5); // Bônus por matar um predador
-        }
-    }
-});
-// --- LÓGICA DAS FLECHAS ---
+// 3. ATUALIZAÇÃO E COLISÃO DAS FLECHAS (A versão limpa)
 for (let i = arrows.length - 1; i >= 0; i--) {
     let a = arrows[i];
-
-    // Movimentação
     a.x += a.vx;
     a.y += a.vy;
     a.dist += Math.hypot(a.vx, a.vy);
 
-    // 1. Checar Alcance
     if (a.dist > a.maxDist) a.active = false;
 
-    // 2. Checar Colisão com Inimigos (Zumbis/Passarinhos)
-    // Aqui você faria um loop nos seus inimigos e checaria a distância
-    /*
-    zombies.forEach(z => {
-        if(dist(a.x, a.y, z.x, z.y) < z.r) {
-            z.hp -= 20;
-            a.active = false; // Flecha some ao atingir
-        }
-    });
-    */
+    // Função de detecção universal
+    const checarAlvos = (lista, ehBichoVivo) => {
+        lista.forEach(obj => {
+            if (!a.active) return;
+            const estaAtivo = ehBichoVivo ? obj.alive : obj.active;
+            if (!estaAtivo) return;
 
-    // 3. Limpeza (Remove do array se não estiver mais ativa)
-    if (!a.active) {
-        arrows.splice(i, 1);
-    }
-}
-// --- DENTRO DA SUA FUNÇÃO DE ATAQUE ---
-for (let i = 0; i < birds.length; i++) {
-    let b = birds[i];
-    if (!b.active) continue;
+            const d = Math.hypot(a.x - obj.x, a.y - obj.y);
+            const raioAcerto = (obj.r || 20) + 10; // Hitbox generosa
 
-    // SÓ PODE BATER SE ESTIVER NO CHÃO (resting)
-    if (b.resting) {
-        // Usa o hx/hy (ponta da arma) para detectar o hit
-        let d = Math.hypot(hx - b.x, hy - b.y);
-        
-        // Colisão com a ponta da arma + raio do pássaro
-        if (d < b.r + 15) { 
-            b.hp -= w.damage; // Aplica o dano da arma (Lança=20, Tocha=5, Mão=3)
-            
-            // Sangue
-            createParticles(b.x, b.y, "#ff0000", 8);
+            if (d < raioAcerto) {
+                obj.hp -= (a.damage || 25);
+                a.active = false;
+                createParticles(obj.x, obj.y, "#ff0000", 5);
 
-            if (b.hp <= 0) {
-                b.active = false;
-                // Dá a comida (12 de valor como definido no seu spawnBird)
-                player.food = Math.min(player.maxFood, player.food + b.foodValue);
-                // NOVO: Entrega as penas (8 ou 10)
-    let qtdPenas = Math.random() < 0.5 ? 8 : 10;
-    player.feather = Math.min(LIMITES.penas, player.feather + qtdPenas);
-    
-    console.log(`Pássaro abatido! Comida +35 | Penas +${qtdPenas}`);
-    
-            } else {
-                // Se sobreviveu ao golpe, foge desesperado
-                b.resting = false; 
-                b.stamina = 5; 
-                b.angle = Math.atan2(b.y - player.y, b.x - player.x);
+                if (obj.hp <= 0) {
+                    if (ehBichoVivo) obj.alive = false; else obj.active = false;
+                    // Se quiser adicionar recompensas das mortes por flecha, é aqui!
+                }
             }
-        }
-    }
-}
-animals.forEach(ani => {
-    if(!ani.alive) return; // Só bate se estiver vivo
+        });
+    };
 
-    if(Math.hypot(hx - ani.x, hy - ani.y) < ani.r + 15){
-      ani.hp -= weapons[player.weapon].damage; // Tira vida do coelho
-      createParticles(hx, hy, "#fce4ec", 6); // Partícula de "pelo"
-      
-      if(ani.hp <= 0){
-        ani.alive = false; // Mata o coelho
-        player.food = Math.min(player.maxFood, player.food + 50); // Dá comida!
-      }
-    }
-  });
-}
-}
+    // Aplica a flecha em todos os alvos
+    checarAlvos(zombies, false);
+    checarAlvos(jaguars, true);
+    checarAlvos(animals, true); // Coelhos
+    checarAlvos(birds, false);
 
-  if(player.attacking){ player.atkTimer--; if(player.atkTimer<=0) player.attacking=false; }
-  if(player.attackProgress>0){ player.attackProgress-=0.15; if(player.attackProgress<0) player.attackProgress=0; }
-  for(let i=particles.length-1;i>=0;i--){
-    const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life--;
-   if(p.life<=0) particles.splice(i,1);
-  }// --- IA DOS COELHOS ATUALIZADA (STAMINA + TOCAS + ANTI-ENCALHE) ---
+    // Remove flecha se inativa
+    if (!a.active) arrows.splice(i, 1);
+}
+  // --- IA DOS COELHOS ATUALIZADA (STAMINA + TOCAS + ANTI-ENCALHE) ---
 animals.forEach(a => {
     if (!a.alive) return;
     const dx = player.x - a.x;
@@ -3316,12 +3372,11 @@ let displayKeys;
 
 if (isMobile) {
     if (craftPage === 0) {
-        // PÁGINA 1: Ferramentas e itens básicos
-        // Filtra para remover Vara e Flechas da primeira página
-        displayKeys = allKeys.filter(key => key !== "fishing_rod" && key !== "arrow");
+        // PÁGINA 1: Ferramentas e básicos (ESCONDE vara, flecha e arco)
+        displayKeys = allKeys.filter(key => key !== "fishing_rod" && key !== "arrow" && key !== "bow");
     } else {
-        // PÁGINA 2: Itens de caça e pesca
-        displayKeys = allKeys.filter(key => key === "fishing_rod" || key === "arrow");
+        // PÁGINA 2: Caça e Pesca (MOSTRA apenas vara, flecha e arco)
+        displayKeys = allKeys.filter(key => key === "fishing_rod" || key === "arrow" || key === "bow");
     }
 } else {
     displayKeys = allKeys; // PC mostra tudo
@@ -4173,26 +4228,31 @@ jaguars.forEach(j => {
         ctx.restore();
       }
 });
+// --- DENTRO DA SUA FUNÇÃO DE DESENHO (DRAW) ---
 arrows.forEach(a => {
     ctx.save();
-    ctx.translate(a.x - camX(), a.y - camY()); // Ajuste para a sua câmera
+    ctx.translate(a.x - camX(), a.y - camY()); 
     ctx.rotate(a.angle);
     
-    // Desenho simples da flecha
-    ctx.strokeStyle = "#444";
-    ctx.lineWidth = 3;
+    // Corpo da flecha (Aumentado)
+    ctx.strokeStyle = "#5d4037"; // Cor de madeira escura
+    ctx.lineWidth = 4;           // Mais grossa
     ctx.beginPath();
-    ctx.moveTo(-10, 0);
-    ctx.lineTo(10, 0);
+    ctx.moveTo(-20, 0);          // Começa mais atrás
+    ctx.lineTo(20, 0);           // Vai mais à frente
     ctx.stroke();
     
-    // Ponta da flecha
-    ctx.fillStyle = "#888";
+    // Ponta da flecha (Maior)
+    ctx.fillStyle = "#90a4ae";   // Cor de pedra/ferro
     ctx.beginPath();
-    ctx.moveTo(10, 0);
-    ctx.lineTo(5, -4);
-    ctx.lineTo(5, 4);
+    ctx.moveTo(22, 0);
+    ctx.lineTo(12, -7);
+    ctx.lineTo(12, 7);
     ctx.fill();
+    
+    // Penas na traseira (Detalhe visual legal)
+    ctx.fillStyle = "#eceff1";
+    ctx.fillRect(-20, -4, 6, 8);
     
     ctx.restore();
 });

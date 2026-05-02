@@ -243,7 +243,7 @@ if (inventoryOpen) {
         continue; 
     }
 
-    // B) DETECTAR TOQUE NOS SLOTS
+// B) DETECTAR TOQUE NOS SLOTS (Dentro do if(inventoryOpen))
     const slotSize = 110, gap = 15, cols = 7;
     const startX = 100;
     const startY = 150;
@@ -282,21 +282,21 @@ if (craftingOpen) {
     }
 
    // 3. CLIQUE NOS ITENS FILTRADOS
+// Dentro do if (craftingOpen) no seu touchstart
 const allKeys = Object.keys(recipes);
 let displayKeys;
 
 if (craftPage === 0) {
-    displayKeys = allKeys.filter(k => k !== "fishing_rod");
+    displayKeys = allKeys.filter(k => k !== "fishing_rod" && k !== "arrow" && k !== "bow");
 } else {
-    displayKeys = allKeys.filter(k => k === "fishing_rod");
+    displayKeys = allKeys.filter(k => k === "fishing_rod" || k === "arrow" || k === "bow");
 }
 
+// Loop de clique corrigido
 for (let i = 0; i < displayKeys.length; i++) {
-    const pos = getCraftItemPos(i); // i é a posição visual na tela (0, 1, 2...)
-
+    const pos = getCraftItemPos(i); 
     if (tx >= pos.x && tx <= pos.x + pos.w && ty >= pos.y && ty <= pos.y + pos.h) {
-        tryCraft(displayKeys[i]); // Compra o item correto da lista filtrada
-        
+        tryCraft(displayKeys[i]); // Agora compra o item certo da página 2
         return; 
     }
 }
@@ -588,7 +588,9 @@ const UI_CRAFT = {
 };
 const LIMITES = {
   recursos: 50,    // Valor que você alterou
-  ferramentas: 1
+  ferramentas: 1,
+  flechas: 30, // Defina um limite para flechas
+  penas: 100   // Defina um limite para penas
 };
 const player = {
   x: MAP / 2, 
@@ -614,11 +616,14 @@ const player = {
   maxFood: 100,
   foodCooldown: 0,
   wood: 0, 
+  feather: 0,
+arrows: 0,
   stone: 0, 
   gold: 0, 
   sticks: 0,
   dead: false,
   inventory: {
+    bow: 0,
     axe_wood: 0,
     pickaxe_wood: 0,
     axe_stone: 0,
@@ -651,7 +656,9 @@ const recipes = {
   spear: { name: "Lança", wood: 4, sticks: 2, weaponIndex: 5 },
   torch: { name: "Tocha", wood: 2, stone: 2, sticks: 1, weaponIndex: 6 },
   fishing_rod: { name: "Vara de Pesca", wood: 5, sticks: 1, weaponIndex: 7 }, // weaponIndex 7 (Vara) 
-  wood_convert: { name: "Refinar Madeira", wood: 0, sticks: 2, yield: 1 } 
+  wood_convert: { name: "Refinar Madeira", wood: 0, sticks: 2, yield: 1 },
+  bow: { name: "Arco", wood: 5, sticks: 4, weaponIndex: 8 },
+  arrow: { name: "Flechas (x3)", sticks: 1, feather: 2, yield: 3, isAmmo: true }
 };
 const weapons = [
   { name: "Mão", range: 30, damage: 3, speed: 12, style: "hand" },
@@ -661,10 +668,11 @@ const weapons = [
   { name: "Picareta Pedra", range: 50, damage: 16.7, speed: 17, style: "pickaxe" }, // Novo
   { name: "Lança", range: 75, damage: 20, speed: 10, style: "spear" }, // Novo
   { name: "Tocha", range: 40, damage: 5, speed: 14, style: "torch" },
-  { name: "Vara de Pesca", range: 90, damage: 0, speed: 1000, style: "fishing_rod" }
+  { name: "Vara de Pesca", range: 90, damage: 0, speed: 1000, style: "fishing_rod" },
+  { name: "Arco", range: 350, damage: 25, speed: 35, style: "bow" } // weaponIndex 8
 ];
 
-let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [], fishes = [];
+let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [], fishes = [], arrows = [];
 let running = false;
 let lastTime = 0;
 let dt = 1; // Multiplicador de velocidade
@@ -862,6 +870,26 @@ function spawnJaguar() {
 }
 for(let i=0; i<10; i++) spawnJaguar();
 
+function shootArrow() {
+    if (player.arrows <= 0) return false;
+
+    const arrowSpeed = 12;
+    arrows.push({
+        x: player.x,
+        y: player.y,
+        angle: player.angle,
+        // Isso aqui faz a flecha saber para que lado ir:
+        vx: Math.cos(player.angle) * arrowSpeed,
+        vy: Math.sin(player.angle) * arrowSpeed,
+        dist: 0,
+        maxDist: 600,
+        active: true,
+        damage: 25 // Dano fixo da flecha
+    });
+
+    player.arrows--;
+    return true; // Retorna true para o sistema de ataque saber que disparou
+}
 function drawRock(rock, offsetX=0, offsetY=0, scale=1){
   if(!rock.active) return;
   ctx.save();
@@ -899,7 +927,30 @@ function isInSand(x,y){
   if(dist < circularRiver.r + SAND_WIDTH) return true;
   return false;
 }
+function shootArrow() {
+    // 1. Só atira se tiver mais que 0 flechas
+    if (player.arrows > 0) {
+        const arrowSpeed = 12;
+        
+        arrows.push({
+            x: player.x,
+            y: player.y,
+            angle: player.angle,
+            vx: Math.cos(player.angle) * arrowSpeed,
+            vy: Math.sin(player.angle) * arrowSpeed,
+            dist: 0,
+            maxDist: 700, // Distância para sumir (cerca de uma tela)
+            active: true,
+            damage: 25
+        });
 
+        player.arrows--; // 2. Gasta a munição aqui!
+        return true; 
+    }
+    
+    console.log("Sem flechas!");
+    return false; // Retorna falso se não tiver munição
+}
 // MONTANHAS AMPLIADAS EM 50% (1250 -> 1875)
 const M_RADIUS = 1875;
 const mPos=[{x:M_RADIUS, y:M_RADIUS}, {x:MAP-M_RADIUS, y:M_RADIUS}, {x:M_RADIUS, y:MAP-M_RADIUS}, {x:MAP-M_RADIUS, y:MAP-M_RADIUS}];
@@ -1050,6 +1101,36 @@ for(let i = 0; i < 2400; i++) {
     }
   }
 }
+const algae = [];
+
+function spawnAlgae(amount) {
+    if (!rivers || rivers.length === 0) return;
+    const coresAlgas = ["#1b5e20", "#2ecc71", "#16a085", "#0a3d1d", "#27ae60"];
+    const r = rivers[0];
+
+    for (let i = 0; i < amount; i++) {
+        // Criamos um "grupo" de algas
+        let clusterX = r.x + Math.random() * r.w;
+        let clusterY = r.y + Math.random() * r.h;
+        let numStalks = Math.floor(Math.random() * 3) + 1; // Mínimo 1, Máximo 3
+
+        let stalks = [];
+        for (let j = 0; j < numStalks; j++) {
+            stalks.push({
+                offX: (Math.random() - 0.5) * 25, // Pequeno desvio entre elas
+                size: 30 + Math.random() * 40,
+                width: 6 + Math.random() * 6,
+                phase: Math.random() * Math.PI * 2,
+                color: coresAlgas[Math.floor(Math.random() * coresAlgas.length)]
+            });
+        }
+
+        algae.push({ x: clusterX, y: clusterY, stalks: stalks, speed: 0.002 + Math.random() * 0.002 });
+    }
+}
+
+// Inicializa 150 algas no rio
+spawnAlgae(150);
 // 🌿 SPAWN INICIAL DE GRAVETOS (Versão Ajustada)
 for(let i = 0; i < 600; i++){ // Aumentei de 600 para 1200 (2x mais)
   let x = Math.random() * MAP;
@@ -1264,6 +1345,10 @@ else if (i === 11 && player.inventory.torch > 0) {
                     player.weapon = 7;
                     inventoryOpen = false;
                 }
+                else if (i === 15 && player.inventory.bow > 0) { // Supondo que o Arco seja o slot 15
+    player.weapon = 8; // ID do Arco na sua lista de weapons
+    inventoryOpen = false;
+}
                 // Fogueira (Slot 4)
                 else if (i === 4 && player.inventory.campfire > 0) {
                      placingCampfire = true;
@@ -1309,27 +1394,29 @@ if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + sl
         const worldMouseX = mx + camX();
         const worldMouseY = my + camY();
 
-        if (weapons[player.weapon].style === "fishing_rod") {
-            if (isInRiver(worldMouseX, worldMouseY)) {
-                const dx = worldMouseX - player.x;
-                const dy = worldMouseY - player.y;
-                const distClique = Math.hypot(dx, dy);
-                
-                const maxRange = 150; 
-                const distFinal = Math.min(distClique, maxRange);
-                
-                player.anzolDestX = player.x + Math.cos(player.angle) * distFinal;
-                player.anzolDestY = player.y + Math.sin(player.angle) * distFinal;
-                
-                mouse.down = true; 
-            } else {
-
-                mouse.down = false;
-                player.attacking = false;
-                player.attackProgress = 0;
-                isFishing = false;
-            }
-        } else {
+if (weapons[player.weapon].style === "fishing_rod") {
+    if (isInRiver(worldMouseX, worldMouseY)) {
+        // Só permite lançar se estiver na água
+        const dx = worldMouseX - player.x;
+        const dy = worldMouseY - player.y;
+        const distClique = Math.hypot(dx, dy);
+        
+        const maxRange = 250; // Aumentei um pouco o alcance para facilitar
+        const distFinal = Math.min(distClique, maxRange);
+        
+        player.anzolDestX = player.x + Math.cos(player.angle) * distFinal;
+        player.anzolDestY = player.y + Math.sin(player.angle) * distFinal;
+        
+        mouse.down = true; 
+        player.attacking = true; // Ativa a animação de lançamento
+    } else {
+        // BLOQUEIO TOTAL: Se não for água, cancela tudo
+        mouse.down = false;
+        player.attacking = false;
+        player.attackProgress = 0;
+        // Opcional: console.log("Aqui não tem peixe!");
+    }
+} else {
             mouse.down = true;
         }
     }
@@ -1357,6 +1444,7 @@ function drawFullscreenInventory() {
 
   // Itens originais + 7 slots vazios novos (Total 21)
   const items = [
+
     { label: "MADEIRA", value: player.wood, color: "#8d6e63", detail: "#5d4037", max: LIMITES.recursos },
     { label: "PEDRA", value: player.stone, color: "#757575", detail: "#4a4a4a", max: LIMITES.recursos },
     { label: "OURO", value: player.gold, color: "#f1c40f", detail: "#d4ac0d", max: LIMITES.recursos },
@@ -1370,10 +1458,9 @@ function drawFullscreenInventory() {
     { label: "COMIDA", value: Math.floor(player.food), color: "#e74c3c", detail: "#c0392b", max: 100 },
     { label: "TOCHA", value: player.inventory.torch || 0, color: "#f39c12", detail: "#d35400", max: 1 },
     { label: "VARA PESCA", value: player.inventory.fishing_rod || 0, color: "#8b4513", detail: "#fff", max: 1 },
-    { label: "SLOT VAZIO", value: 0, empty: true },
-    // Terceira fileira (vazia)
-    { label: "SLOT VAZIO", value: 0, empty: true },
-    { label: "SLOT VAZIO", value: 0, empty: true },
+    { label: "FLECHAS", value: player.arrows, color: "#34495e", detail: "#2c3e50", max: LIMITES.flechas }, // ADICIONADO
+    { label: "PENAS", value: player.feather, color: "#ecf0f1", detail: "#bdc3c7", max: LIMITES.penas }, // ADICIONADO
+    { label: "ARCO", value: player.inventory.bow || 0, color: "#8b4513", detail: "#f1c40f", max: 1 }, // ADICIONADO
     { label: "SLOT VAZIO", value: 0, empty: true },
     { label: "SLOT VAZIO", value: 0, empty: true },
     { label: "SLOT VAZIO", value: 0, empty: true },
@@ -1440,6 +1527,24 @@ function drawFullscreenInventory() {
     ctx.moveTo(iconCenterX - 3, iconCenterY - 8);
     ctx.quadraticCurveTo(iconCenterX, iconCenterY - 18 - flicker, iconCenterX + 3, iconCenterY - 8);
     ctx.fill();
+    ctx.restore();
+}
+else if (res.label === "ARCO") {
+    ctx.save();
+    ctx.translate(iconCenterX, iconCenterY);
+    ctx.strokeStyle = "#8b4513";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    // Desenha a curva do arco
+    ctx.arc(0, 0, 20, -Math.PI/2, Math.PI/2);
+    ctx.stroke();
+    // Desenha a corda
+    ctx.strokeStyle = "#eee";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -20);
+    ctx.lineTo(0, 20);
+    ctx.stroke();
     ctx.restore();
 }
 else if (res.label === "VARA PESCA") {
@@ -1593,44 +1698,50 @@ function checkResources(key) {
     if ((r.wood || 0) > player.wood) return false;
     if ((r.stone || 0) > player.stone) return false;
     if ((r.sticks || 0) > player.sticks) return false;
+    if ((r.feather || 0) > player.feather) return false; // ADICIONADO
     return true;
 }
 function tryCraft(id) {
   const r = recipes[id];
   if (!r) return;
 
-  // Limite para ferramentas (Não deixa fazer mais de 1)
-  const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "fishing_rod"];
-  if (ferramentas.includes(id) && player.inventory[id] >= LIMITES.ferramentas) {
-    console.log("Você já tem esta ferramenta!");
+  // 1. Verificação de Limites
+  const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "fishing_rod", "bow"];
+  if (ferramentas.includes(id) && player.inventory[id] >= 1) {
+    showHint("VOCÊ JÁ TEM ESTE ITEM!");
     return;
   }
 
-  // Limite para recurso (Se estiver refinando madeira)
-  if (id === "wood_convert" && player.wood >= LIMITES.recursos) {
-    console.log("Limite de madeira atingido!");
-    return;
-  }
+  // 2. Verificação de Recursos (Dinâmica)
+  const canCraft = (player.wood >= (r.wood || 0)) &&
+                   (player.stone >= (r.stone || 0)) &&
+                   (player.sticks >= (r.sticks || 0)) &&
+                   (player.feather >= (r.feather || 0));
 
-  const hasWood = player.wood >= r.wood;
-  const hasSticks = player.sticks >= r.sticks;
-  const hasStone = player.stone >= (r.stone || 0);
-
-  if (hasWood && hasSticks && hasStone) {
-        player.wood -= r.wood;
-        player.sticks -= r.sticks;
-        player.stone -= (r.stone || 0);
-        
-        if (id === "wood_convert") {
-            if(player.wood < LIMITES.recursos) player.wood += 1;
-        } else {
-            // Garante que o item existe no objeto antes de somar
-            if (player.inventory[id] === undefined) player.inventory[id] = 0;
-            player.inventory[id]++; 
-        }
-        console.log("Sucesso: " + id);
+  if (canCraft) {
+    // Subtrai apenas o que a receita pede
+    player.wood -= (r.wood || 0);
+    player.stone -= (r.stone || 0);
+    player.sticks -= (r.sticks || 0);
+    player.feather -= (r.feather || 0);
+    
+    // 3. Entrega do Item
+    if (id === "wood_convert") {
+        player.wood = Math.min(LIMITES.recursos, player.wood + 1);
+    } else if (id === "arrow") {
+        player.arrows = Math.min(LIMITES.flechas, player.arrows + (r.yield || 3));
+        showHint("+3 FLECHAS FABRICADAS");
+    } else if (id === "bow") {
+        player.inventory.bow = 1;
+        player.weapon = 8; // ID do Arco
+        showHint("ARCO EQUIPADO!");
     } else {
-    console.log("Recursos insuficientes!");
+        if (player.inventory[id] === undefined) player.inventory[id] = 0;
+        player.inventory[id]++; 
+    }
+    console.log("Sucesso: " + id);
+  } else {
+    showHint("RECURSOS INSUFICIENTES!");
   }
 }
 function spawnAnimal() {
@@ -1709,7 +1820,16 @@ function equiparItemPorIndice(index) {
                 console.log("Vara equipada!");
             }
             break;
+//16-1=15 por algum motivo esse calculo da certo 
+            case 15: // Slot do Arco
+    if (player.inventory.bow > 0) {
+        player.weapon = 8; // ID 8 na lista 'weapons' é o Arco
+        console.log("Arco equipado!");
     }
+    break;
+
+    }
+    
 }
 // Localize onde você definiu o hintSystem e adicione/atualize estes pontos:
 const hintSystem = {
@@ -2382,6 +2502,17 @@ if(isMobile){
 
 // --- 3. SISTEMA DE ATAQUE UNIFICADO ---
 if ((!isMobile && mouse.down && !player.attacking) || (isMobile && touchAttack && !player.attacking)) {
+    
+    const w = weapons[player.weapon];
+
+    // NOVO: Se for arco, tenta atirar. Se shootArrow for false (sem flecha), ele não ataca.
+    if (w.style === "bow") {
+        if (shootArrow()) {
+            player.attacking = true;
+            player.atkTimer = w.speed;
+            player.attackProgress = 1;
+        }
+    } else {
 
   player.attacking = true;
   player.atkTimer = weapons[player.weapon].speed;
@@ -2491,6 +2622,34 @@ jaguars.forEach(j => {
         }
     }
 });
+// --- LÓGICA DAS FLECHAS ---
+for (let i = arrows.length - 1; i >= 0; i--) {
+    let a = arrows[i];
+
+    // Movimentação
+    a.x += a.vx;
+    a.y += a.vy;
+    a.dist += Math.hypot(a.vx, a.vy);
+
+    // 1. Checar Alcance
+    if (a.dist > a.maxDist) a.active = false;
+
+    // 2. Checar Colisão com Inimigos (Zumbis/Passarinhos)
+    // Aqui você faria um loop nos seus inimigos e checaria a distância
+    /*
+    zombies.forEach(z => {
+        if(dist(a.x, a.y, z.x, z.y) < z.r) {
+            z.hp -= 20;
+            a.active = false; // Flecha some ao atingir
+        }
+    });
+    */
+
+    // 3. Limpeza (Remove do array se não estiver mais ativa)
+    if (!a.active) {
+        arrows.splice(i, 1);
+    }
+}
 // --- DENTRO DA SUA FUNÇÃO DE ATAQUE ---
 for (let i = 0; i < birds.length; i++) {
     let b = birds[i];
@@ -2512,7 +2671,12 @@ for (let i = 0; i < birds.length; i++) {
                 b.active = false;
                 // Dá a comida (12 de valor como definido no seu spawnBird)
                 player.food = Math.min(player.maxFood, player.food + b.foodValue);
-                console.log("Pássaro abatido! Comida + " + b.foodValue);
+                // NOVO: Entrega as penas (8 ou 10)
+    let qtdPenas = Math.random() < 0.5 ? 8 : 10;
+    player.feather = Math.min(LIMITES.penas, player.feather + qtdPenas);
+    
+    console.log(`Pássaro abatido! Comida +35 | Penas +${qtdPenas}`);
+    
             } else {
                 // Se sobreviveu ao golpe, foge desesperado
                 b.resting = false; 
@@ -2537,13 +2701,37 @@ animals.forEach(ani => {
   });
 }
 }
+}
 
   if(player.attacking){ player.atkTimer--; if(player.atkTimer<=0) player.attacking=false; }
   if(player.attackProgress>0){ player.attackProgress-=0.15; if(player.attackProgress<0) player.attackProgress=0; }
   for(let i=particles.length-1;i>=0;i--){
     const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.life--;
    if(p.life<=0) particles.splice(i,1);
-  }// --- IA DOS COELHOS ATUALIZADA (STAMINA + TOCAS + ANTI-ENCALHE) ---
+  }
+  
+  // Atualização das Flechas (Independente do ataque)
+for (let i = arrows.length - 1; i >= 0; i--) {
+    let a = arrows[i];
+    a.x += a.vx;
+    a.y += a.vy;
+    a.dist += Math.hypot(a.vx, a.vy);
+
+    // Colisão da flecha com Zumbis
+    zombies.forEach(z => {
+        if(z.active && Math.hypot(a.x - z.x, a.y - z.y) < z.r) {
+            z.hp -= a.damage;
+            a.active = false;
+            createParticles(z.x, z.y, "#6aff6a", 5);
+        }
+    });
+
+    // Sumir se atingir o limite ou ficar inativa
+    if (a.dist > a.maxDist || !a.active) {
+        arrows.splice(i, 1);
+    }
+}
+  // --- IA DOS COELHOS ATUALIZADA (STAMINA + TOCAS + ANTI-ENCALHE) ---
 animals.forEach(a => {
     if (!a.alive) return;
     const dx = player.x - a.x;
@@ -2737,10 +2925,10 @@ for (let i = 0; i < birds.length; i++) {
     
     // Entrega a comida direto para a barra do player (igual na sua palmeira)
     player.food = Math.min(player.maxFood, player.food + 35); 
-    
-    // Feedback visual (partículas vermelhas/laranjas de comida)
+
     if (typeof createParticles === 'function') {
-        createParticles(b.x, b.y, "#ff4d4d", 10);
+        createParticles(b.x, b.y, "#ff4d4d", 10); // Sangue
+        createParticles(b.x, b.y, "#ffffff", 5);  // Partículas brancas (penas)
     }
 }}
 jaguars.forEach(j => {
@@ -3068,6 +3256,22 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
             ctxRef.restore();
         }
     }
+    else if(w.style === "bow") {
+    ctxRef.strokeStyle = "#8b4513";
+    ctxRef.lineWidth = 4;
+    ctxRef.beginPath();
+    // Desenha a curva do arco
+    ctxRef.arc(player.r + 5, 0, 25, -Math.PI/2, Math.PI/2);
+    ctxRef.stroke();
+    
+    // Linha do arco (corda)
+    ctxRef.strokeStyle = "#eee";
+    ctxRef.lineWidth = 1;
+    ctxRef.beginPath();
+    ctxRef.moveTo(player.r + 5, -25);
+    ctxRef.lineTo(player.r + 5, 25);
+    ctxRef.stroke();
+}
   }
 
   // CORPO DO PLAYER
@@ -3168,15 +3372,14 @@ let displayKeys;
 
 if (isMobile) {
     if (craftPage === 0) {
-        // PÁGINA 1: Tudo que NÃO for a vara de pesca
-        displayKeys = allKeys.filter(key => key !== "fishing_rod");
+        // PÁGINA 1: Ferramentas e básicos (ESCONDE vara, flecha e arco)
+        displayKeys = allKeys.filter(key => key !== "fishing_rod" && key !== "arrow" && key !== "bow");
     } else {
-        // PÁGINA 2: Apenas a vara de pesca
-        displayKeys = allKeys.filter(key => key === "fishing_rod");
+        // PÁGINA 2: Caça e Pesca (MOSTRA apenas vara, flecha e arco)
+        displayKeys = allKeys.filter(key => key === "fishing_rod" || key === "arrow" || key === "bow");
     }
 } else {
-    // Computador: Mostra todos os itens de uma vez
-    displayKeys = allKeys;
+    displayKeys = allKeys; // PC mostra tudo
 }
     // 4. CÁLCULO DA GRADE E DESENHO (Usando displayKeys!)
     const totalW = (UI_CRAFT.cols * UI_CRAFT.cardW) + ((UI_CRAFT.cols - 1) * UI_CRAFT.gap);
@@ -3209,8 +3412,15 @@ if (isMobile) {
         // Custo (Abaixo da linha)
         ctx.fillStyle = canAfford ? "#2ecc71" : "#e74c3c";
         ctx.font = "11px Arial";
-        let custoText = `M:${item.wood||0} P:${item.stone||0} G:${item.sticks||0}`;
-        ctx.fillText(custoText, x + UI_CRAFT.cardW/2, y + 75);
+        let custos = [];
+
+if (item.wood) custos.push(`W:${item.wood}`);
+if (item.stone) custos.push(`S:${item.stone}`);
+if (item.sticks) custos.push(`G:${item.sticks}`);
+if (item.feather) custos.push(`P:${item.feather}`); // Adiciona pena ao texto se houver custo
+
+let custoText = custos.join(" | "); 
+ctx.fillText(custoText, x + UI_CRAFT.cardW/2, y + 75);
     });
 // 5. SETA DE NAVEGAÇÃO E BOTÃO SAIR (EXCLUSIVO MOBILE)
     if (isMobile) {
@@ -3319,6 +3529,59 @@ ctx.fillText("ITENS", btnX + btnW / 2, btnY + btnH / 2 + 7);
     ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 4, 0, Math.PI*2); ctx.fill();
 
     ctx.restore();
+}
+function drawAlgae(offsetX, offsetY) {
+    algae.forEach(group => {
+        group.stalks.forEach(s => {
+            ctx.save();
+
+            const time = Date.now() * group.speed + s.phase;
+            const swayX = Math.sin(time) * 15;
+            const swayY = Math.cos(time * 0.5) * 5; // Balanço vertical sutil
+
+            const baseX = group.x + s.offX - offsetX;
+            const baseY = group.y - offsetY;
+            const tipX = baseX + swayX;
+            const tipY = baseY - s.size + swayY;
+
+            // 1. DESENHO DO CORPO CILÍNDRICO (Sombra/Base)
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            
+            // Criar degradê para profundidade
+            const grad = ctx.createLinearGradient(baseX, baseY, tipX, tipY);
+            grad.addColorStop(0, "#051a0b"); // Base escura
+            grad.addColorStop(1, s.color);   // Topo colorido
+
+            ctx.beginPath();
+            ctx.moveTo(baseX, baseY);
+            // Curva suave para parecer flexível
+            ctx.quadraticCurveTo(baseX + swayX * 0.2, baseY - s.size * 0.5, tipX, tipY);
+            
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = s.width;
+            ctx.stroke();
+
+            // 2. O TOQUE PRO: BRILHO LATERAL (Efeito 3D)
+            // Desenhamos uma linha mais fina e clara por cima para simular luz no cilindro
+            ctx.beginPath();
+            ctx.moveTo(baseX + 2, baseY); 
+            ctx.quadraticCurveTo(baseX + swayX * 0.2 + 2, baseY - s.size * 0.5, tipX + 2, tipY);
+            
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)"; // Brilho de luz
+            ctx.lineWidth = s.width / 3; // Bem mais fina
+            ctx.stroke();
+
+            // 3. SOMBRA NO CHÃO DO RIO
+            ctx.globalCompositeOperation = 'destination-over'; // Desenha atrás
+            ctx.beginPath();
+            ctx.ellipse(baseX, baseY, s.width * 0.8, 3, 0, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(0,0,0,0.2)";
+            ctx.fill();
+
+            ctx.restore();
+        });
+    });
 }
 function drawHints() {
     hintSystem.update();
@@ -3528,7 +3791,7 @@ else if(res.type === "campfire"){
   ctx.fillRect(x, y, barW * hpPct, barH);
 });
   });
-
+  
 zombies.forEach(z => {
   if(!z.active) return;
 
@@ -3594,7 +3857,7 @@ if(obj.hp < obj.maxHp){
 }
  } else if(obj.t==='p') drawPlayer(ctx, player.x-camX(), player.y-camY(), player.angle, player.hidden);
   });
-
+drawAlgae(camX(), camY());
   particles.forEach(p=>{ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x-camX(), p.y-camY(), p.r, 0, Math.PI*2); ctx.fill();});
 // --- DESENHO DAS TOCAS ---
 rabbitHoles.forEach(h => {
@@ -3964,6 +4227,29 @@ jaguars.forEach(j => {
 
         ctx.restore();
       }
+});
+arrows.forEach(a => {
+    ctx.save();
+    ctx.translate(a.x - camX(), a.y - camY()); // Ajuste para a sua câmera
+    ctx.rotate(a.angle);
+    
+    // Desenho simples da flecha
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-10, 0);
+    ctx.lineTo(10, 0);
+    ctx.stroke();
+    
+    // Ponta da flecha
+    ctx.fillStyle = "#888";
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(5, -4);
+    ctx.lineTo(5, 4);
+    ctx.fill();
+    
+    ctx.restore();
 });
 // 🌙 NOITE COM MÁSCARA DE LUZ (TOCHA NÃO BUGAR A FOGUEIRA)
 if(!isDay) {
