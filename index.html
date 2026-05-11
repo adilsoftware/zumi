@@ -426,7 +426,7 @@ if (moveuX > 1.2 || moveuY > 1.2) {
             const dy = worldTouchY - player.y;
             const distClique = Math.hypot(dx, dy);
             
-            const maxRange = 150; // Mesmo alcance do seu PC
+            const maxRange = 175; // Mesmo alcance do seu PC
             const distFinal = Math.min(distClique, maxRange);
             
             // 2. Calcula onde a boia cai baseada no ângulo do toque
@@ -858,9 +858,9 @@ function spawnJaguar() {
 
     jaguars.push({
         x: x, y: y,
-        r: 25, hp: 300, maxHp: 300,
+        r: 25, hp: 420, maxHp: 420,
         angle: Math.random() * Math.PI * 2,
-        speed: player.speed * 0.9,
+        speed: 3.6,
         alive: true,
         estado: "vadiando",
         timer: 3 + Math.random() * 5,
@@ -1726,41 +1726,48 @@ function tryCraft(id) {
   const r = recipes[id];
   if (!r) return;
 
-  // 1. Verificação de Limites
+  // 1. Verificação de Limites para Ferramentas/Arco
   const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "fishing_rod", "bow"];
   if (ferramentas.includes(id) && player.inventory[id] >= 1) {
     showHint("VOCÊ JÁ TEM ESTE ITEM!");
     return;
   }
 
-  // 2. Verificação de Recursos (Dinâmica)
+  // 2. BLOQUEIO DE FLECHAS: Verifica o limite ANTES de gastar recursos
+  if (id === "arrow" && player.arrows >= LIMITES.flechas) {
+    showHint("LIMITE DE FLECHAS ALCANÇADO (30)!");
+    return;
+  }
+
+  // 3. Verificação de Recursos (Dinâmica)
   const canCraft = (player.wood >= (r.wood || 0)) &&
                    (player.stone >= (r.stone || 0)) &&
                    (player.sticks >= (r.sticks || 0)) &&
                    (player.feather >= (r.feather || 0));
 
   if (canCraft) {
-    // Subtrai apenas o que a receita pede
+    // 4. Subtrai os recursos APENAS se passou em todos os testes acima
     player.wood -= (r.wood || 0);
     player.stone -= (r.stone || 0);
     player.sticks -= (r.sticks || 0);
     player.feather -= (r.feather || 0);
     
-    // 3. Entrega do Item
+    // 5. Entrega do Item
     if (id === "wood_convert") {
         player.wood = Math.min(LIMITES.recursos, player.wood + 1);
     } else if (id === "arrow") {
+        // O Math.min aqui garante que se você tiver 29 e ganhar 3, fique com 30.
         player.arrows = Math.min(LIMITES.flechas, player.arrows + (r.yield || 3));
         showHint("+3 FLECHAS FABRICADAS");
     } else if (id === "bow") {
         player.inventory.bow = 1;
-        player.weapon = 8; // ID do Arco
+        player.weapon = 8; 
         showHint("ARCO EQUIPADO!");
     } else {
         if (player.inventory[id] === undefined) player.inventory[id] = 0;
         player.inventory[id]++; 
     }
-    console.log("Sucesso: " + id);
+    console.log("Sucesso no Craft: " + id);
   } else {
     showHint("RECURSOS INSUFICIENTES!");
   }
@@ -2382,46 +2389,48 @@ fishes.forEach(f => {
         if (f.y > r.y + r.h - f.r) { f.y = r.y + r.h - f.r; f.angle = -Math.PI / 2; }
     }
 });
-// --- SISTEMA DE ONÇAS (JAGUARS) ---
+// --- SISTEMA DE ONÇAS (JAGUARS) UNIFICADO ---
 jaguars.forEach(j => {
     if (!j.alive) return;
 
     const dx = player.x - j.x;
     const dy = player.y - j.y;
-    const dist = Math.hypot(dx, dy);
+    const distToPlayer = Math.hypot(dx, dy);
     const agora = Date.now();
 
     // 1. OTIMIZAÇÃO
-    if (dist > 2000) return;
+    if (distToPlayer > 2000) return;
 
-    // 2. REGRA DE VISÃO (CORRIGIDA)
-    // Se o player estiver no mato (hidden), ela só vê se estiver colada (faro/dist < 80)
-    let podeVerPlayer = !player.hidden || dist < 80;
+    // 2. REGRA DE VISÃO COM MATO
+    // Ela te vê se: você NÃO está escondido OU se ela estiver colada (faro/dist < 80)
+    let podeVerPlayer = !player.hidden || distToPlayer < 80;
 
     let moveSpeed = 0;
 
-    // Ela só entra em Modo Caça se puder te ver e estiver no alcance de 500px
-    if (dist < 500 && podeVerPlayer) {
+    // Ela só entra em Modo Caça se puder te ver e estiver no alcance de 400px/500px
+    if (distToPlayer < 500 && podeVerPlayer) {
         // --- MODO CAÇA ---
         j.estado = "cacando";
         j.angle = Math.atan2(dy, dx);
 
-        // Lógica do Bote (Dash)
-        if (agora - j.lastDash > 3500 && !j.isDashing) {
+        // Lógica do Bote (Dash) - O impulso visual que você gostou
+       if (agora - j.lastDash > 2000 && !j.isDashing) {
             j.isDashing = true;
             j.lastDash = agora;
-            j.dashEndTime = agora + 350;
+            j.dashEndTime = agora + 400; // Aumentei levemente a duração para 400ms para o bote ser mais letal
         }
         if (j.isDashing && agora > j.dashEndTime) j.isDashing = false;
 
-        // VELOCIDADES ORIGINAIS (Mantidas como você pediu)
-        moveSpeed = j.isDashing ? 1.6 : 0.92;
+        // MULTIPLICADOR AUMENTADO PARA 1.8 
+        moveSpeed = j.isDashing ? j.speed * 1.8 : j.speed;
 
-        // Dano de contato
-        if (dist < j.r + player.r) player.hp -= 0.4;
+        // Dano de contato (se encostar no player)
+        if (distToPlayer < j.r + player.r) {
+            player.hp -= 0.5 * dt; // Dano constante multiplicado pelo dt
+        }
 
     } else {
-        // --- MODO VADIAR (Aqui o mato funciona!) ---
+        // --- MODO VADIAR (Aqui o mato funciona e ela passeia) ---
         j.estado = "vadiando";
         j.isDashing = false;
 
@@ -2432,15 +2441,28 @@ jaguars.forEach(j => {
             j.timer = 3 + Math.random() * 5;
         }
         
-        // Velocidade de passeio baseada no player
-        moveSpeed = player.speed * 0.5;
+        moveSpeed = 2.5;
     }
 
-    // Aplica o movimento final
-    j.x += Math.cos(j.angle) * moveSpeed;
-    j.y += Math.sin(j.angle) * moveSpeed;
+    // --- 3. LÓGICA DA ÁGUA (Copiada do Coelho) ---
+    let inWaterJaguar = typeof isInRiver === "function" ? isInRiver(j.x, j.y) : false;
+    
+    if (inWaterJaguar) {
+        moveSpeed /= 2; // Corta a velocidade pela metade na água
+        
+        // Efeito visual opcional de "espirrar água" se estiver caçando
+        if (j.estado === "cacando" && Math.random() < 0.15) {
+            if (typeof createParticles === "function") createParticles(j.x, j.y, "#a0d8ef", 1, 0.3);
+        }
+    }
 
-    // 3. COLISÕES COM RECURSOS
+    // Aplica o movimento final com a velocidade já reduzida pela água
+    if (distToPlayer > 10 || j.estado === "vadiando") {
+        j.x += Math.cos(j.angle) * moveSpeed * dt;
+        j.y += Math.sin(j.angle) * moveSpeed * dt;
+    }
+
+    // 4. COLISÕES COM RECURSOS
     resources.forEach(res => {
         if (!res.alive || res.type === "stick") return;
         const rDx = j.x - res.x;
@@ -2457,17 +2479,17 @@ jaguars.forEach(j => {
         }
     });
 
-    // 4. COLISÃO JAGUAR vs PLAYER (Sólida)
-    if (dist < player.r + j.r) {
+    // 5. COLISÃO JAGUAR vs PLAYER (Sólida)
+    if (distToPlayer < player.r + j.r) {
         const angleP = Math.atan2(dy, dx);
-        const overlapP = (player.r + j.r) - dist;
+        const overlapP = (player.r + j.r) - distToPlayer;
         player.x += Math.cos(angleP) * (overlapP / 2);
         player.y += Math.sin(angleP) * (overlapP / 2);
         j.x -= Math.cos(angleP) * (overlapP / 2);
         j.y -= Math.sin(angleP) * (overlapP / 2);
     }
 
-    // 5. COLISÃO JAGUAR vs JAGUAR
+    // 6. COLISÃO JAGUAR vs JAGUAR
     jaguars.forEach(other => {
         if (other === j || !other.alive) return;
         const dxJ = other.x - j.x;
@@ -2483,6 +2505,7 @@ jaguars.forEach(j => {
         }
     });
 
+    // Limites do mapa
     j.x = Math.max(j.r, Math.min(MAP - j.r, j.x));
     j.y = Math.max(j.r, Math.min(MAP - j.r, j.y));
 });
@@ -2527,7 +2550,7 @@ const tentandoAtacar = (!isMobile && mouse.down) || (isMobile && touchAttack);
 // 1. GATILHO DE ATAQUE (Clique/Toque)
 if (tentandoAtacar && !player.attacking) {
     const w = weapons[player.weapon];
-
+ 
     // Se for arco, tenta atirar
     if (w.style === "bow") {
         if (shootArrow()) {
@@ -2673,12 +2696,12 @@ if (tentandoAtacar && !player.attacking) {
 
 // 2. TIMERS DE ATAQUE E PARTÍCULAS
 if (player.attacking) { 
-    player.atkTimer--; 
+    player.atkTimer -= 1 * dt; // Usa DT aqui
     if (player.atkTimer <= 0) player.attacking = false; 
 }
 
 if (player.attackProgress > 0) { 
-    player.attackProgress -= 0.15; 
+    player.attackProgress -= 0.15 * dt; 
     if (player.attackProgress < 0) player.attackProgress = 0; 
 }
 
@@ -2700,33 +2723,49 @@ for (let i = arrows.length - 1; i >= 0; i--) {
     if (a.dist > a.maxDist) a.active = false;
 
     // Função de detecção universal
-    const checarAlvos = (lista, ehBichoVivo) => {
-        lista.forEach(obj => {
-            if (!a.active) return;
-            const estaAtivo = ehBichoVivo ? obj.alive : obj.active;
-            if (!estaAtivo) return;
+const checarAlvos = (lista, ehBichoVivo, tipo) => {
+    lista.forEach(obj => {
+        if (!a.active) return;
+        const estaAtivo = ehBichoVivo ? obj.alive : obj.active;
+        if (!estaAtivo) return;
 
-            const d = Math.hypot(a.x - obj.x, a.y - obj.y);
-            const raioAcerto = (obj.r || 20) + 10; // Hitbox generosa
+        const d = Math.hypot(a.x - obj.x, a.y - obj.y);
+        const raioAcerto = (obj.r || 20) + 10;
 
-            if (d < raioAcerto) {
-                obj.hp -= (a.damage || 25);
-                a.active = false;
-                createParticles(obj.x, obj.y, "#ff0000", 5);
+        if (d < raioAcerto) {
+            obj.hp -= (a.damage || 25);
+            a.active = false;
+            createParticles(obj.x, obj.y, "#ff0000", 5);
 
-                if (obj.hp <= 0) {
-                    if (ehBichoVivo) obj.alive = false; else obj.active = false;
-                    // Se quiser adicionar recompensas das mortes por flecha, é aqui!
+            if (obj.hp <= 0) {
+                if (ehBichoVivo) obj.alive = false; else obj.active = false;
+                
+                // --- RECOMPENSAS DA FLECHA ---
+                if (tipo === "zombie") {
+                    player.gold = Math.min(LIMITES.recursos, player.gold + 2);
+                }
+                else if (tipo === "jaguar") {
+                    player.food = Math.min(player.maxFood, player.food + 100);
+                    player.gold = Math.min(LIMITES.recursos, player.gold + 5);
+                }
+                else if (tipo === "bird") {
+                    player.food = Math.min(player.maxFood, player.food + (obj.foodValue || 12));
+                    let qtd = Math.random() < 0.5 ? 8 : 10;
+                    player.feather = Math.min(LIMITES.penas, player.feather + qtd);
+                }
+                else if (tipo === "animal") { // Coelho
+                    player.food = Math.min(player.maxFood, player.food + 50);
                 }
             }
-        });
-    };
+        }
+    });
+};
 
-    // Aplica a flecha em todos os alvos
-    checarAlvos(zombies, false);
-    checarAlvos(jaguars, true);
-    checarAlvos(animals, true); // Coelhos
-    checarAlvos(birds, false);
+// Chame assim agora:
+checarAlvos(zombies, false, "zombie");
+checarAlvos(jaguars, true, "jaguar");
+checarAlvos(animals, true, "animal");
+checarAlvos(birds, false, "bird");
 
     // Remove flecha se inativa
     if (!a.active) arrows.splice(i, 1);
@@ -2931,153 +2970,84 @@ for (let i = 0; i < birds.length; i++) {
         createParticles(b.x, b.y, "#ffffff", 5);  // Partículas brancas (penas)
     }
 }}
-jaguars.forEach(j => {
-    if (!j.alive) return;
 
-    const distToPlayer = Math.hypot(player.x - j.x, player.y - j.y);
-    const agora = Date.now();
-
-    // --- LÓGICA DE VISÃO COM MATO ---
-    // Ela te vê se: você NÃO está escondido OU se ela estiver "pisando" em você (dist < 80)
-    let podeVerPlayer = !player.hidden || distToPlayer < 80;
-
-    // Se estiver perto (400px) E puder te ver...
-    if (distToPlayer < 400 && podeVerPlayer) {
-        
-        // Mira no player
-        j.angle = Math.atan2(player.y - j.y, player.x - j.x);
-        
-        // --- SEU MOVIMENTO QUE VOCÊ GOSTOU ---
-        if (distToPlayer > 10) {
-            // Lógica do Bote (Dash) - Mantive para dar o "impulso" visual
-            if (agora - j.lastDash > 3500 && !j.isDashing) {
-                j.isDashing = true;
-                j.lastDash = agora;
-                j.dashEndTime = agora + 350;
-            }
-            if (j.isDashing && agora > j.dashEndTime) j.isDashing = false;
-
-            // Se estiver no bote, ela ganha um bônus na velocidade que já tem
-           let velFinal = j.isDashing ? j.speed * 1.25 : j.speed;
-
-            j.x += Math.cos(j.angle) * velFinal;
-            j.y += Math.sin(j.angle) * velFinal;
-        }
-
-        // Se encostar no player, dá dano
-        if (distToPlayer < j.r + player.r) {
-            player.hp -= 0.5; 
-        }
-
-    } else {
-        // --- MODO VADIAR (Quando você se esconde ou está longe) ---
-        if (passouUmSegundo) j.timer--;
-        if (!j.timer || j.timer <= 0) {
-            j.angle = Math.random() * Math.PI * 2;
-            j.timer = 3 + Math.random() * 5;
-        }
-        // No passeio ela anda mais devagar (metade da speed dela)
-        j.x += Math.cos(j.angle) * (j.speed * 0.5);
-        j.y += Math.sin(j.angle) * (j.speed * 0.5);
-    }
-});
 if (player.attacking && weapons[player.weapon].style === "fishing_rod") {
     
     const ax = player.anzolDestX;
     const ay = player.anzolDestY;
 
-    // 1. CALCULA A DISTÂNCIA ENTRE O PLAYER E O ANZOL NO MUNDO
+    // 1. DISTÂNCIA SEGURA (Para a linha não esticar infinitamente)
     const distDaBoia = Math.hypot(player.x - ax, player.y - ay);
 
-    // 2. SE A LINHA ESTICAR DEMAIS (ex: 250px), ELA ARREBENTA
+
     if (distDaBoia > 250) {
-        console.log("A linha arrebentou!");
-        fishes.forEach(f => {
-            if (f.presoNoAnzol) {
-                f.presoNoAnzol = false;
-                f.assustado = true; // Ativa a fuga no peixe
-            }
-        });
-        
-        isFishing = false;
-        player.attacking = false;
-
-        fishBite = false;
-
-        createParticles(ax, ay, "rgba(200,200,200,0.5)", 5, 0.5);
+        console.log("A linha arrebentou por distância!");
+        resetPesca(true); // Função auxiliar para limpar os estados
     }
-    // 3. SE ESTIVER NO RIO, CONTINUA PESCANDO
-    else if (isInRiver(ax, ay)) {
+    
+    // 2. CONDIÇÃO DE TERRENO: ÁGUA OU AREIA
+    // Verifica se o anzol está em um local válido para pescar
+    else if (isInRiver(ax, ay) || (typeof isInSand === 'function' && isInSand(ax, ay))) {
+        
         if (!isFishing) {
             isFishing = true;
             fishTimer = 150 + Math.random() * 200;
             fishBite = false;
         }
 
-        player.attackProgress = 1; // Trava a vara esticada
+        player.attackProgress = 1; // Trava a animação da vara
 
         if (fishTimer > 0) {
-        fishTimer--;
-    } else {
-        fishBite = true; // Peixe mordeu!
+            fishTimer--;
+        } else {
+            fishBite = true; // O peixe mordeu!
 
-        // --- NOVIDADE: LÓGICA DA FISGADA (PUXÃO) ---
-        // Checa se o jogador se moveu (o "puxão" com as teclas ou mouse)
-        let moveuX = Math.abs(player.x - (player.oldX || player.x));
+            // 3. LÓGICA DA FISGADA (DETECÇÃO DE MOVIMENTO)
+            let moveuX = Math.abs(player.x - (player.oldX || player.x));
             let moveuY = Math.abs(player.y - (player.oldY || player.y));
 
             if (moveuX > 1.2 || moveuY > 1.2) { 
-                // SÓ GANHA COMIDA SE UM PEIXE REAL ESTIVER NO ANZOL
+
                 let peixeCapturado = false;
                 fishes.forEach(f => {
                     if (f.presoNoAnzol && f.alive) { 
-                        f.alive = false; // O PEIXE SOME DO JOGO
+                        f.alive = false; 
                         f.presoNoAnzol = false;
                         peixeCapturado = true;
                     }
                 });
 
                 if (peixeCapturado) {
-                    console.log("FISGOU!");
+
                     player.food = Math.min(player.maxFood, player.food + 40);
                     createParticles(player.x, player.y, "#ffffff", 15, 1);
+                    console.log("Sucesso! Peixe capturado.");
                 }
                 
-                // Finaliza o estado
+                // Finaliza a pescaria após a tentativa de fisgada
                 isFishing = false;
                 fishBite = false;
                 player.attacking = false;
+                player.attackProgress = 0;
             }
         }
 
-        // BOLHAS VISUAIS
+        // Feedback visual (bolhas)
         let chanceBolha = (fishBite) ? 0.8 : 0.15;
         if (Math.random() < chanceBolha) {
             createParticles(ax, ay, "rgba(255,255,255,0.7)", 1, 0.4);
         }
+    } 
+    else {
+        // Se o anzol cair na grama/terra firme, cancela
+        resetPesca(false);
     }
-// 4. SE O ANZOL CAIR NA TERRA
-else {
-    isFishing = false;
-    player.attacking = false;
-    player.attackProgress = 0;
+
+} else if (isFishing && !player.attacking) {
+    // Se o player trocar de arma ou cancelar o clique, limpa o estado de pesca
+    resetPesca(false);
 }
- } else {
-    // MOMENTO DE RECOLHER A VARA (Soltou o clique)
-    if (isFishing) {
-        fishes.forEach(f => {
-            if (f.presoNoAnzol) {
-                f.presoNoAnzol = false;
-                f.assustado = true; // Peixe foge ao ser solto
-            }
-        });
-        isFishing = false;
-        fishBite = false;
-        player.attackProgress = 0;
-        fishes.forEach(f => f.presoNoAnzol = false);
-        console.log("Recolheu a linha.");
-    }
-}
+
 
 // ATUALIZA A POSIÇÃO ANTIGA (Coloque isso no final do seu update geral)
 player.oldX = player.x;
@@ -3086,6 +3056,21 @@ player.oldY = player.y;
 handleFishRespawn();
 cleanDeadFishes();
 hintSystem.update();
+}
+// --- FUNÇÃO AUXILIAR (Coloque fora do update para organizar) ---
+function resetPesca(assustarPeixes) {
+    if (assustarPeixes) {
+        fishes.forEach(f => {
+            if (f.presoNoAnzol) {
+                f.presoNoAnzol = false;
+                f.assustado = true;
+            }
+        });
+    }
+    isFishing = false;
+    fishBite = false;
+    player.attacking = false;
+    player.attackProgress = 0;
 }
 function drawBloodMoonText(){
     if(showBloodMoonText > 0){
