@@ -124,7 +124,261 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
 </div>
 
 <script>
+// ==================================================================
+// 🎛️ SINTETIZADOR DE ÁUDIO NATIVO (WEB AUDIO API) - CORRIGIDO
+// ==================================================================
 
+let ctxAudio = null; // Começa vazio para evitar bloqueio precoce
+
+// Criamos um player invisível de áudio para a música tocar de forma 100% natural
+const musicaNoite = new Audio();
+musicaNoite.loop = true;
+musicaNoite.src = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"; 
+musicaNoite.volume = 0.08; // Deixe o volume bem baixinho (0.05 a 0.08) para virar música de fundo
+
+const SONS = {
+    arco: null, swing: null, fruta: null, madeira: null, picareta: null,
+    pedraQuebra: null, peixe: null, arvoreCaiu: null, agua: null,
+    compra: "SINTETIZADOR_COMPRA",
+    selecionar: "SINTETIZADOR_SELECIONAR",
+    erro: "SINTETIZADOR_ERRO",
+    fogueira_colocar: "SINTETIZADOR_FOGUEIRA_COLOCAR",
+    agua_anzol: "SINTETIZADOR_AGUA_ANZOL",
+    
+    musica_noite_liga: "MUSICA_NOITE_LIGA",
+    musica_noite_desliga: "MUSICA_NOITE_DESLIGA"
+};
+
+function tocarSom(som) {
+    // Inicializa o contexto APENAS no momento do clique, 100% livre de bloqueios
+    if (!ctxAudio) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        ctxAudio = new AudioContext();
+    }
+    
+    if (ctxAudio.state === 'suspended') {
+        ctxAudio.resume();
+    }
+
+    // GATILHO: SOM DE COMPRA / CRAFT
+    if (som === "SINTETIZADOR_COMPRA") {
+        const tempo = ctxAudio.currentTime;
+        const osc1 = ctxAudio.createOscillator();
+        const ganho1 = ctxAudio.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, tempo);
+        ganho1.gain.setValueAtTime(0.15, tempo);
+        ganho1.gain.exponentialRampToValueAtTime(0.01, tempo + 0.08);
+        osc1.connect(ganho1);
+        ganho1.connect(ctxAudio.destination);
+        osc1.start(tempo);
+        osc1.stop(tempo + 0.08);
+
+        const osc2 = ctxAudio.createOscillator();
+        const ganho2 = ctxAudio.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880, tempo + 0.05);
+        ganho2.gain.setValueAtTime(0.2, tempo + 0.05);
+        ganho2.gain.exponentialRampToValueAtTime(0.01, tempo + 0.25);
+        osc2.connect(ganho2);
+        ganho2.connect(ctxAudio.destination);
+        osc2.start(tempo + 0.05);
+        osc2.stop(tempo + 0.25);
+        return;
+    }
+
+    // 🔥 GATILHO: SOM DE ERRO COMPATÍVEL E COM VOLUME ALTO
+    if (som === "SINTETIZADOR_ERRO") {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const ctxErro = new AudioContext();
+            const tempo = ctxErro.currentTime;
+            
+            const osc = ctxErro.createOscillator();
+            const ganho = ctxErro.createGain();
+
+            // Mudamos para 'triangle' para dar mais corpo e peso ao som de erro
+            osc.type = 'triangle'; 
+            osc.frequency.setValueAtTime(140, tempo); // Nota levemente mais grave
+            osc.frequency.linearRampToValueAtTime(70, tempo + 0.15); // Queda de tom agressiva
+
+            // Aumentamos o volume inicial para 0.8 (bem mais forte)
+            ganho.gain.setValueAtTime(0.8, tempo); 
+            ganho.gain.exponentialRampToValueAtTime(0.01, tempo + 0.16);
+
+            osc.connect(ganho);
+            ganho.connect(ctxErro.destination);
+
+            osc.start(tempo);
+            osc.stop(tempo + 0.16);
+
+            setTimeout(() => {
+                ctxErro.close().catch(() => {});
+            }, 250);
+        } catch (e) {
+            console.error("Falha ao gerar som de erro:", e.message);
+        }
+        return;
+    }
+
+    // GATILHO: SOM DE SELECIONAR ITEM
+    if (som === "SINTETIZADOR_SELECIONAR") {
+        const tempo = ctxAudio.currentTime;
+        const osc = ctxAudio.createOscillator();
+        const ganho = ctxAudio.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, tempo);
+        osc.frequency.exponentialRampToValueAtTime(1200, tempo + 0.04);
+        ganho.gain.setValueAtTime(0.12, tempo);
+        ganho.gain.exponentialRampToValueAtTime(0.01, tempo + 0.05);
+        osc.connect(ganho);
+        ganho.connect(ctxAudio.destination);
+        osc.start(tempo);
+        osc.stop(tempo + 0.05);
+        return;
+    }
+// 🔥 GATILHO: SOM DE COLOCAR FOGUEIRA (Madeira estalando + baque seco)
+    if (som === "SINTETIZADOR_FOGUEIRA_COLOCAR") {
+        try {
+            const ctxFog = new (window.AudioContext || window.webkitAudioContext)();
+            const tempo = ctxFog.currentTime;
+            
+            // Som do "baque" de madeira tocando a terra (Grave)
+            const oscBaque = ctxFog.createOscillator();
+            const ganhoBaque = ctxFog.createGain();
+            oscBaque.type = 'triangle';
+            oscBaque.frequency.setValueAtTime(120, tempo);
+            oscBaque.frequency.linearRampToValueAtTime(50, tempo + 0.1);
+            ganhoBaque.gain.setValueAtTime(0.4, tempo);
+            ganhoBaque.gain.exponentialRampToValueAtTime(0.01, tempo + 0.1);
+            oscBaque.connect(ganhoBaque);
+            ganhoBaque.connect(ctxFog.destination);
+            oscBaque.start(tempo);
+            oscBaque.stop(tempo + 0.1);
+
+            // Som do estalo seco (Agudo)
+            const oscEstalo = ctxFog.createOscillator();
+            const ganhoEstalo = ctxFog.createGain();
+            oscEstalo.type = 'sine';
+            oscEstalo.frequency.setValueAtTime(1200, tempo);
+            oscEstalo.frequency.linearRampToValueAtTime(800, tempo + 0.04);
+            ganhoEstalo.gain.setValueAtTime(0.15, tempo);
+            ganhoEstalo.gain.exponentialRampToValueAtTime(0.01, tempo + 0.04);
+            oscEstalo.connect(ganhoEstalo);
+            ganhoEstalo.connect(ctxFog.destination);
+            oscEstalo.start(tempo);
+            oscEstalo.stop(tempo + 0.04);
+
+            setTimeout(() => ctxFog.close().catch(() => {}), 200);
+        } catch (e) { console.error(e); }
+        return;
+    }
+
+    // 🔥 GATILHO: SOM DO ANZOL CAINDO NA ÁGUA (Splash dinâmico e agudo)
+    if (som === "SINTETIZADOR_AGUA_ANZOL") {
+        try {
+            const ctxAgua = new (window.AudioContext || window.webkitAudioContext)();
+            const tempo = ctxAgua.currentTime;
+            
+            const osc = ctxAgua.createOscillator();
+            const ganho = ctxAgua.createGain();
+            osc.type = 'sine';
+            
+            // Frequência rápida que sobe e desce imitando uma bolha d'água estourando/splash
+            osc.frequency.setValueAtTime(600, tempo);
+            osc.frequency.exponentialRampToValueAtTime(300, tempo + 0.08);
+            osc.frequency.exponentialRampToValueAtTime(900, tempo + 0.15);
+
+            ganho.gain.setValueAtTime(0.25, tempo);
+            ganho.gain.exponentialRampToValueAtTime(0.01, tempo + 0.18);
+
+            osc.connect(ganho);
+            ganho.connect(ctxAgua.destination);
+            osc.start(tempo);
+            osc.stop(tempo + 0.18);
+
+            setTimeout(() => ctxAgua.close().catch(() => {}), 250);
+        } catch (e) { console.error(e); }
+        return;
+    }
+    // 🔥 GATILHO: BATIDA DE CORAÇÃO SINTETIZADA (Grave e Abafado)
+    if (som === "SINTETIZADOR_CORACAO") {
+        try {
+            const tempo = ctxAudio.currentTime;
+            
+            // Batida dupla característica: "Tum-Tum"
+            [0, 0.25].forEach((atraso) => {
+                const osc = ctxAudio.createOscillator();
+                const ganho = ctxAudio.createGain();
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(60, tempo + atraso); // Frequência ultra grave
+                osc.frequency.linearRampToValueAtTime(30, tempo + atraso + 0.12);
+                
+                ganho.gain.setValueAtTime(0.4, tempo + atraso);
+                ganho.gain.exponentialRampToValueAtTime(0.01, tempo + atraso + 0.12);
+                
+                osc.connect(ganho);
+                ganho.connect(ctxAudio.destination);
+                osc.start(tempo + atraso);
+                osc.stop(tempo + atraso + 0.12);
+            });
+        } catch(e) {}
+        return;
+    }
+
+    // 🔥 GATILHO: BARRIGA RONCANDO (Frequência trêmula de fome)
+    if (som === "SINTETIZADOR_FOME") {
+        try {
+            const tempo = ctxAudio.currentTime;
+            const osc = ctxAudio.createOscillator();
+            const modulador = ctxAudio.createOscillator();
+            const ganhoMod = ctxAudio.createGain();
+            const ganhoFinal = ctxAudio.createGain();
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(90, tempo);
+            osc.frequency.linearRampToValueAtTime(70, tempo + 0.8);
+            
+            modulador.type = 'sine';
+            modulador.frequency.setValueAtTime(12, tempo); // Tremor lento da barriga
+            ganhoMod.gain.setValueAtTime(30, tempo);
+            
+            modulador.connect(ganhoMod);
+            ganhoMod.connect(osc.frequency);
+            
+            ganhoFinal.gain.setValueAtTime(0.12, tempo);
+            ganhoFinal.gain.linearRampToValueAtTime(0.01, tempo + 0.8);
+            
+            osc.connect(ganhoFinal);
+            ganhoFinal.connect(ctxAudio.destination);
+            
+            modulador.start(tempo);
+            osc.start(tempo);
+            modulador.stop(tempo + 0.8);
+            osc.stop(tempo + 0.8);
+        } catch(e) {}
+        return;
+    }
+    // 🔥 GATILHO: LIGA A TRILHA DA NOITE
+    if (som === "MUSICA_NOITE_LIGA") {
+        musicaNoite.play().catch(e => console.log("Aguardando clique para iniciar música:", e.message));
+        return;
+    }
+
+    // 🔥 GATILHO: DESLIGA A TRILHA DA NOITE (Fade out / Parada)
+    if (som === "MUSICA_NOITE_DESLIGA") {
+        musicaNoite.pause();
+        musicaNoite.currentTime = 0; // Reseta para o início
+        return;
+    }
+
+    // Lógica antiga de fallback
+    if (som && typeof som.play === 'function') {
+        som.currentTime = 0;
+        som.play().catch(e => console.log("Áudio bloqueado:", e.message));
+    }
+}
 // Localize onde você pegou o startBtn e adicione estes:
 const startBtn = document.getElementById("startBtn"); // você já deve ter esse
 const manualBtn = document.getElementById("manualBtn");
@@ -646,6 +900,9 @@ let placingCampfire = false;
 let inventoryOpen = false;
 let inventorySlots = [];
 let ultimoTickGlobal = Date.now();
+let ultimoBatimento = 0;
+let ultimoRonco = 0;
+let flashSangue = 0;
 const recipes = {
   
   axe_wood: { name: "Machado de Madeira", wood: 3, sticks: 2, weaponIndex: 1 },
@@ -1299,6 +1556,7 @@ const slotAccY = 300;
 const sSize = 100;
 
 if (mx >= slotAccX && mx <= slotAccX + sSize && my >= slotAccY && my <= slotAccY + sSize) {
+    tocarSom(SONS.selecionar);
     if (player.accessory === "torch") {
         player.accessory = null;
         player.weapon = 6; 
@@ -1315,7 +1573,7 @@ if (mx >= slotAccX && mx <= slotAccX + sSize && my >= slotAccY && my <= slotAccY
 
             if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
                 console.log("Slot clicado:", i);
-
+            tocarSom(SONS.selecionar);
                 // --- Lógica de Equipar (Mantendo suas funções originais) ---
                 if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
                 else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
@@ -1368,6 +1626,7 @@ const torchX = canvas.width - 200;
 const torchY = canvas.height / 2 - 55;
 if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + slotSize) {
     if (player.inventory.torch > 0) {
+        tocarSom(SONS.selecionar);
         // Se clicar aqui, ela SEMPRE vem para a mão e sai das costas
         player.weapon = 6;
         player.accessory = null; // Garante que saiu das costas
@@ -1389,6 +1648,7 @@ if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + sl
         });
         player.inventory.campfire--;
         placingCampfire = false;
+        tocarSom(SONS.fogueira_colocar); // 🔊 SOM ADICIONADO AQUI!
     } else {
       
         const worldMouseX = mx + camX();
@@ -1409,6 +1669,7 @@ if (weapons[player.weapon].style === "fishing_rod") {
         
         mouse.down = true; 
         player.attacking = true; // Ativa a animação de lançamento
+        tocarSom(SONS.agua_anzol); // 🔊 SOM ADICIONADO AQUI (Ao lançar com sucesso no rio)!
     } else {
         // BLOQUEIO TOTAL: Se não for água, cancela tudo
         mouse.down = false;
@@ -1695,6 +1956,10 @@ function getCraftItemPos(index) {
 function checkCraftClick(mx, my) {
     if (!craftingOpen) return;
 
+    // 🔥 ADICIONE ESTA LINHA AQUI: Acorda o áudio no instante exato do clique físico
+    if (ctxAudio && ctxAudio.state === 'suspended') {
+        ctxAudio.resume();
+    }
     const items = Object.keys(recipes);
     console.log("--- TESTE DE CLIQUE ---");
     console.log("Mouse em:", Math.round(mx), Math.round(my));
@@ -1706,12 +1971,10 @@ function checkCraftClick(mx, my) {
         console.log(`Item ${i} (${items[i]}): X(${Math.round(pos.x)}-${Math.round(pos.x+pos.w)}) Y(${Math.round(pos.y)}-${Math.round(pos.y+pos.h)})`);
 
         if (mx >= pos.x && mx <= pos.x + pos.w && my >= pos.y && my <= pos.y + pos.h) {
-            console.log("✅ ACERTOU O BOTÃO:", items[i]);
             tryCraft(items[i]);
             return;
         }
     }
-    console.log("❌ ERROU TODOS OS BOTÕES");
 }
 // Auxiliar para saber se pode comprar (usado no visual)
 function checkResources(key) {
@@ -1729,13 +1992,15 @@ function tryCraft(id) {
   // 1. Verificação de Limites para Ferramentas/Arco
   const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "fishing_rod", "bow"];
   if (ferramentas.includes(id) && player.inventory[id] >= 1) {
-    showHint("VOCÊ JÁ TEM ESTE ITEM!");
+    console.log("Aviso: VOCÊ JÁ TEM ESTE ITEM!");
+    tocarSom(SONS.erro);
     return;
   }
 
   // 2. BLOQUEIO DE FLECHAS: Verifica o limite ANTES de gastar recursos
   if (id === "arrow" && player.arrows >= LIMITES.flechas) {
-    showHint("LIMITE DE FLECHAS ALCANÇADO (30)!");
+    console.log("Aviso: LIMITE DE FLECHAS ALCANÇADO (30)!");
+    tocarSom(SONS.erro);
     return;
   }
 
@@ -1746,6 +2011,8 @@ function tryCraft(id) {
                    (player.feather >= (r.feather || 0));
 
   if (canCraft) {
+    tocarSom(SONS.compra); // 🔊 SOM DE COMPRA / CRAFT CONCLUÍDO COM SUCESSO!
+    
     // 4. Subtrai os recursos APENAS se passou em todos os testes acima
     player.wood -= (r.wood || 0);
     player.stone -= (r.stone || 0);
@@ -1756,20 +2023,21 @@ function tryCraft(id) {
     if (id === "wood_convert") {
         player.wood = Math.min(LIMITES.recursos, player.wood + 1);
     } else if (id === "arrow") {
-        // O Math.min aqui garante que se você tiver 29 e ganhar 3, fique com 30.
+
         player.arrows = Math.min(LIMITES.flechas, player.arrows + (r.yield || 3));
-        showHint("+3 FLECHAS FABRICADAS");
+        console.log("+3 FLECHAS FABRICADAS");
     } else if (id === "bow") {
         player.inventory.bow = 1;
         player.weapon = 8; 
-        showHint("ARCO EQUIPADO!");
+        console.log("ARCO EQUIPADO!");
     } else {
         if (player.inventory[id] === undefined) player.inventory[id] = 0;
         player.inventory[id]++; 
     }
     console.log("Sucesso no Craft: " + id);
   } else {
-    showHint("RECURSOS INSUFICIENTES!");
+    console.log("Aviso: RECURSOS INSUFICIENTES!");
+    tocarSom(SONS.erro); // 🔊 AGORA O SOM VAI TOCAR! O código não vai mais travar aqui.
   }
 }
 function spawnAnimal() {
@@ -1944,7 +2212,19 @@ const agora = Date.now();
         passouUmSegundo = true;
         ultimoTickGlobal = agora;
     }
-
+// 🌌 NOVO SISTEMA AMBIENTE AUTOMÁTICO DA NOITE
+    if (!isDay) { 
+        // 1. Liga a música de fundo se ela estiver parada
+        if (musicaNoite.paused) {
+            tocarSom(SONS.musica_noite_liga);
+        }
+        
+    } else {
+        // 3. Se amanheceu, desliga a música na hora
+        if (!musicaNoite.paused) {
+            tocarSom(SONS.musica_noite_desliga);
+        }
+    }
     if (player.dead) {
         player.attacking = false;
         player.attackProgress = 0;
@@ -2135,29 +2415,53 @@ if (player.temp < 30 && !hintSystem.activeAlert) {
 }
 }
 
-  // 🍗 FOME → DANO OU REGENERAÇÃO
+// 🍗 FOME → DANO OU REGENERAÇÃO
+  // Dano por fome (2x mais lento)
+  if(player.food <= 0){
+    player.food = 0;
+    player.hp -= 0.075 * dt;
 
-// dano por fome (2x mais lento)
-if(player.food <= 0){
-  player.food = 0;
-  player.hp -= 0.075 * dt;
-}
+    // Dispara o ronco da barriga a cada 6 segundos quando a fome zerar
+    if (agora - ultimoRonco >= 6000) {
+        tocarSom("SINTETIZADOR_FOME");
+        ultimoRonco = agora;
+    }
+  }
 
-// regeneração se estiver bem alimentado
-if(player.food > player.maxFood * 0.75 && player.hp < player.maxHp){
-  player.hp += 0.04 * dt;
-}
-// 2. Alerta de Fome (Adicione logo após o cálculo de player.food)
-if (player.food <= 0 && !hintSystem.activeAlert) {
-    hintSystem.show("PERIGO: Você está morrendo de fome!", "alert");
-} else if (player.food < 25 && !hintSystem.activeAlert) {
-    hintSystem.show("AVISO: Você está ficando com fome. Procure frutas ou peixes.", "alert");
-}
+  // Regeneração se estiver bem alimentado
+  if(player.food > player.maxFood * 0.75 && player.hp < player.maxHp){
+    player.hp += 0.04 * dt;
+  }
+
+  // 2. Alerta de Fome
+  if (player.food <= 0 && !hintSystem.activeAlert) {
+      hintSystem.show("PERIGO: Você está morrendo de fome!", "alert");
+  } else if (player.food < 25 && !hintSystem.activeAlert) {
+      hintSystem.show("AVISO: Você está ficando com fome. Procure alimento.", "alert");
+  }
+
+  // ❤️ SENSOR DE VIDA CRÍTICA (Menos de 20% da vida máxima)
+  if (player.hp > 0 && player.hp <= player.maxHp * 0.20) {
+      // Toca o coração a cada 2 segundos e ativa o flash vermelho
+      if (agora - ultimoBatimento >= 2000) {
+          tocarSom("SINTETIZADOR_CORACAO");
+          flashSangue = 0.45; // Intensidade máxima do vermelho nas bordas
+          ultimoBatimento = agora;
+      }
+  }
+
+  // Faz a tela vermelha sumir suavemente a cada frame
+  if (flashSangue > 0) {
+      flashSangue -= 0.01 * dt; // Desvanece lentamente
+      if (flashSangue < 0) flashSangue = 0;
+  }
+
   if(player.hp <= 0 && !player.dead) {
-  player.hp = 0;
-  player.dead = true;
-  document.getElementById("gameOver").style.display = "flex";
-}
+    player.hp = 0;
+    player.dead = true;
+    flashSangue = 0; // Desliga o flash ao morrer
+    document.getElementById("gameOver").style.display = "flex";
+  }
 // === CONTROLE DE STAMINA (APÓS UPDATE) ===
 if (player.stamina <= 0) {
   player.stamina = 0;
