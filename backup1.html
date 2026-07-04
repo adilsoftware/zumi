@@ -124,7 +124,286 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
 </div>
 
 <script>
+// ==================================================================
+// 🎛️ SINTETIZADOR DE ÁUDIO NATIVO (WEB AUDIO API) - CORRIGIDO
+// ==================================================================
 
+let ctxAudio = null; // Começa vazio para evitar bloqueio precoce
+
+// Criamos um player invisível de áudio para a música tocar de forma 100% natural
+const musicaNoite = new Audio();
+musicaNoite.loop = true;
+musicaNoite.src = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"; 
+musicaNoite.volume = 0.08; // Deixe o volume bem baixinho (0.05 a 0.08) para virar música de fundo
+
+const SONS = {
+    arco: null, swing: null, fruta: null, madeira: null, picareta: null,
+    pedraQuebra: null, peixe: null, arvoreCaiu: null, agua: null,
+    compra: "SINTETIZADOR_COMPRA",
+    selecionar: "SINTETIZADOR_SELECIONAR",
+    erro: "SINTETIZADOR_ERRO",
+    fogueira_colocar: "SINTETIZADOR_FOGUEIRA_COLOCAR",
+    agua_anzol: "SINTETIZADOR_AGUA_ANZOL",
+    
+    musica_noite_liga: "MUSICA_NOITE_LIGA",
+    musica_noite_desliga: "MUSICA_NOITE_DESLIGA"
+};
+
+function tocarSom(som) {
+    // Inicializa o contexto APENAS no momento do clique, 100% livre de bloqueios
+    if (!ctxAudio) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        ctxAudio = new AudioContext();
+    }
+    
+    if (ctxAudio.state === 'suspended') {
+        ctxAudio.resume();
+    }
+
+    // GATILHO: SOM DE COMPRA / CRAFT
+    if (som === "SINTETIZADOR_COMPRA") {
+        const tempo = ctxAudio.currentTime;
+        const osc1 = ctxAudio.createOscillator();
+        const ganho1 = ctxAudio.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, tempo);
+        ganho1.gain.setValueAtTime(0.15, tempo);
+        ganho1.gain.exponentialRampToValueAtTime(0.01, tempo + 0.08);
+        osc1.connect(ganho1);
+        ganho1.connect(ctxAudio.destination);
+        osc1.start(tempo);
+        osc1.stop(tempo + 0.08);
+
+        const osc2 = ctxAudio.createOscillator();
+        const ganho2 = ctxAudio.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880, tempo + 0.05);
+        ganho2.gain.setValueAtTime(0.2, tempo + 0.05);
+        ganho2.gain.exponentialRampToValueAtTime(0.01, tempo + 0.25);
+        osc2.connect(ganho2);
+        ganho2.connect(ctxAudio.destination);
+        osc2.start(tempo + 0.05);
+        osc2.stop(tempo + 0.25);
+        return;
+    }
+
+    // 🔥 GATILHO: SOM DE ERRO COMPATÍVEL E COM VOLUME ALTO
+    if (som === "SINTETIZADOR_ERRO") {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const ctxErro = new AudioContext();
+            const tempo = ctxErro.currentTime;
+            
+            const osc = ctxErro.createOscillator();
+            const ganho = ctxErro.createGain();
+
+            // Mudamos para 'triangle' para dar mais corpo e peso ao som de erro
+            osc.type = 'triangle'; 
+            osc.frequency.setValueAtTime(140, tempo); // Nota levemente mais grave
+            osc.frequency.linearRampToValueAtTime(70, tempo + 0.15); // Queda de tom agressiva
+
+            // Aumentamos o volume inicial para 0.8 (bem mais forte)
+            ganho.gain.setValueAtTime(0.8, tempo); 
+            ganho.gain.exponentialRampToValueAtTime(0.01, tempo + 0.16);
+
+            osc.connect(ganho);
+            ganho.connect(ctxErro.destination);
+
+            osc.start(tempo);
+            osc.stop(tempo + 0.16);
+
+            setTimeout(() => {
+                ctxErro.close().catch(() => {});
+            }, 250);
+        } catch (e) {
+            console.error("Falha ao gerar som de erro:", e.message);
+        }
+        return;
+    }
+
+    // GATILHO: SOM DE SELECIONAR ITEM
+    if (som === "SINTETIZADOR_SELECIONAR") {
+        const tempo = ctxAudio.currentTime;
+        const osc = ctxAudio.createOscillator();
+        const ganho = ctxAudio.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, tempo);
+        osc.frequency.exponentialRampToValueAtTime(1200, tempo + 0.04);
+        ganho.gain.setValueAtTime(0.12, tempo);
+        ganho.gain.exponentialRampToValueAtTime(0.01, tempo + 0.05);
+        osc.connect(ganho);
+        ganho.connect(ctxAudio.destination);
+        osc.start(tempo);
+        osc.stop(tempo + 0.05);
+        return;
+    }
+// 🔥 GATILHO: SOM DE COLOCAR FOGUEIRA (Madeira estalando + baque seco)
+    if (som === "SINTETIZADOR_FOGUEIRA_COLOCAR") {
+        try {
+            const ctxFog = new (window.AudioContext || window.webkitAudioContext)();
+            const tempo = ctxFog.currentTime;
+            
+            // Som do "baque" de madeira tocando a terra (Grave)
+            const oscBaque = ctxFog.createOscillator();
+            const ganhoBaque = ctxFog.createGain();
+            oscBaque.type = 'triangle';
+            oscBaque.frequency.setValueAtTime(120, tempo);
+            oscBaque.frequency.linearRampToValueAtTime(50, tempo + 0.1);
+            ganhoBaque.gain.setValueAtTime(0.4, tempo);
+            ganhoBaque.gain.exponentialRampToValueAtTime(0.01, tempo + 0.1);
+            oscBaque.connect(ganhoBaque);
+            ganhoBaque.connect(ctxFog.destination);
+            oscBaque.start(tempo);
+            oscBaque.stop(tempo + 0.1);
+
+            // Som do estalo seco (Agudo)
+            const oscEstalo = ctxFog.createOscillator();
+            const ganhoEstalo = ctxFog.createGain();
+            oscEstalo.type = 'sine';
+            oscEstalo.frequency.setValueAtTime(1200, tempo);
+            oscEstalo.frequency.linearRampToValueAtTime(800, tempo + 0.04);
+            ganhoEstalo.gain.setValueAtTime(0.15, tempo);
+            ganhoEstalo.gain.exponentialRampToValueAtTime(0.01, tempo + 0.04);
+            oscEstalo.connect(ganhoEstalo);
+            ganhoEstalo.connect(ctxFog.destination);
+            oscEstalo.start(tempo);
+            oscEstalo.stop(tempo + 0.04);
+
+            setTimeout(() => ctxFog.close().catch(() => {}), 200);
+        } catch (e) { console.error(e); }
+        return;
+    }
+
+    // 🔥 GATILHO: SOM DO ANZOL CAINDO NA ÁGUA (Splash dinâmico e agudo)
+    if (som === "SINTETIZADOR_AGUA_ANZOL") {
+        try {
+            const ctxAgua = new (window.AudioContext || window.webkitAudioContext)();
+            const tempo = ctxAgua.currentTime;
+            
+            const osc = ctxAgua.createOscillator();
+            const ganho = ctxAgua.createGain();
+            osc.type = 'sine';
+            
+            // Frequência rápida que sobe e desce imitando uma bolha d'água estourando/splash
+            osc.frequency.setValueAtTime(600, tempo);
+            osc.frequency.exponentialRampToValueAtTime(300, tempo + 0.08);
+            osc.frequency.exponentialRampToValueAtTime(900, tempo + 0.15);
+
+            ganho.gain.setValueAtTime(0.25, tempo);
+            ganho.gain.exponentialRampToValueAtTime(0.01, tempo + 0.18);
+
+            osc.connect(ganho);
+            ganho.connect(ctxAgua.destination);
+            osc.start(tempo);
+            osc.stop(tempo + 0.18);
+
+            setTimeout(() => ctxAgua.close().catch(() => {}), 250);
+        } catch (e) { console.error(e); }
+        return;
+    }
+// 🔥 GATILHO: BATIDA DE CORAÇÃO SINTETIZADA (Volume Turbinado)
+    if (som === "SINTETIZADOR_CORACAO") {
+        try {
+            const tempo = ctxAudio.currentTime + 0.01;
+            
+            // Aumentamos bem o volume (1.5 e 1.2) para o som estalar de verdade
+            const batidas = [
+                { atraso: 0, freqInicial: 110, freqFinal: 50, duracao: 0.15, volume: 1.5 },
+                { atraso: 0.22, freqInicial: 120, freqFinal: 55, duracao: 0.12, volume: 1.2 }
+            ];
+
+            batidas.forEach((config) => {
+                const osc = ctxAudio.createOscillator();
+                const ganho = ctxAudio.createGain();
+                
+                osc.type = 'sine';
+                
+                // Rampas de frequência
+                osc.frequency.setValueAtTime(config.freqInicial, tempo + config.atraso);
+                osc.frequency.linearRampToValueAtTime(config.freqFinal, tempo + config.atraso + config.duracao);
+                
+                // Volume alto e seco, sem filtro para não perder potência
+                ganho.gain.setValueAtTime(0.01, tempo + config.atraso);
+                ganho.gain.linearRampToValueAtTime(config.volume, tempo + config.atraso + 0.01); 
+                ganho.gain.exponentialRampToValueAtTime(0.01, tempo + config.atraso + config.duracao);
+                
+                // Conexão direta sem barreiras para dar o volume máximo
+                osc.connect(ganho);
+                ganho.connect(ctxAudio.destination);
+                
+                osc.start(tempo + config.atraso);
+                osc.stop(tempo + config.atraso + config.duracao);
+            });
+        } catch(e) {}
+        return;
+    }
+
+ // 🔥 GATILHO: BARRIGA RONCANDO (Textura Orgânica e Borbulhante Realista)
+    if (som === "SINTETIZADOR_FOME") {
+        try {
+            const tempo = ctxAudio.currentTime + 0.01;
+            const duracao = 1.4; 
+            
+            const osc = ctxAudio.createOscillator();
+            const modulador = ctxAudio.createOscillator();
+            const ganhoMod = ctxAudio.createGain();
+            const filtro = ctxAudio.createBiquadFilter();
+            const ganhoFinal = ctxAudio.createGain();
+            
+            // Usamos sawtooth porque tem as imperfeições necessárias para virar um ruído biológico
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(80, tempo);
+            osc.frequency.linearRampToValueAtTime(50, tempo + duracao);
+            
+            // O modulador vai sacudir o filtro de corte, criando o efeito "borbulhante/líquido"
+            modulador.type = 'sine';
+            modulador.frequency.setValueAtTime(16, tempo); // Velocidade do borbulho
+            ganhoMod.gain.setValueAtTime(120, tempo); // Força da oscilação do filtro
+            
+            // O segredo está aqui: modulamos o FILTRO e não a nota pura
+            modulador.connect(ganhoMod);
+            ganhoMod.connect(filtro.frequency);
+            
+            // Filtro Passa-Baixo abafa o dente de serra para parecer interno
+            filtro.type = 'lowpass';
+            filtro.frequency.setValueAtTime(140, tempo);
+            
+            // Volume alto focado em estalar nas caixas
+            ganhoFinal.gain.setValueAtTime(0.01, tempo);
+            ganhoFinal.gain.linearRampToValueAtTime(1.6, tempo + 0.2); 
+            ganhoFinal.gain.exponentialRampToValueAtTime(0.01, tempo + duracao);
+            
+            // Linha de conexões orgânica
+            osc.connect(filtro);
+            filtro.connect(ganhoFinal);
+            ganhoFinal.connect(ctxAudio.destination);
+            
+            modulador.start(tempo);
+            osc.start(tempo);
+            modulador.stop(tempo + duracao);
+            osc.stop(tempo + duracao);
+        } catch(e) {}
+        return;
+    }
+    // 🔥 GATILHO: LIGA A TRILHA DA NOITE
+    if (som === "MUSICA_NOITE_LIGA") {
+        musicaNoite.play().catch(e => console.log("Aguardando clique para iniciar música:", e.message));
+        return;
+    }
+
+    // 🔥 GATILHO: DESLIGA A TRILHA DA NOITE (Fade out / Parada)
+    if (som === "MUSICA_NOITE_DESLIGA") {
+        musicaNoite.pause();
+        musicaNoite.currentTime = 0; // Reseta para o início
+        return;
+    }
+
+    // Lógica antiga de fallback
+    if (som && typeof som.play === 'function') {
+        som.currentTime = 0;
+        som.play().catch(e => console.log("Áudio bloqueado:", e.message));
+    }
+}
 // Localize onde você pegou o startBtn e adicione estes:
 const startBtn = document.getElementById("startBtn"); // você já deve ter esse
 const manualBtn = document.getElementById("manualBtn");
@@ -646,6 +925,9 @@ let placingCampfire = false;
 let inventoryOpen = false;
 let inventorySlots = [];
 let ultimoTickGlobal = Date.now();
+let ultimoBatimento = 0;
+let ultimoRonco = 0;
+let flashSangue = 0;
 const recipes = {
   
   axe_wood: { name: "Machado de Madeira", wood: 3, sticks: 2, weaponIndex: 1 },
@@ -1153,7 +1435,9 @@ for(let i = 0; i < 600; i++){ // Aumentei de 600 para 1200 (2x mais)
     });
   }
 }
-const keys={},mouse={x:0,y:0,down:false};
+// --- ENTRADAS, CONTROLES E EVENTOS DO JOGO ---
+const keys = {}, mouse = { x: 0, y: 0, down: false };
+
 onkeydown = e => {
   const k = e.key.toLowerCase();
   keys[k] = true;
@@ -1166,7 +1450,7 @@ onkeydown = e => {
   // C -> Abre/Fecha Crafting
   if (k === "c") {
     craftingOpen = !craftingOpen;
-    if (craftingOpen) inventoryOpen = false; // Fecha o outro menu se abrir este
+    if (craftingOpen) inventoryOpen = false; 
   }
 
   // E -> Abre/Fecha Inventário Tela Cheia
@@ -1174,11 +1458,11 @@ onkeydown = e => {
     inventoryOpen = !inventoryOpen;
     if (inventoryOpen) {
         craftingOpen = false;
-        placingCampfire = false; // Cancela fogueira se abrir o menu
+        placingCampfire = false; 
     }
   }
 
-  // Q -> Modo Fogueira (Separado para não bugar o E)
+  // Q -> Modo Fogueira
   if (k === "q") {
     if (player.inventory.campfire > 0) {
       placingCampfire = !placingCampfire;
@@ -1188,12 +1472,11 @@ onkeydown = e => {
 
   // Troca de ferramentas
   if (k === "1") player.weapon = 0;
-
 };
 
 // Abre inventário também com o botão direito do mouse
 window.addEventListener("contextmenu", e => {
-  e.preventDefault(); // Não abre o menu do navegador
+  e.preventDefault(); 
   inventoryOpen = !inventoryOpen;
   if (inventoryOpen) craftingOpen = false;
 });
@@ -1208,11 +1491,15 @@ onkeyup = e => {
 
 if(!isMobile){
   onmousedown = e => {
+    if (e.button === 2) return;
+
     // 1. Lógica de colocar fogueira
     if(placingCampfire && player.inventory.campfire > 0){
       const rect = canvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) + camX();
-      const my = (e.clientY - rect.top) + camY();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mx = ((e.clientX - rect.left) * scaleX) + camX();
+      const my = ((e.clientY - rect.top) * scaleY) + camY();
 
       resources.push({
         type: "campfire",
@@ -1226,7 +1513,7 @@ if(!isMobile){
 
       player.inventory.campfire--;
       placingCampfire = false;
-      return; // Sai da função para não atacar
+      return; 
     }
 
     // 2. Se não for fogueira, é ataque normal
@@ -1252,13 +1539,10 @@ let lastFishRespawn = Date.now();
 
 function handleFishRespawn() {
     const agora = Date.now();
-    // Só tenta spawnar se tiver menos de 25 peixes no total
     if (fishes.length < 25) {
-        // Sorteia um tempo entre 1 e 3 minutos (60.000ms a 180.000ms)
         let tempoNecessario = 60000 + Math.random() * 120000;
 
         if (agora - lastFishRespawn > tempoNecessario) {
-            // Sorteia entre 1 e 3 peixes para nascer
             let quantidade = Math.floor(Math.random() * 3) + 1;
             spawnFishes(quantidade); 
             lastFishRespawn = agora;
@@ -1266,6 +1550,7 @@ function handleFishRespawn() {
         }
     }
 }
+
 function cleanDeadFishes() {
     for (let i = fishes.length - 1; i >= 0; i--) {
         if (!fishes[i].alive) {
@@ -1273,113 +1558,105 @@ function cleanDeadFishes() {
         }
     }
 }
+
 canvas.addEventListener("mousedown", e => {
-    // 1. Pegar a posição exata do mouse dentro do canvas
+    if (e.button === 2) {
+        return; 
+    }
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top) * scaleY;
 
-    // 2. Se o menu de Crafting estiver aberto, processa ele e PARA
     if (craftingOpen) {
         checkCraftClick(mx, my);
         return; 
     }
 
-    // 3. LÓGICA DO INVENTÁRIO (Ajustada para 21 slots e deslocada para a esquerda)
     if (inventoryOpen) {
         const slotSize = 110;
         const gap = 15;
         const cols = 7;
-        const startX = 100; // IGUAL ao que colocamos no draw para alinhar o clique
+        const startX = 100; 
         const startY = 150;
-const slotAccX = canvas.width - 220; 
-const slotAccY = 300;
-const sSize = 100;
+        const slotAccX = canvas.width - 220; 
+        const slotAccY = 300;
+        const sSize = 100;
 
-if (mx >= slotAccX && mx <= slotAccX + sSize && my >= slotAccY && my <= slotAccY + sSize) {
-    if (player.accessory === "torch") {
-        player.accessory = null;
-        player.weapon = 6; 
-    } else if (player.weapon === 6) {
-        player.accessory = "torch";
-        player.weapon = 0;
-    }
-    return;
-}
-        // Aumentamos para 21 para pegar a nova fileira de baixo
+        if (mx >= slotAccX && mx <= slotAccX + sSize && my >= slotAccY && my <= slotAccY + sSize) {
+            tocarSom(SONS.selecionar);
+            if (player.accessory === "torch") {
+                player.accessory = null;
+                player.weapon = 6; 
+            } else if (player.weapon === 6) {
+                player.accessory = "torch";
+                player.weapon = 0;
+            }
+            return;
+        }
+
         for (let i = 0; i < 21; i++) {
             const x = startX + (i % cols) * (slotSize + gap);
             const y = startY + Math.floor(i / cols) * (slotSize + gap);
 
             if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
                 console.log("Slot clicado:", i);
-
-                // --- Lógica de Equipar (Mantendo suas funções originais) ---
+                tocarSom(SONS.selecionar);
                 if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
                 else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
                 else if (i === 8 && player.inventory.axe_stone > 0) player.weapon = 3;
                 else if (i === 9 && player.inventory.pickaxe_stone > 0) player.weapon = 4;
                 else if (i === 5 && player.inventory.spear > 0) player.weapon = 5;
                 
-                // Tocha (Slot 11) - Dentro do loop de slots
-else if (i === 11 && player.inventory.torch > 0) {
-    if (player.weapon === 6) {
-        // Se já está na mão, manda para o acessório (costas)
-        player.weapon = 0;
-        player.accessory = "torch";
-    } else if (player.accessory === "torch") {
-        // Se está no acessório, volta para a mão
-        player.accessory = null;
-        player.weapon = 6;
-    } else {
-        // Se estava guardada, equipa na mão primeiro
-        player.weapon = 6;
-        player.accessory = null;
-    }
-    // Removi o inventoryOpen = false para você ver o item mudando de lugar sem fechar o menu
-}
-                // Vara de Pesca (Slot 12)
+                else if (i === 11 && player.inventory.torch > 0) {
+                    if (player.weapon === 6) {
+                        player.weapon = 0;
+                        player.accessory = "torch";
+                    } else if (player.accessory === "torch") {
+                        player.accessory = null;
+                        player.weapon = 6;
+                    } else {
+                        player.weapon = 6;
+                        player.accessory = null;
+                    }
+                }
                 else if (i === 12 && player.inventory.fishing_rod > 0) {
                     player.weapon = 7;
                     inventoryOpen = false;
                 }
-                else if (i === 15 && player.inventory.bow > 0) { // Supondo que o Arco seja o slot 15
-    player.weapon = 8; // ID do Arco na sua lista de weapons
-    inventoryOpen = false;
-}
-                // Fogueira (Slot 4)
+                else if (i === 15 && player.inventory.bow > 0) {
+                    player.weapon = 8; 
+                    inventoryOpen = false;
+                }
                 else if (i === 4 && player.inventory.campfire > 0) {
+                     e.stopPropagation(); 
+                     e.preventDefault();  
                      placingCampfire = true;
                      inventoryOpen = false;
+                     mouse.down = false;  
                 }
-                // Mão vazia / Recursos
                 else if (i <= 3 || i === 10 || i >= 13) {
                     player.weapon = 0; 
                 }
-                
-                return; // Bloqueia o ataque se clicou em qualquer slot
+                return; 
             }
         }
 
-        // --- CLIQUE NA TOCHA RÁPIDA (Lado Direito) ---
-const torchX = canvas.width - 200;
-const torchY = canvas.height / 2 - 55;
-if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + slotSize) {
-    if (player.inventory.torch > 0) {
-        // Se clicar aqui, ela SEMPRE vem para a mão e sai das costas
-        player.weapon = 6;
-        player.accessory = null; // Garante que saiu das costas
-        inventoryOpen = false;
-        return;
-    }
-}
-
-        return; // Se clicar no fundo do inventário, não ataca
+        const torchX = canvas.width - 200;
+        const torchY = canvas.height / 2 - 55;
+        if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + slotSize) {
+            if (player.inventory.torch > 0) {
+                tocarSom(SONS.selecionar);
+                player.weapon = 6;
+                player.accessory = null; 
+                inventoryOpen = false;
+                return;
+            }
+        }
+        return; 
     }
     
-    // 4. LÓGICA DE LANÇAR O ANZOL, COLOCAR FOGUEIRA OU ATACAR
     if (placingCampfire && player.inventory.campfire > 0) {
         const worldX = mx + camX();
         const worldY = my + camY();
@@ -1389,34 +1666,32 @@ if (mx >= torchX && mx <= torchX + slotSize && my >= torchY && my <= torchY + sl
         });
         player.inventory.campfire--;
         placingCampfire = false;
+        tocarSom(SONS.fogueira_colocar); 
     } else {
-      
         const worldMouseX = mx + camX();
         const worldMouseY = my + camY();
 
-if (weapons[player.weapon].style === "fishing_rod") {
-    if (isInRiver(worldMouseX, worldMouseY)) {
-        // Só permite lançar se estiver na água
-        const dx = worldMouseX - player.x;
-        const dy = worldMouseY - player.y;
-        const distClique = Math.hypot(dx, dy);
-        
-        const maxRange = 250; // Aumentei um pouco o alcance para facilitar
-        const distFinal = Math.min(distClique, maxRange);
-        
-        player.anzolDestX = player.x + Math.cos(player.angle) * distFinal;
-        player.anzolDestY = player.y + Math.sin(player.angle) * distFinal;
-        
-        mouse.down = true; 
-        player.attacking = true; // Ativa a animação de lançamento
-    } else {
-        // BLOQUEIO TOTAL: Se não for água, cancela tudo
-        mouse.down = false;
-        player.attacking = false;
-        player.attackProgress = 0;
-        // Opcional: console.log("Aqui não tem peixe!");
-    }
-} else {
+        if (weapons[player.weapon].style === "fishing_rod") {
+            if (isInRiver(worldMouseX, worldMouseY)) {
+                const dx = worldMouseX - player.x;
+                const dy = worldMouseY - player.y;
+                const distClique = Math.hypot(dx, dy);
+                
+                const maxRange = 250; 
+                const distFinal = Math.min(distClique, maxRange);
+                
+                player.anzolDestX = player.x + Math.cos(player.angle) * distFinal;
+                player.anzolDestY = player.y + Math.sin(player.angle) * distFinal;
+                
+                mouse.down = true; 
+                player.attacking = true; 
+                tocarSom(SONS.agua_anzol); 
+            } else {
+                mouse.down = false;
+                player.attacking = false;
+                player.attackProgress = 0;
+            }
+        } else {
             mouse.down = true;
         }
     }
@@ -1695,6 +1970,10 @@ function getCraftItemPos(index) {
 function checkCraftClick(mx, my) {
     if (!craftingOpen) return;
 
+    // 🔥 ADICIONE ESTA LINHA AQUI: Acorda o áudio no instante exato do clique físico
+    if (ctxAudio && ctxAudio.state === 'suspended') {
+        ctxAudio.resume();
+    }
     const items = Object.keys(recipes);
     console.log("--- TESTE DE CLIQUE ---");
     console.log("Mouse em:", Math.round(mx), Math.round(my));
@@ -1706,12 +1985,10 @@ function checkCraftClick(mx, my) {
         console.log(`Item ${i} (${items[i]}): X(${Math.round(pos.x)}-${Math.round(pos.x+pos.w)}) Y(${Math.round(pos.y)}-${Math.round(pos.y+pos.h)})`);
 
         if (mx >= pos.x && mx <= pos.x + pos.w && my >= pos.y && my <= pos.y + pos.h) {
-            console.log("✅ ACERTOU O BOTÃO:", items[i]);
             tryCraft(items[i]);
             return;
         }
     }
-    console.log("❌ ERROU TODOS OS BOTÕES");
 }
 // Auxiliar para saber se pode comprar (usado no visual)
 function checkResources(key) {
@@ -1729,13 +2006,15 @@ function tryCraft(id) {
   // 1. Verificação de Limites para Ferramentas/Arco
   const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "fishing_rod", "bow"];
   if (ferramentas.includes(id) && player.inventory[id] >= 1) {
-    showHint("VOCÊ JÁ TEM ESTE ITEM!");
+    console.log("Aviso: VOCÊ JÁ TEM ESTE ITEM!");
+    tocarSom(SONS.erro);
     return;
   }
 
   // 2. BLOQUEIO DE FLECHAS: Verifica o limite ANTES de gastar recursos
   if (id === "arrow" && player.arrows >= LIMITES.flechas) {
-    showHint("LIMITE DE FLECHAS ALCANÇADO (30)!");
+    console.log("Aviso: LIMITE DE FLECHAS ALCANÇADO (30)!");
+    tocarSom(SONS.erro);
     return;
   }
 
@@ -1746,6 +2025,8 @@ function tryCraft(id) {
                    (player.feather >= (r.feather || 0));
 
   if (canCraft) {
+    tocarSom(SONS.compra); // 🔊 SOM DE COMPRA / CRAFT CONCLUÍDO COM SUCESSO!
+    
     // 4. Subtrai os recursos APENAS se passou em todos os testes acima
     player.wood -= (r.wood || 0);
     player.stone -= (r.stone || 0);
@@ -1756,20 +2037,21 @@ function tryCraft(id) {
     if (id === "wood_convert") {
         player.wood = Math.min(LIMITES.recursos, player.wood + 1);
     } else if (id === "arrow") {
-        // O Math.min aqui garante que se você tiver 29 e ganhar 3, fique com 30.
+
         player.arrows = Math.min(LIMITES.flechas, player.arrows + (r.yield || 3));
-        showHint("+3 FLECHAS FABRICADAS");
+        console.log("+3 FLECHAS FABRICADAS");
     } else if (id === "bow") {
         player.inventory.bow = 1;
         player.weapon = 8; 
-        showHint("ARCO EQUIPADO!");
+        console.log("ARCO EQUIPADO!");
     } else {
         if (player.inventory[id] === undefined) player.inventory[id] = 0;
         player.inventory[id]++; 
     }
     console.log("Sucesso no Craft: " + id);
   } else {
-    showHint("RECURSOS INSUFICIENTES!");
+    console.log("Aviso: RECURSOS INSUFICIENTES!");
+    tocarSom(SONS.erro); // 🔊 AGORA O SOM VAI TOCAR! O código não vai mais travar aqui.
   }
 }
 function spawnAnimal() {
@@ -1944,7 +2226,19 @@ const agora = Date.now();
         passouUmSegundo = true;
         ultimoTickGlobal = agora;
     }
-
+// 🌌 NOVO SISTEMA AMBIENTE AUTOMÁTICO DA NOITE
+    if (!isDay) { 
+        // 1. Liga a música de fundo se ela estiver parada
+        if (musicaNoite.paused) {
+            tocarSom(SONS.musica_noite_liga);
+        }
+        
+    } else {
+        // 3. Se amanheceu, desliga a música na hora
+        if (!musicaNoite.paused) {
+            tocarSom(SONS.musica_noite_desliga);
+        }
+    }
     if (player.dead) {
         player.attacking = false;
         player.attackProgress = 0;
@@ -2135,29 +2429,53 @@ if (player.temp < 30 && !hintSystem.activeAlert) {
 }
 }
 
-  // 🍗 FOME → DANO OU REGENERAÇÃO
+// 🍗 FOME → DANO OU REGENERAÇÃO
+  // Dano por fome (2x mais lento)
+  if(player.food <= 0){
+    player.food = 0;
+    player.hp -= 0.075 * dt;
 
-// dano por fome (2x mais lento)
-if(player.food <= 0){
-  player.food = 0;
-  player.hp -= 0.075 * dt;
-}
+    // Dispara o ronco da barriga a cada 6 segundos quando a fome zerar
+    if (agora - ultimoRonco >= 6000) {
+        tocarSom("SINTETIZADOR_FOME");
+        ultimoRonco = agora;
+    }
+  }
 
-// regeneração se estiver bem alimentado
-if(player.food > player.maxFood * 0.75 && player.hp < player.maxHp){
-  player.hp += 0.04 * dt;
-}
-// 2. Alerta de Fome (Adicione logo após o cálculo de player.food)
-if (player.food <= 0 && !hintSystem.activeAlert) {
-    hintSystem.show("PERIGO: Você está morrendo de fome!", "alert");
-} else if (player.food < 25 && !hintSystem.activeAlert) {
-    hintSystem.show("AVISO: Você está ficando com fome. Procure frutas ou peixes.", "alert");
-}
+  // Regeneração se estiver bem alimentado
+  if(player.food > player.maxFood * 0.75 && player.hp < player.maxHp){
+    player.hp += 0.04 * dt;
+  }
+
+  // 2. Alerta de Fome
+  if (player.food <= 0 && !hintSystem.activeAlert) {
+      hintSystem.show("PERIGO: Você está morrendo de fome!", "alert");
+  } else if (player.food < 25 && !hintSystem.activeAlert) {
+      hintSystem.show("AVISO: Você está ficando com fome. Procure alimento.", "alert");
+  }
+
+  // ❤️ SENSOR DE VIDA CRÍTICA (Menos de 20% da vida máxima)
+  if (player.hp > 0 && player.hp <= player.maxHp * 0.20) {
+      // Toca o coração a cada 2 segundos e ativa o flash vermelho
+      if (agora - ultimoBatimento >= 2000) {
+          tocarSom("SINTETIZADOR_CORACAO");
+          flashSangue = 0.45; // Intensidade máxima do vermelho nas bordas
+          ultimoBatimento = agora;
+      }
+  }
+
+  // Faz a tela vermelha sumir suavemente a cada frame
+  if (flashSangue > 0) {
+      flashSangue -= 0.01 * dt; // Desvanece lentamente
+      if (flashSangue < 0) flashSangue = 0;
+  }
+
   if(player.hp <= 0 && !player.dead) {
-  player.hp = 0;
-  player.dead = true;
-  document.getElementById("gameOver").style.display = "flex";
-}
+    player.hp = 0;
+    player.dead = true;
+    flashSangue = 0; // Desliga o flash ao morrer
+    document.getElementById("gameOver").style.display = "flex";
+  }
 // === CONTROLE DE STAMINA (APÓS UPDATE) ===
 if (player.stamina <= 0) {
   player.stamina = 0;
@@ -3647,136 +3965,228 @@ flowers.forEach(f => {
   ctx.fillStyle=rivers[0].color;
   ctx.fillRect(rivers[0].x-camX(), rivers[0].y-camY(), rivers[0].w, rivers[0].h);
   ctx.beginPath(); ctx.arc(circularRiver.x-camX(), circularRiver.y-camY(), circularRiver.r, 0, Math.PI*2); ctx.fill();
+  // --- INÍCIO DO LOOP DE RECURSOS CORRIGIDO ---
   resources.forEach(res => {
-  if(!res.alive) return;
+    if(!res.alive) return;
 
-if (res.x < camX() - 100 || res.x > camX() + canvas.width + 100 ||
-      res.y < camY() - 100 || res.y > camY() + canvas.height + 100) return;
+    // 🟢 CORREÇÃO: Se for fogueira, damos uma folga maior (250px) para as brasas e o fogo não sumirem!
+    let margem = (res.type === "campfire") ? 250 : 100;
 
-const rx = res.x - camX();
-  const ry = res.y - camY();
+    if (res.x < camX() - margem || res.x > camX() + canvas.width + margem ||
+        res.y < camY() - margem || res.y > camY() + canvas.height + margem) return;
 
-  if(res.type === "stick"){
-    ctx.fillStyle = "#8b5a2b";
-    ctx.fillRect(
-      res.x - 12 - camX(),
-      res.y - 3 - camY(),
-      24,
-      6
-    );
-  }
-// 🌴 DESENHO DO COQUEIRO (Tronco Visível e Comprido)
-if(res.type === "palm") {
-  const camXVal = camX();
-  const camYVal = camY();
+    const rx = res.x - camX();
+    const ry = res.y - camY();
 
-  // 1. Tronco (Desenhado um pouco mais grosso e longo para baixo)
-  ctx.fillStyle = "#6d4c41"; 
-  // O tronco agora desce 55 pixels a partir do topo, ficando bem visível
-  ctx.fillRect(res.x - 8 - camXVal, res.y - 15 - camYVal, 16, 55);
+    if(res.type === "stick"){
+      ctx.fillStyle = "#8b5a2b";
+      ctx.fillRect(
+        res.x - 12 - camX(),
+        res.y - 3 - camY(),
+        24,
+        6
+      );
+    }
+    // 🌴 DESENHO DO COQUEIRO
+    if(res.type === "palm") {
+      const camXVal = camX();
+      const camYVal = camY();
 
-  // 2. Folhas (Subimos o ponto de origem das folhas para o topo do tronco)
-  ctx.fillStyle = "#27ae60";
-  for(let i = 0; i < 4; i++) {
-      ctx.save();
-      // Deslocamos o "centro" das folhas 15 pixels para cima (-15)
-      ctx.translate(res.x - camXVal, res.y - 15 - camYVal);
-      ctx.rotate((Math.PI / 2) * i + Math.sin(Date.now() / 600) * 0.1); 
+      ctx.fillStyle = "#6d4c41"; 
+      ctx.fillRect(res.x - 8 - camXVal, res.y - 15 - camYVal, 16, 55);
+
+      ctx.fillStyle = "#27ae60";
+      for(let i = 0; i < 4; i++) {
+          ctx.save();
+          ctx.translate(res.x - camXVal, res.y - 15 - camYVal);
+          ctx.rotate((Math.PI / 2) * i + Math.sin(Date.now() / 600) * 0.1); 
+          ctx.beginPath();
+          ctx.ellipse(25, 0, 32, 10, 0, 0, Math.PI * 2); 
+          ctx.fill();
+          ctx.restore();
+      }
+
+      ctx.fillStyle = "#1e8449";
       ctx.beginPath();
-      // Elipse da folha
-      ctx.ellipse(25, 0, 32, 10, 0, 0, Math.PI * 2); 
+      ctx.arc(res.x - camXVal, res.y - 15 - camYVal, 8, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
-  }
 
-  // 3. Centro das folhas (O coco/topo no novo lugar)
-  ctx.fillStyle = "#1e8449";
-  ctx.beginPath();
-  ctx.arc(res.x - camXVal, res.y - 15 - camYVal, 8, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 4. Barra de Vida (Cor do tronco, lá em cima de tudo)
-  const hpPct = res.hp / res.maxHp;
-  if(hpPct < 1) {
-    const barW = 35;
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(res.x - barW/2 - camXVal, res.y - 80 - camYVal, barW, 5);
-    ctx.fillStyle = "#6d4c41"; 
-    ctx.fillRect(res.x - barW/2 - camXVal, res.y - 80 - camYVal, barW * hpPct, 5);
-  }
-}
-// --- DESENHO: FOGUEIRA MELHORADA (TAMANHO 1.5x) ---
-else if(res.type === "campfire"){
-    // 1. MADEIRA (Pilha de 8 galhos - 1.5x maior)
-    ctx.save();
-    ctx.translate(rx, ry); 
-    ctx.fillStyle = "#5d4037"; 
-    
-    for(let i = 0; i < 8; i++) {
-        ctx.save();
-        ctx.rotate((i * 45) * Math.PI / 180); 
-        // Aumentado de 30x6 para 45x9 (1.5x mais largo e grosso)
-        ctx.fillRect(-22.5, -4.5, 45, 9); 
+      const hpPct = res.hp / res.maxHp;
+      if(hpPct < 1) {
+        const barW = 35;
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(res.x - barW/2 - camXVal, res.y - 80 - camYVal, barW, 5);
+        ctx.fillStyle = "#6d4c41"; 
+        ctx.fillRect(res.x - barW/2 - camXVal, res.y - 80 - camYVal, barW * hpPct, 5);
+      }
+    }
+    // --- DESENHO: FOGUEIRA MELHORADA NO CHÃO ---
+    else if(res.type === "campfire"){
+        let estaNaMontanha = mountains.some(m => Math.hypot(res.x - m.x, res.y - m.y) <= m.r);
         
-        // Detalhe de sombra no galho
-        ctx.fillStyle = "#4e342e";
-        ctx.fillRect(-22.5, 0, 45, 3);
-        ctx.restore();
-    }
-    ctx.restore();
+        if (!estaNaMontanha) {
+            ctx.save();
+            ctx.translate(rx, ry); 
+            ctx.fillStyle = "#5d4037"; 
+            for(let i = 0; i < 8; i++) {
+                ctx.save();
+                ctx.rotate((i * 45) * Math.PI / 180); 
+                ctx.fillRect(-22.5, -4.5, 45, 9); 
+                ctx.fillStyle = "#4e342e";
+                ctx.fillRect(-22.5, 0, 45, 3);
+                ctx.restore();
+            }
+            ctx.restore();
 
-    // 2. FOGO (Proporcional ao novo tamanho da lenha)
-    const pulo = Math.random() * 7; // Oscilação um pouco maior
-    
-    // Parte externa (Laranja) - Raio base aumentado para 15
-    ctx.fillStyle = "#e67e22";
-    ctx.beginPath();
-    ctx.arc(rx, ry - 8, 15 + pulo, 0, Math.PI * 2);
-    ctx.fill();
+            const pulo = Math.random() * 7;
+            ctx.fillStyle = "#e67e22";
+            ctx.beginPath(); ctx.arc(rx, ry - 8, 15 + pulo, 0, Math.PI * 2); ctx.fill();
 
-    // Parte interna (Amarelo brilhante) - Raio base aumentado para 8
-    ctx.fillStyle = "#f1c40f";
-    ctx.beginPath();
-    ctx.arc(rx, ry - 8, 8 + pulo * 0.5, 0, Math.PI * 2);
-    ctx.fill();
+            ctx.fillStyle = "#f1c40f";
+            ctx.beginPath(); ctx.arc(rx, ry - 8, 8 + pulo * 0.5, 0, Math.PI * 2); ctx.fill();
 
-    // 3. ✨ BRASAS (Subindo proporcionalmente)
-    if(!isDay) {
-        ctx.fillStyle = "#ffcc00";
-        for(let j = 0; j < 3; j++) { // Aumentei para 3 brasas
-            let tempoBrasa = Date.now() * 0.003 + j;
-            let bx = rx + Math.sin(tempoBrasa) * 20; // Espalhamento maior
-            let by = (ry - 15) - (Date.now() * 0.08 + j * 30) % 80;
-            ctx.globalAlpha = 0.8;
-            ctx.fillRect(bx, by, 2.5, 2.5); // Brasas levemente maiores
-            ctx.globalAlpha = 1.0;
+            if(!isDay) {
+                ctx.fillStyle = "#ffcc00";
+                for(let j = 0; j < 3; j++) {
+                    let tempoBrasa = Date.now() * 0.003 + j;
+                    let bx = rx + Math.sin(tempoBrasa) * 20;
+                    let by = (ry - 15) - (Date.now() * 0.08 + j * 30) % 80;
+                    ctx.globalAlpha = 0.8;
+                    ctx.fillRect(bx, by, 2.5, 2.5);
+                    ctx.globalAlpha = 1.0;
+                }
+            }
         }
-    }
-}})
+    } 
+
+  }); // <--- Fecha o resources.forEach original aqui
+
+  // --- DESENHO DAS MONTANHAS ---
   mountains.forEach(m=>{
-    ctx.fillStyle=m.color; ctx.beginPath(); ctx.arc(m.x-camX(), m.y-camY(), m.r, 0, Math.PI*2); ctx.fill();
-    m.goldRocks.forEach(gr=>drawRock(gr, camX(), camY()));
-    m.stoneRocks.forEach(sr=>drawRock(sr, camX(), camY()));
-    resources.forEach(res => {
-  if(!res.alive) return;
-  if(res.type !== "stone" && res.type !== "gold") return;
+      ctx.fillStyle=m.color; 
+      ctx.beginPath(); 
+      ctx.arc(m.x-camX(), m.y-camY(), m.r, 0, Math.PI*2); 
+      ctx.fill();
+      
+      m.goldRocks.forEach(gr=>drawRock(gr, camX(), camY()));
+      m.stoneRocks.forEach(sr=>drawRock(sr, camX(), camY()));
+      
+      resources.forEach(res => {
+          if(!res.alive) return;
+          if(res.type !== "stone" && res.type !== "gold") return;
 
-  const hpPct = res.hp / res.maxHp;
-  if(hpPct >= 1) return; // só mostra se sofreu dano
+          const hpPct = res.hp / res.maxHp;
+          if(hpPct >= 1) return;
 
-  const barW = 26;
-  const barH = 4;
-  const x = res.x - barW/2 - camX();
-  const y = res.y - res.r - 12 - camY();
+          const barW = 26;
+          const barH = 4;
+          const x = res.x - barW/2 - camX();
+          const y = res.y - res.r - 12 - camY();
 
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
-  ctx.fillRect(x, y, barW, barH);
+          ctx.fillStyle = "rgba(0,0,0,0.6)";
+          ctx.fillRect(x, y, barW, barH);
 
-  ctx.fillStyle = res.type === "gold" ? "#FFD700" : "#bdc3c7";
-  ctx.fillRect(x, y, barW * hpPct, barH);
-});
+          ctx.fillStyle = res.type === "gold" ? "#FFD700" : "#bdc3c7";
+          ctx.fillRect(x, y, barW * hpPct, barH);
+      });
   });
-  
+
+  // 🟢 CAMADA CORRETA DAS FOGUEIRAS DA MONTANHA
+  resources.forEach(res => {
+      if(res.type === "campfire" && res.alive) {
+          // Usamos a mesma margem segura aqui
+          if (res.x < camX() - 250 || res.x > camX() + canvas.width + 250 ||
+              res.y < camY() - 250 || res.y > camY() + canvas.height + 250) return;
+
+          let estaNaMontanha = mountains.some(m => Math.hypot(res.x - m.x, res.y - m.y) <= m.r);
+          
+          if(estaNaMontanha) {
+              const rx = res.x - camX();
+              const ry = res.y - camY();
+              
+              ctx.save();
+              ctx.translate(rx, ry); 
+              ctx.fillStyle = "#5d4037"; 
+              for(let i = 0; i < 8; i++) {
+                  ctx.save();
+                  ctx.rotate((i * 45) * Math.PI / 180); 
+                  ctx.fillRect(-22.5, -4.5, 45, 9); 
+                  ctx.fillStyle = "#4e342e";
+                  ctx.fillRect(-22.5, 0, 45, 3);
+                  ctx.restore();
+              }
+              ctx.restore();
+
+              const pulo = Math.random() * 7;
+              ctx.fillStyle = "#e67e22";
+              ctx.beginPath(); ctx.arc(rx, ry - 8, 15 + pulo, 0, Math.PI * 2); ctx.fill();
+
+              ctx.fillStyle = "#f1c40f";
+              ctx.beginPath(); ctx.arc(rx, ry - 8, 8 + pulo * 0.5, 0, Math.PI * 2); ctx.fill();
+
+              if(!isDay) {
+                  ctx.fillStyle = "#ffcc00";
+                  for(let j = 0; j < 3; j++) {
+                      let tempoBrasa = Date.now() * 0.003 + j;
+                      let bx = rx + Math.sin(tempoBrasa) * 20;
+                      let by = (ry - 15) - (Date.now() * 0.08 + j * 30) % 80;
+                      ctx.globalAlpha = 0.8;
+                      ctx.fillRect(bx, by, 2.5, 2.5);
+                      ctx.globalAlpha = 1.0;
+                  }
+              }
+          }
+      }
+  });
+
+  // 🟢 SELETOR TRANSPARENTE (FANTASMA)
+  if (typeof placingCampfire !== 'undefined' && placingCampfire && !isMobile) {
+      ctx.save();
+      
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const ghostX = (mouse.x - rect.left) * scaleX;
+      const ghostY = (mouse.y - rect.top) * scaleY;
+
+      ctx.globalAlpha = 0.45;
+
+      ctx.save();
+      ctx.translate(ghostX, ghostY);
+      ctx.fillStyle = "#5d4037";
+      for(let i = 0; i < 8; i++) {
+          ctx.save();
+          ctx.rotate((i * 45) * Math.PI / 180);
+          ctx.fillRect(-22.5, -4.5, 45, 9);
+          ctx.fillStyle = "#4e342e";
+          ctx.fillRect(-22.5, 0, 45, 3);
+          ctx.restore();
+      }
+      ctx.restore();
+
+      const puloGhost = Math.random() * 7;
+      ctx.fillStyle = "#e67e22";
+      ctx.beginPath();
+      ctx.arc(ghostX, ghostY - 8, 15 + puloGhost, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#f1c40f";
+      ctx.beginPath();
+      ctx.arc(ghostX, ghostY - 8, 8 + puloGhost * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      if(!isDay) {
+          ctx.fillStyle = "#ffcc00";
+          for(let j = 0; j < 2; j++) {
+              let tempoBrasa = Date.now() * 0.003 + j;
+              let bx = ghostX + Math.sin(tempoBrasa) * 15;
+              let by = (ghostY - 15) - (Date.now() * 0.08 + j * 30) % 60;
+              ctx.fillRect(bx, by, 2, 2);
+          }
+      }
+
+      ctx.restore(); 
+  }
 zombies.forEach(z => {
   if(!z.active) return;
 
