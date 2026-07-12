@@ -15,7 +15,7 @@ html,body{
 canvas{display:block;}
 
 /* AJUSTE DO OVERLAY PARA FICAR LADO A LADO */
-#overlay {
+#overlay, #gameOver {
  position:fixed; inset:0; background:rgba(0,0,0,0);
   color:white; display:flex; 
   justify-content:center; align-items:center; 
@@ -25,7 +25,18 @@ canvas{display:block;}
 }
 
 
-#gameOver { display: none; background: rgba(139, 0, 0, 0.9); flex-direction:column; }
+#gameOver { 
+  display: none; 
+  position: fixed; 
+  inset: 0; 
+  background: rgba(139, 0, 0, 0.95); 
+  color: white;
+  flex-direction: column; 
+  justify-content: center; 
+  align-items: center;
+  z-index: 999; /* Valor bem alto para ficar na frente do menu inicial */
+  text-align: center;
+}
 
 #container-central {
   display: flex;
@@ -80,6 +91,7 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
 
 <canvas id="game"></canvas>
 
+<!-- MENU INICIAL -->
 <div id="overlay">
   <div id="container-central">
     
@@ -88,30 +100,30 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
       
       <div class="news-item">
         <div class="icon-box">🐆</div>
-        <div><strong>Predadores Reais</strong><br>Cuidado com as Onças na mata!</div>
+        <div><strong>Predadores</strong><br>Cuidado com as Onças na mata!</div>
       </div>
 
       <div class="news-item">
         <div class="icon-box">⛏️</div>
-        <div><strong>Mineração</strong><br>Ouro agora brilha nas montanhas.</div>
+        <div><strong>Mineração</strong><br>Ouro não é útil ainda...</div>
       </div>
 
       <div class="news-item">
         <div class="icon-box">🔥</div>
-        <div><strong>Sobrevivência Noturna</strong><br>A escuridão é mortal sem fogo.</div>
+        <div><strong>Sobrevivência Noturna</strong><br>à noite é muito frio, é melhor você se aquecer.</div>
       </div>
 
       <div class="news-item">
         <div class="icon-box">⚔️</div>
-        <div><strong>Arsenal</strong><br>Lanças e Machados de Pedra.</div>
+        <div><strong>Arsenal</strong><br>Lanças e Machados de Pedra são úteis contra ameaças.</div>
       </div>
     </div>
 
     <div id="main-panel">
       <h1>Zumi.io</h1>
       <div id="instructions">
-        • Sobreviva ao Ciclo de Dia e Noite<br>
-        • Gerencie Fome e Stamina<br>
+        • SOBREVIVA<br>
+        • EQUIPE-SE<br>
         • Use 'C' (Craft) e 'E' (Inventário)
       </div>
       
@@ -120,20 +132,21 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
         <button id="manualBtn" style="background: #3498db; font-size: 20px; padding: 10px 30px;">Como Jogar</button>
       </div>
     </div>
-  <div id="manualPanel" style="display:none; position:fixed; inset:0; background:rgba(11, 18, 32, 0.98); z-index:20; padding:20px; color:white; flex-direction:column; align-items:center; justify-content:center; overflow-y: auto;">
     
+  </div> <!-- FECHAMENTO CORRETO DO CONTAINER CENTRAL -->
+
+  <div id="manualPanel" style="display:none; position:fixed; inset:0; background:rgba(11, 18, 32, 0.98); z-index:20; padding:20px; color:white; flex-direction:column; align-items:center; justify-content:center; overflow-y: auto;">
     <h2 style="color:#2ecc71; font-size: 40px; margin-bottom:10px;">COMO JOGAR</h2>
-
-    <div id="guiaConteudo" style="width: 100%; max-width: 900px; text-align: left;">
-        </div>
-
+    <div id="guiaConteudo" style="width: 100%; max-width: 900px; text-align: left;"></div>
     <button id="closeManualBtn" style="margin-top:30px; background:#2ecc71; padding: 15px 40px; border-radius: 30px; border: none; color: white; font-weight: bold; cursor: pointer; font-size: 20px;">ENTENDI!</button>
-</div>
-</div>
+  </div>
 
+</div> <!-- FECHAMENTO CORRETO DO OVERLAY (MENU INICIAL) -->
+
+<!-- TELA DE GAME OVER (AGORA TOTALMENTE INDEPENDENTE) -->
 <div id="gameOver">
   <h1 style="color:#ff4d4d; font-size:72px;">GAME OVER</h1>
-  <p id="deathMsg" style="font-size: 28px; font-weight: bold; color: #fff;"></p>
+  <p id="deathMsg" style="font-size: 28px; font-weight: bold; color: #fff; margin-bottom: 20px; max-width: 600px;"></p>
   <button onclick="location.reload()">Tentar Novamente</button>
 </div>
 
@@ -514,6 +527,7 @@ let joystick = {
 // === CONTROLES MOBILE 100% FUNCIONAIS ===
 if(isMobile){
   canvas.addEventListener("touchstart", e => {
+    if (!isGameStarted) return;
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -729,6 +743,7 @@ if (moveuX > 1.2 || moveuY > 1.2) {
             
             // 3. Ativa o estado de ataque/pesca
             player.attacking = true; 
+            player.atkTimer = weapons[player.weapon].speed; // 🔥 NOVO: Define o tempo de ataque no mobile também!
         } else {
             // Se tocar na terra com a vara, cancela a pesca
             player.attacking = false;
@@ -750,6 +765,7 @@ if (moveuX > 1.2 || moveuY > 1.2) {
         }
     }, { passive: false });
  canvas.addEventListener("touchmove", e => {
+    if (!isGameStarted) return;
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -772,6 +788,7 @@ if (moveuX > 1.2 || moveuY > 1.2) {
 }, { passive: false });
 
   canvas.addEventListener("touchend", e => {
+    if (!isGameStarted) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
         // Se soltou o lado esquerdo, para de andar
@@ -868,6 +885,17 @@ let targetCamX = Math.random() * (MAP - 1280);
 let targetCamY = Math.random() * (MAP - 720);
 let lastCamChange = 0;
 
+const mistClouds = [];
+for (let i = 0; i < 10; i++) {
+    mistClouds.push({
+        x: Math.random() * 1280,
+        y: Math.random() * 720,
+        r: 200 + Math.random() * 200,      // Tamanho da nuvem de névoa
+        vx: -0.2 - Math.random() * 0.4,    // Velocidade de deriva para a esquerda
+        vy: (Math.random() - 0.5) * 0.1,   // Oscilação vertical sutil
+        alpha: 0.05 + Math.random() * 0.08 // Opacidade suave
+    });
+}
 const stars = [];
 for(let i=0;i<400;i++){
   stars.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2, a: Math.random()*0.8});
@@ -918,6 +946,7 @@ arrows: 0,
   gold: 0, 
   sticks: 0,
   dead: false,
+  bowCharge: 0,
   inventory: {
     bow: 0,
     axe_wood: 0,
@@ -932,6 +961,8 @@ arrows: 0,
 };
 let isRaining = false;
 let rainTextTimer = 0;
+let avisouAnoitecer = false;
+let avisouAmanhecer = false;
 let isFishing = false;      // O jogador está com a linha na água?
 let fishTimer = 0;          // Quanto tempo falta para o peixe morder?
 let fishBite = false;       // O peixe já mordeu (as bolhas ficaram loucas)?
@@ -941,6 +972,17 @@ let craftingOpen = false;
 let placingCampfire = false;
 let inventoryOpen = false;
 let inventorySlots = [];
+
+// 🔥 Novas variáveis para evitar spam de abrir/fechar e exploits de soco rápido
+let lastMenuToggleTime = 0;
+const MENU_TOGGLE_COOLDOWN = 50; // Cooldown de 0.5 segundos para re-clicar nas telas
+
+function fecharAtaques() {
+    mouse.down = false;
+    touchAttack = false;
+    player.attacking = false;
+    player.attackProgress = 0;
+}
 let ultimoTickGlobal = Date.now();
 let ultimoBatimento = 0;
 let ultimoRonco = 0;
@@ -1017,7 +1059,8 @@ document.getElementById("startBtn").onclick = () => {
     zombieSpawnTimer = 0;
     bloodMoonTimer = 0;
     isBloodMoon = false;
-
+ avisouAnoitecer = false;
+    avisouAmanhecer = false;
     // Recupera status do jogador e USA O NASCIMENTO ALEATÓRIO SEGURO!
     if (player) {
         player.hp = player.maxHp;
@@ -1214,6 +1257,27 @@ function shootArrow() {
 
     player.arrows--;
     return true; // Retorna true para o sistema de ataque saber que disparou
+}
+function shootArrowCharged(charge) {
+    if (player.arrows <= 0) return;
+
+    // Velocidade escala de 6 (fraco) até 22 (carregado máximo)
+    const arrowSpeed = 6 + charge * 16;
+    
+    arrows.push({
+        x: player.x,
+        y: player.y,
+        angle: player.angle,
+        vx: Math.cos(player.angle) * arrowSpeed,
+        vy: Math.sin(player.angle) * arrowSpeed,
+        dist: 0,
+        maxDist: 400 + charge * 400, // O alcance também escala de 400 a 800
+        active: true,
+        damage: Math.round(15 + charge * 25) // O dano escala de 10 a 35
+    });
+
+    player.arrows--; 
+    tocarSom(SONS.selecionar); 
 }
 function drawRock(rock, offsetX=0, offsetY=0, scale=1){
   if(!rock.active) return;
@@ -1482,6 +1546,8 @@ for(let i = 0; i < 600; i++){ // Aumentei de 600 para 1200 (2x mais)
 const keys = {}, mouse = { x: 0, y: 0, down: false };
 
 onkeydown = e => {
+  if (e.repeat) return; // 🔥 Bloqueia a repetição nativa do teclado ao segurar a tecla!
+  
   const k = e.key.toLowerCase();
   keys[k] = true;
 
@@ -1490,18 +1556,26 @@ onkeydown = e => {
     keys.shift = true;
   }
 
-  // C -> Abre/Fecha Crafting
+  // C -> Abre/Fecha Crafting (Com cooldown de 500ms)
   if (k === "c") {
+    if (Date.now() - lastMenuToggleTime < MENU_TOGGLE_COOLDOWN) return;
+    lastMenuToggleTime = Date.now();
     craftingOpen = !craftingOpen;
-    if (craftingOpen) inventoryOpen = false; 
+    if (craftingOpen) {
+        inventoryOpen = false;
+        fecharAtaques(); // 🔥 Para socos/ferramentas na hora ao abrir o menu
+    }
   }
 
-  // E -> Abre/Fecha Inventário Tela Cheia
+  // E -> Abre/Fecha Inventário Tela Cheia (Com cooldown de 500ms)
   if (k === "e") {
+    if (Date.now() - lastMenuToggleTime < MENU_TOGGLE_COOLDOWN) return;
+    lastMenuToggleTime = Date.now();
     inventoryOpen = !inventoryOpen;
     if (inventoryOpen) {
         craftingOpen = false;
         placingCampfire = false; 
+        fecharAtaques(); // 🔥 Para socos/ferramentas na hora ao abrir o menu
     }
   }
 
@@ -1513,9 +1587,11 @@ onkeydown = e => {
     }
   }
 
-  // Troca de ferramentas
-  if (k === "1") player.weapon = 0;
-};
+  if (k === "1" || k === "2" || k === "3" || k === "e") { // Exemplo
+      cancelarPescaria();
+  }
+}
+
 
 // Abre inventário também com o botão direito do mouse
 window.addEventListener("contextmenu", e => {
@@ -1611,6 +1687,7 @@ function cleanDeadFishes() {
 }
 
 canvas.addEventListener("mousedown", e => {
+    if (!isGameStarted) return;
     if (e.button === 2) {
         return; 
     }
@@ -1652,8 +1729,11 @@ canvas.addEventListener("mousedown", e => {
             const y = startY + Math.floor(i / cols) * (slotSize + gap);
 
             if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
+                e.stopPropagation(); // 🔥 NOVO: Impede que o clique suba para o evento global da window!
                 console.log("Slot clicado:", i);
                 tocarSom(SONS.selecionar);
+                fecharAtaques();
+                
                 if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
                 else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
                 else if (i === 8 && player.inventory.axe_stone > 0) player.weapon = 3;
@@ -1723,20 +1803,21 @@ canvas.addEventListener("mousedown", e => {
         const worldMouseY = my + camY();
 
         if (weapons[player.weapon].style === "fishing_rod") {
-            if (isInRiver(worldMouseX, worldMouseY)) {
-                const dx = worldMouseX - player.x;
-                const dy = worldMouseY - player.y;
-                const distClique = Math.hypot(dx, dy);
-                
-                const maxRange = 250; 
-                const distFinal = Math.min(distClique, maxRange);
-                
-                player.anzolDestX = player.x + Math.cos(player.angle) * distFinal;
-                player.anzolDestY = player.y + Math.sin(player.angle) * distFinal;
-                
-                mouse.down = true; 
-                player.attacking = true; 
-                tocarSom(SONS.agua_anzol); 
+                        if (isInRiver(worldMouseX, worldMouseY)) {
+                            const dx = worldMouseX - player.x;
+                            const dy = worldMouseY - player.y;
+                            const distClique = Math.hypot(dx, dy);
+                            
+                            const maxRange = 250; 
+                            const distFinal = Math.min(distClique, maxRange);
+                            
+                            player.anzolDestX = player.x + Math.cos(player.angle) * distFinal;
+                            player.anzolDestY = player.y + Math.sin(player.angle) * distFinal;
+                            
+                            mouse.down = true; 
+                            player.attacking = true; 
+                            player.atkTimer = weapons[player.weapon].speed; // 🔥 NOVO: Define o tempo de ataque para a linha não sumir!
+                            tocarSom(SONS.agua_anzol);
             } else {
                 mouse.down = false;
                 player.attacking = false;
@@ -1933,8 +2014,7 @@ if (!res.empty) {
     ctx.fillText(`${res.value} / ${res.max || 0}`, iconCenterX, y + slotSize - 10);
 }
   });
-
-  drawHotbar(); // Chama a barra de baixo junto com o inventário grande
+  
 
  // Botão de Fechar Mobile (Topo Esquerdo)
   if (isMobile) {
@@ -2061,6 +2141,16 @@ function tryCraft(id) {
     tocarSom(SONS.erro);
     return;
   }
+if (id === "campfire" && player.inventory.campfire >= 5) {
+      hintSystem.show("AVISO: Limite de 5 fogueiras no inventário!", "alert");
+      tocarSom(SONS.erro);
+      return;
+  }
+    if (id === "wood_convert" && player.wood >= LIMITES.recursos) {
+      hintSystem.show("AVISO: Estoque de madeira cheio!", "alert");
+      tocarSom(SONS.erro);
+      return;
+  }
 
   // 2. BLOQUEIO DE FLECHAS: Verifica o limite ANTES de gastar recursos
   if (id === "arrow" && player.arrows >= LIMITES.flechas) {
@@ -2137,6 +2227,7 @@ console.log("Coelhos criados: " + animals.length);
 let jaTestouSorteNoPeriodo = false;
 
 function equiparItemPorIndice(index) {
+    fecharAtaques();
     // Mapeamos os índices conforme a ordem que você desenhou no drawFullscreenInventory
     switch(index) {
         case 4: // FOGUEIRA
@@ -2325,7 +2416,7 @@ if (isDay && worldTime >= DAY_DURATION) {
     jaTestouSorteNoPeriodo = false; // Reset para sortear chuva na NOITE
     isRaining = false;             
     zombieSpawnTimer = 0;
-
+avisouAnoitecer = false;
     
     if (dayCount >= 5 && Math.random() < BLOOD_MOON_CHANCE) {
         isBloodMoon = true;
@@ -2345,8 +2436,22 @@ else if (!isDay && worldTime >= NIGHT_DURATION) {
     zombies.length = 0;
     zombieSpawnTimer = 0;
     isBloodMoon = false;
+    avisouAmanhecer = false;
 }
-
+// 🔥 NOVO SISTEMA DE AVISO DINÂMICO (Calcula com base na duração das variáveis e reage à Lua de Sangue)
+    if (isDay && worldTime >= (DAY_DURATION - 30) && !avisouAnoitecer) {
+        hintSystem.show("AVISO: A noite chegará em 30 segundos! Procure fogueiras ou tochas.", "alert");
+        avisouAnoitecer = true;
+    }
+    if (!isDay && worldTime >= (NIGHT_DURATION - 30) && !avisouAmanhecer) {
+        // Alerta personalizado caso a noite atual tenha sido uma Lua de Sangue
+        if (isBloodMoon) {
+            hintSystem.show("AVISO: A Lua de Sangue está se pondo! O sol nascerá em 30 segundos.", "alert");
+        } else {
+            hintSystem.show("AVISO: O sol nascerá em 30 segundos!", "alert");
+        }
+        avisouAmanhecer = true;
+    }
 // --- 3. GATILHO DA CHUVA (Sorteio Único por Ciclo) ---
 // Se ainda não testamos a sorte neste período (dia ou noite)
 if (!jaTestouSorteNoPeriodo) {
@@ -2384,6 +2489,9 @@ if (!isDay && passouUmSegundo) {
 
         zombieSpawnTimer = 0;
     }
+}
+if (isRaining && rainTextTimer > 0) {
+    rainTextTimer -= 1 * dt; 
 }
 zombies.forEach(z => {
   if(!z.active) return;
@@ -2448,13 +2556,14 @@ zombies.forEach(z => {
   (isMobile && touchMove.active && Math.hypot(touchMove.dx, touchMove.dy) > joystick.radius * 0.8
  && !player.exhausted);
 
- if (isGameStarted) {
-  let foodDrain = isSprinting ? 0.018 : 0.009;
-  if(player.foodCooldown > 0){
-  player.foodCooldown--;
-} else {
-  player.food -= foodDrain * dt;
-}
+if (isGameStarted && !player.dead) {
+    if (player.foodCooldown > 0) {
+        player.foodCooldown -= 1 * dt; // Usa apenas o DT (Pausa real)
+    } else {
+        let foodDrain = isSprinting ? 0.018 : 0.009;
+        player.food -= foodDrain * dt;
+    }
+    if (player.food < 0) player.food = 0;
 
 // --- LÓGICA DE TEMPERATURA ---
 if (passouUmSegundo) {
@@ -2606,6 +2715,26 @@ resources.forEach(res => {
         player.x += Math.cos(angle) * overlap;
         player.y += Math.sin(angle) * overlap;
     }
+});
+// Colisão OTIMIZADA: Apenas fogueiras se afastam de objetos
+resources.filter(r => r.type === "campfire" && r.alive).forEach(fog => {
+    // Checa apenas contra objetos próximos (economiza CPU)
+    resources.forEach(obj => {
+        if (fog === obj || !obj.alive || obj.type === "stick") return;
+        
+        const dx = fog.x - obj.x;
+        const dy = fog.y - obj.y;
+        const dist = Math.hypot(dx, dy);
+        const minDist = fog.r + (obj.r || 20);
+
+        if (dist < minDist) {
+            const angle = Math.atan2(dy, dx);
+            const overlap = minDist - dist;
+            // A fogueira "desliza" para fora do objeto
+            fog.x += Math.cos(angle) * overlap;
+            fog.y += Math.sin(angle) * overlap;
+        }
+    });
 });
 // 🐇 COLISÃO FÍSICA COM COELHOS
 animals.forEach(ani => {
@@ -2944,24 +3073,42 @@ if(isMobile){
     player.angle = Math.atan2(touchAim.dy, touchAim.dx);
   }
 } else {
-  player.angle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
+  // 🔥 CORREÇÃO: Mira baseada na posição real projetada do jogador na tela (corrige limite do mapa)
+  const screenPlayerX = player.x - camX();
+  const screenPlayerY = player.y - camY();
+  player.angle = Math.atan2(mouse.y - screenPlayerY, mouse.x - screenPlayerX);
 }
 
 // --- 3. SISTEMA DE ATAQUE UNIFICADO ---
 const tentandoAtacar = (!isMobile && mouse.down) || (isMobile && touchAttack);
 
+if (player.weapon === 8 && !player.dead) {
+    if (tentandoAtacar && player.arrows > 0 && !player.attacking) {
+        // Enquanto o clique é segurado, tensiona a corda do arco
+        player.bowCharge = Math.min(1.0, (player.bowCharge || 0) + 0.03 * dt); 
+    } else if (!tentandoAtacar && player.bowCharge > 0) {
+        // Ao soltar o clique, o projétil é disparado com a força acumulada
+        shootArrowCharged(player.bowCharge);
+        player.attacking = true;
+        player.atkTimer = weapons[8].speed;
+        player.bowCharge = 0;
+    } else {
+        player.bowCharge = 0;
+    }
+}
 // 1. GATILHO DE ATAQUE (Clique/Toque)
 if (tentandoAtacar && !player.attacking) {
     const w = weapons[player.weapon];
  
-    // Se for arco, tenta atirar
+    // Se for arco, ignora o gatilho de clique instantâneo (agora ele funciona no segurar e soltar acima)
     if (w.style === "bow") {
-        if (shootArrow()) {
-            player.attacking = true;
-            player.atkTimer = w.speed;
-            player.attackProgress = 1;
-        }
-    } else {
+        // Vazio!
+    } 
+    // 🔥 CORREÇÃO: Impede que a vara de pesca execute golpes corpo-a-corpo ou colha frutas!
+    else if (w.style === "fishing_rod") {
+        // Vazio! A vara de pesca servirá unicamente para pescar nos rios.
+    } 
+    else {
         // Se for Corpo-a-Corpo (Lança, Machado, etc)
         player.attacking = true;
         player.atkTimer = w.speed;
@@ -2975,8 +3122,8 @@ if (tentandoAtacar && !player.attacking) {
         bushes.forEach(b => {
             if (b.hasFruit && Math.hypot(hx - b.x, hy - b.y) < b.r + 20) {
                 b.hasFruit = false;
-                player.food = Math.min(player.maxFood, player.food + 10);
-                player.foodCooldown = 180;
+                player.food = Math.min(player.maxFood, player.food + 5);
+                player.foodCooldown = 60;
                 createParticles(hx, hy, "#ff4d4d", 8);
             }
         });
@@ -3009,6 +3156,7 @@ if (tentandoAtacar && !player.attacking) {
                         player.wood = Math.min(LIMITES.recursos, player.wood + 2);
                         player.sticks = Math.min(LIMITES.recursos, player.sticks + 1);
                         player.food = Math.min(player.maxFood, player.food + 20);
+                        player.foodCooldown = 120;
                         createParticles(res.x, res.y, "#ffffff", 12, 1.5);
                     }
                 }
@@ -3054,7 +3202,8 @@ if (tentandoAtacar && !player.attacking) {
                 createParticles(hx, hy, "#d3a625", 6); 
                 if (j.hp <= 0) {
                     j.alive = false;
-                    player.food = Math.min(player.maxFood, player.food + 100); 
+                    player.food = Math.min(player.maxFood, player.food + 100);
+                    player.foodCooldown = 300; 
                     player.gold = Math.min(LIMITES.recursos, player.gold + 5); 
                 }
             }
@@ -3068,6 +3217,7 @@ if (tentandoAtacar && !player.attacking) {
                 if (b.hp <= 0) {
                     b.active = false;
                     player.food = Math.min(player.maxFood, player.food + (b.foodValue || 12));
+                    player.foodCooldown = 180;
                     let qtdPenas = Math.random() < 0.5 ? 8 : 10;
                     player.feather = Math.min(LIMITES.penas, player.feather + qtdPenas);
                     console.log(`Pássaro abatido! Penas +${qtdPenas}`);
@@ -3086,7 +3236,8 @@ if (tentandoAtacar && !player.attacking) {
                 createParticles(hx, hy, "#fce4ec", 6); 
                 if (ani.hp <= 0) {
                     ani.alive = false; 
-                    player.food = Math.min(player.maxFood, player.food + 50); 
+                    player.food = Math.min(player.maxFood, player.food + 50);
+                    player.foodCooldown = 240; 
                 }
             }
         });
@@ -3149,15 +3300,18 @@ const checarAlvos = (lista, ehBichoVivo, tipo) => {
                 }
                 else if (tipo === "jaguar") {
                     player.food = Math.min(player.maxFood, player.food + 100);
+                    player.foodCooldown = 300;
                     player.gold = Math.min(LIMITES.recursos, player.gold + 5);
                 }
                 else if (tipo === "bird") {
                     player.food = Math.min(player.maxFood, player.food + (obj.foodValue || 12));
+                    player.foodCooldown = 180;
                     let qtd = Math.random() < 0.5 ? 8 : 10;
                     player.feather = Math.min(LIMITES.penas, player.feather + qtd);
                 }
                 else if (tipo === "animal") { // Coelho
                     player.food = Math.min(player.maxFood, player.food + 50);
+                    player.foodCooldown = 240;
                 }
             }
         }
@@ -3302,7 +3456,7 @@ animals.forEach(a => {
     a.y = Math.max(a.r, Math.min(MAP - a.r, a.y));
 });
 
-  // --- 4. GERENCIAR TOCAS, RESPAWN E PROTEÇÃO ---
+// --- 4. GERENCIAR TOCAS, RESPAWN E PROTEÇÃO ---
   if (passouUmSegundo) {
       // Avança o tempo global do jogo
       if (typeof worldTime !== 'undefined') worldTime++;
@@ -3385,7 +3539,8 @@ for (let i = 0; i < birds.length; i++) {
     b.active = false; // O pássaro some
     
     // Entrega a comida direto para a barra do player (igual na sua palmeira)
-    player.food = Math.min(player.maxFood, player.food + 35); 
+    player.food = Math.min(player.maxFood, player.food + 35);
+    player.foodCooldown = 180; 
 
     if (typeof createParticles === 'function') {
         createParticles(b.x, b.y, "#ff4d4d", 10); // Sangue
@@ -3442,6 +3597,7 @@ if (player.attacking && weapons[player.weapon].style === "fishing_rod") {
                 if (peixeCapturado) {
 
                     player.food = Math.min(player.maxFood, player.food + 40);
+                    player.foodCooldown = 210;
                     createParticles(player.x, player.y, "#ffffff", 15, 1);
                     console.log("Sucesso! Peixe capturado.");
                 }
@@ -3478,6 +3634,19 @@ player.oldY = player.y;
 handleFishRespawn();
 cleanDeadFishes();
 hintSystem.update();
+}
+function cancelarPescaria() {
+    isFishing = false;
+    fishBite = false;
+    player.attacking = false;
+    player.attackProgress = 0;
+    // Solta todos os peixes que estavam presos
+    fishes.forEach(f => {
+        if (f.presoNoAnzol) {
+            f.presoNoAnzol = false;
+            f.assustado = true; // Eles fogem ao cancelar
+        }
+    });
 }
 // --- FUNÇÃO AUXILIAR (Coloque fora do update para organizar) ---
 function resetPesca(assustarPeixes) {
@@ -3671,11 +3840,13 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
     ctxRef.arc(player.r + 5, 0, 25, -Math.PI/2, Math.PI/2);
     ctxRef.stroke();
     
-    // Linha do arco (corda)
+    // 🔥 NOVO: Corda do arco tensiona para trás conforme a força do tiro carregado
+    const tension = (player.bowCharge || 0) * 18;
     ctxRef.strokeStyle = "#eee";
     ctxRef.lineWidth = 1;
     ctxRef.beginPath();
     ctxRef.moveTo(player.r + 5, -25);
+    ctxRef.lineTo(player.r + 5 - tension, 0); // Ponto central da corda puxado para trás
     ctxRef.lineTo(player.r + 5, 25);
     ctxRef.stroke();
 }
@@ -3702,8 +3873,8 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
   ctxRef.restore();
 }
 function drawJoystick(){
-
-  if(!isMobile || !touchMove.active) return;
+  // 🔥 CORREÇÃO: Adicione "|| !isGameStarted" para sumir com o joystick do menu
+  if(!isMobile || !touchMove.active || !isGameStarted) return;
 
   const baseX = touchMove.startX;
   const baseY = touchMove.startY;
@@ -3730,7 +3901,8 @@ function drawJoystick(){
   ctx.fill();
 }
 function drawAimJoystick(){
-  if(!isMobile || !touchAim.active) return;
+  // 🔥 CORREÇÃO: Adicione "|| !isGameStarted" para sumir com o joystick de mira do menu
+  if(!isMobile || !touchAim.active || !isGameStarted) return;
 
   const baseX = touchAim.startX;
   const baseY = touchAim.startY;
@@ -3857,7 +4029,8 @@ ctx.fillText(custoText, x + UI_CRAFT.cardW/2, y + 75);
     ctx.restore();
 }
 function drawMobileHUD() {
-    if (!isMobile) return;
+    // 🔥 CORREÇÃO: Adicione "|| !isGameStarted" para sumir com o HUD e botões do menu
+    if (!isMobile || !isGameStarted) return;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0); // Trava o HUD na tela do celular
 
@@ -4765,6 +4938,17 @@ if(!isDay) {
       else if (dayCount === 2) opacidadeNoite = 0.80; 
   }
 
+// 🔥 CORREÇÃO: Transiciona a densidade da noite sem dar "pulo" de luz (conecta perfeitamente com os 20s de transição)
+  if (worldTime <= 20) {
+      let progress = worldTime / 20; // 0 a 1 suavemente
+      let factor = 0.53 + 0.47 * progress; // Começa em 53% de escuridão (igual ao pôr do sol) e vai até 100% de noite
+      opacidadeNoite *= factor;
+  } else if (worldTime >= NIGHT_DURATION - 20) {
+      let progress = (NIGHT_DURATION - worldTime) / 20; // 1 a 0 suavemente
+      let factor = 0.53 + 0.47 * progress; // Clareia aos poucos, mas para em 53% (igual ao início do amanhecer)
+      opacidadeNoite *= factor;
+  }
+
   // 2. ESTRELAS
   ctx.save();
   stars.forEach(s => {
@@ -4916,9 +5100,8 @@ if (isRaining) {
         ctx.stroke();
     }
 
-    // 3. Texto "TEMPESTADE"
+// 3. Texto "TEMPESTADE"
     if (rainTextTimer > 0) {
-        rainTextTimer--;
         if (Math.floor(Date.now() / 500) % 2 === 0) {
             ctx.fillStyle = "#ecf0f1";
             ctx.font = "bold 50px Arial Black";
@@ -4928,6 +5111,9 @@ if (isRaining) {
     }
     ctx.restore();
 }
+
+// 🔥 NOVO: Aplica os tintes de dia/noite e a névoa dinâmica de tempestade
+drawAtmosphereEffects();
 // Na parte onde você move as partículas (dentro do update):
 particles.forEach((p, index) => {
     p.x += p.vx;
@@ -5111,50 +5297,80 @@ function drawTemperatureUI() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 }
-function drawHotbar() {
-  const slots = [
-    { id: "hand", name: "Mão", weapon: 0 },
-    { id: "axe_wood", name: "Mach. M", weapon: 1 },
-    { id: "pickaxe_wood", name: "Pic. M", weapon: 2 },
-    { id: "axe_stone", name: "Mach. P", weapon: 3 },
-    { id: "pickaxe_stone", name: "Pic. P", weapon: 4 },
-    { id: "spear", name: "Lança", weapon: 5 },
-    { id: "torch", name: "Tocha", weapon: 6 },
-    { id: "campfire", name: "Fogueira", isPlaceable: true }
-  ];
+// 🔥 NOVO: Controla a renderização de névoas e a iluminação realista de amanhecer/anoitecer (20s)
+function drawAtmosphereEffects() {
+    if (!isGameStarted || player.dead) return;
 
-  const slotSize = 50;
-  const startX = canvas.width / 2 - (slots.length * (slotSize + 5)) / 2;
-  const y = canvas.height - 70;
+    // 1. NÉVOA DINÂMICA (Tempestade)
+    if (isRaining) {
+        ctx.save();
+        mistClouds.forEach(c => {
+            c.x += c.vx * dt;
+            c.y += c.vy * dt;
+            if (c.x < -c.r) c.x = canvas.width + c.r;
+            if (c.x > canvas.width + c.r) c.x = -c.r;
+            if (c.y < -c.r) c.y = canvas.height + c.r;
+            if (c.y > canvas.height + c.r) c.y = -c.r;
 
-  slots.forEach((slot, i) => {
-    const x = startX + i * (slotSize + 5);
-    
-    // Só desenha se for a Mão (0) ou se o player tiver o item no inventário
-    if (slot.id !== "hand" && player.inventory[slot.id] <= 0) return;
-
-    // Fundo do quadradinho
-    ctx.fillStyle = (player.weapon === slot.weapon || (slot.id === "campfire" && placingCampfire)) 
-                    ? "rgba(46, 204, 113, 0.7)" : "rgba(0,0,0,0.5)";
-    ctx.fillRect(x, y, slotSize, slotSize);
-    ctx.strokeStyle = "white";
-    ctx.strokeRect(x, y, slotSize, slotSize);
-
-    // Texto curto do item
-    ctx.fillStyle = "white";
-    ctx.font = "10px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(slot.name, x + slotSize/2, y + slotSize/2 + 5);
-    
-    // Quantidade (se for fogueira)
-    if(player.inventory[slot.id] > 1) {
-      ctx.fillText("x" + player.inventory[slot.id], x + slotSize - 10, y + slotSize - 5);
+            ctx.save();
+            ctx.globalAlpha = c.alpha;
+            let grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.r);
+            grad.addColorStop(0, "rgba(220, 225, 230, 1)");
+            grad.addColorStop(1, "rgba(220, 225, 230, 0)");
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
+        ctx.restore();
     }
-  });
+
+    // 2. FILTRO DE LUA DE SANGUE (Transição de vermelho suave durante a noite de evento)
+    if (isBloodMoon && !isDay) {
+        ctx.save();
+        let factor = 1.0;
+        // Acompanha a entrada e saída gradual do breu da noite
+        if (worldTime <= 20) {
+            factor = worldTime / 20;
+        } else if (worldTime >= NIGHT_DURATION - 20) {
+            factor = (NIGHT_DURATION - worldTime) / 20;
+        }
+        ctx.fillStyle = `rgba(139, 0, 0, ${factor * 0.18})`; // Tonalidade avermelhada escura suave
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+    }
+
+    // 3. TRANSIÇÃO DE LUZ NATURAL (DIA <-> NOITE)
+    if (isDay) {
+        ctx.save();
+        const limitDusk = DAY_DURATION - 20; // Começa 20 segundos antes da noite
+        if (worldTime >= limitDusk) {
+            // Anoitecer (Sunset): Últimos 20 segundos do dia
+            let factor = (worldTime - limitDusk) / 20; // Rampa suave de 0 a 1
+            
+            // Escurece progressivamente o cenário
+            ctx.fillStyle = `rgba(0, 0, 0, ${factor * 0.45})`; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Filtro quente de pôr do sol
+            ctx.fillStyle = `rgba(243, 156, 18, ${factor * 0.22})`; // Laranja
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = `rgba(155, 89, 182, ${factor * 0.12})`; // Roxo
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        } else if (worldTime <= 20) {
+            // Amanhecer (Sunrise): Primeiros 20 segundos do dia
+            // 🔥 CORREÇÃO: Não escurece a tela no Dia 1 ao clicar em Começar Jogo!
+            if (dayCount > 1) {
+                let factor = 1 - (worldTime / 20); // Rampa suave de 1 a 0
+                ctx.fillStyle = `rgba(0, 0, 0, ${factor * 0.45})`; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+        ctx.restore();
+    }
 }
-
-
-
 </script>
 </body>
 </html>
