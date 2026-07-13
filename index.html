@@ -105,7 +105,7 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
 
       <div class="news-item">
         <div class="icon-box">⛏️</div>
-        <div><strong>Mineração</strong><br>Ouro não é útil ainda...</div>
+        <div><strong>Mineração</strong><br>Ouro é útil finalmente!</div>
       </div>
 
       <div class="news-item">
@@ -898,7 +898,7 @@ for(let i=0;i<400;i++){
   stars.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2, a: Math.random()*0.8});
 }
 const UI_CRAFT = {
-    cols: isMobile ? 2 : 3, // 2 colunas no celular, 3 no PC
+    cols: isMobile ? 2 : 4, // 2 colunas no celular, 3 no PC
     cardW: isMobile ? 180 : 220,
     cardH: isMobile ? 140 : 110,
     gap: 15,
@@ -907,6 +907,17 @@ const UI_CRAFT = {
     startX: 0, // Será calculado no draw
     startY: 120
 };
+function getDisplayRecipes() {
+    const allKeys = Object.keys(recipes);
+    if (isMobile) {
+        if (craftPage === 0) {
+            return allKeys.filter(key => key !== "fishing_rod" && key !== "arrow" && key !== "bow");
+        } else {
+            return allKeys.filter(key => key === "fishing_rod" || key === "arrow" || key === "bow");
+        }
+    }
+    return allKeys; // PC mostra todas de uma vez esticadas de lado
+}
 const LIMITES = {
   recursos: 50,    // Valor que você alterou
   ferramentas: 1,
@@ -944,16 +955,21 @@ arrows: 0,
   sticks: 0,
   dead: false,
   bowCharge: 0,
-  inventory: {
+inventory: {
     bow: 0,
     axe_wood: 0,
     pickaxe_wood: 0,
     axe_stone: 0,
     pickaxe_stone: 0,
+    axe_gold: 0,        // NOVO
+    pickaxe_gold: 0,    // NOVO
     campfire: 0,
-    spear: 0,
+    spear: 0,           // Lança de Madeira (antiga)
+    spear_stone: 0,     // NOVO
+    spear_gold: 0,      // NOVO
     torch: 0,
-    fishing_rod: 0
+    fishing_rod: 0,
+    knife_gold: 0       // NOVO
   }
 };
 let isRaining = false;
@@ -996,18 +1012,28 @@ const recipes = {
   fishing_rod: { name: "Vara de Pesca", wood: 5, sticks: 1, weaponIndex: 7 }, // weaponIndex 7 (Vara) 
   wood_convert: { name: "Refinar Madeira", wood: 0, sticks: 2, yield: 1 },
   bow: { name: "Arco", wood: 5, sticks: 4, weaponIndex: 8 },
-  arrow: { name: "Flechas (x3)", sticks: 1, feather: 2, yield: 3, isAmmo: true }
+  arrow: { name: "Flechas (x3)", sticks: 1, feather: 2, yield: 3, isAmmo: true },
+  spear_stone: { name: "Lança de Pedra", wood: 4, stone: 3, sticks: 2, weaponIndex: 9 },
+  spear_gold: { name: "Lança de Ouro", wood: 4, gold: 4, sticks: 2, weaponIndex: 10 },
+  axe_gold: { name: "Machado de Ouro", wood: 3, gold: 3, sticks: 2, weaponIndex: 11 },
+  pickaxe_gold: { name: "Picareta de Ouro", wood: 3, gold: 4, sticks: 2, weaponIndex: 12 },
+  knife_gold: { name: "Faca de Ouro", wood: 2, gold: 3, sticks: 1, weaponIndex: 13 }
 };
 const weapons = [
   { name: "Mão", range: 30, damage: 3, speed: 12, style: "hand" },
-  { name: "Machado Madeira", range: 42, damage: 12.5, speed: 16, style: "axe" },
-  { name: "Picareta Madeira", range: 46, damage: 12.5, speed: 18, style: "pickaxe" },
-  { name: "Machado Pedra", range: 45, damage: 16.7, speed: 15, style: "axe" }, // Novo
-  { name: "Picareta Pedra", range: 50, damage: 16.7, speed: 17, style: "pickaxe" }, // Novo
-  { name: "Lança", range: 75, damage: 20, speed: 10, style: "spear" }, // Novo
-  { name: "Tocha", range: 40, damage: 5, speed: 14, style: "torch" },
+  { name: "Machado Madeira", range: 42, damage: 12.5, speed: 16.5, style: "axe" },
+  { name: "Picareta Madeira", range: 46, damage: 12.5, speed: 16.5, style: "pickaxe" },
+  { name: "Machado Pedra", range: 45, damage: 16.7, speed: 16, style: "axe" }, // Novo
+  { name: "Picareta Pedra", range: 50, damage: 16.7, speed: 16, style: "pickaxe" }, // Novo
+  { name: "Lança", range: 75, damage: 20, speed: 15.5, style: "spear" }, // Novo
+  { name: "Tocha", range: 40, damage: 5, speed: 13.5, style: "torch" },
   { name: "Vara de Pesca", range: 90, damage: 0, speed: 1000, style: "fishing_rod" },
-  { name: "Arco", range: 350, damage: 25, speed: 35, style: "bow" } // weaponIndex 8
+  { name: "Arco", range: 350, damage: 25, speed: 35, style: "bow" },
+  { name: "Lança Pedra", range: 78, damage: 26, speed: 15, style: "spear" },   // Índice 9
+  { name: "Lança Ouro", range: 82, damage: 36, speed: 14.5, style: "spear" },     // Índice 10
+  { name: "Machado Ouro", range: 45, damage: 24, speed: 15.5, style: "axe" },     // Índice 11
+  { name: "Picareta Ouro", range: 52, damage: 24, speed: 15.5, style: "pickaxe" }, // Índice 12
+  { name: "Faca Ouro", range: 35, damage: 15, speed: 13, style: "knife" }        // Índice 13 (Faca de Ouro)
 ];
 
 let bushes=[], rocks=[], particles=[], mountains=[], rivers=[], zombies=[], resources=[], animals=[], rabbitHoles=[], jaguars=[], birds = [], fishes = [], arrows = [];
@@ -1070,9 +1096,7 @@ document.getElementById("startBtn").onclick = () => {
         player.x = safeStart.x;
         player.y = safeStart.y;
     }
-
-    // O arroto rasgado!
-    tocarSom("SINTETIZADOR_ARROTO");
+    
 };
 function makeRock(x, y, radius, color, type="stone") {
   const points = [];
@@ -1193,8 +1217,8 @@ function spawnBird() {
         active: true
     });
 }
-// Inicializa os 250
-for(let i=0; i<250; i++) spawnBird();
+// Inicializa os 200
+for(let i=0; i<200; i++) spawnBird();
 
 function spawnJaguar() {
     let x, y, dist;
@@ -1726,48 +1750,14 @@ canvas.addEventListener("mousedown", e => {
             const y = startY + Math.floor(i / cols) * (slotSize + gap);
 
             if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
-                e.stopPropagation(); // 🔥 NOVO: Impede que o clique suba para o evento global da window!
+                e.stopPropagation(); // Impede cliques fantasmas
                 console.log("Slot clicado:", i);
                 tocarSom(SONS.selecionar);
                 fecharAtaques();
                 
-                if (i === 6 && player.inventory.axe_wood > 0) player.weapon = 1;
-                else if (i === 7 && player.inventory.pickaxe_wood > 0) player.weapon = 2;
-                else if (i === 8 && player.inventory.axe_stone > 0) player.weapon = 3;
-                else if (i === 9 && player.inventory.pickaxe_stone > 0) player.weapon = 4;
-                else if (i === 5 && player.inventory.spear > 0) player.weapon = 5;
-                
-                else if (i === 11 && player.inventory.torch > 0) {
-                    if (player.weapon === 6) {
-                        player.weapon = 0;
-                        player.accessory = "torch";
-                    } else if (player.accessory === "torch") {
-                        player.accessory = null;
-                        player.weapon = 6;
-                    } else {
-                        player.weapon = 6;
-                        player.accessory = null;
-                    }
-                }
-                else if (i === 12 && player.inventory.fishing_rod > 0) {
-                    player.weapon = 7;
-                    inventoryOpen = false;
-                }
-                else if (i === 15 && player.inventory.bow > 0) {
-                    player.weapon = 8; 
-                    inventoryOpen = false;
-                }
-                else if (i === 4 && player.inventory.campfire > 0) {
-                     e.stopPropagation(); 
-                     e.preventDefault();  
-                     placingCampfire = true;
-                     inventoryOpen = false;
-                     mouse.down = false;  
-                }
-                else if (i <= 3 || i === 10 || i >= 13) {
-                    player.weapon = 0; 
-                }
-                return; 
+                // --- CHAMADA UNIFICADA (Funciona para todas as armas novas e antigas) ---
+                equiparItemPorIndice(i);
+                return;
             }
         }
 
@@ -1847,14 +1837,13 @@ function drawFullscreenInventory() {
   const startY = 150;
 
   // Itens originais + 7 slots vazios novos (Total 21)
-  const items = [
-
+const items = [
     { label: "MADEIRA", value: player.wood, color: "#8d6e63", detail: "#5d4037", max: LIMITES.recursos },
     { label: "PEDRA", value: player.stone, color: "#757575", detail: "#4a4a4a", max: LIMITES.recursos },
     { label: "OURO", value: player.gold, color: "#f1c40f", detail: "#d4ac0d", max: LIMITES.recursos },
     { label: "GRAVETO", value: player.sticks, max: LIMITES.recursos },
     { label: "FOGUEIRA", value: player.inventory.campfire, color: "#e67e22", detail: "#d35400", max: 5 },
-    { label: "LANÇA", value: player.inventory.spear, color: "#95a5a6", detail: "#7f8c8d", max: LIMITES.ferramentas },
+    { label: "LANÇA M.", value: player.inventory.spear, color: "#95a5a6", detail: "#7f8c8d", max: LIMITES.ferramentas },
     { label: "MACHADO M.", value: player.inventory.axe_wood, color: "#8d6e63", detail: "#fff", max: LIMITES.ferramentas },
     { label: "PICARETA M.", value: player.inventory.pickaxe_wood, color: "#8d6e63", detail: "#fff", max: LIMITES.ferramentas },
     { label: "MACHADO P.", value: player.inventory.axe_stone, color: "#757575", detail: "#fff", max: LIMITES.ferramentas },
@@ -1862,14 +1851,16 @@ function drawFullscreenInventory() {
     { label: "COMIDA", value: Math.floor(player.food), color: "#e74c3c", detail: "#c0392b", max: 100 },
     { label: "TOCHA", value: player.inventory.torch || 0, color: "#f39c12", detail: "#d35400", max: 1 },
     { label: "VARA PESCA", value: player.inventory.fishing_rod || 0, color: "#8b4513", detail: "#fff", max: 1 },
-    { label: "FLECHAS", value: player.arrows, color: "#34495e", detail: "#2c3e50", max: LIMITES.flechas }, // ADICIONADO
-    { label: "PENAS", value: player.feather, color: "#ecf0f1", detail: "#bdc3c7", max: LIMITES.penas }, // ADICIONADO
-    { label: "ARCO", value: player.inventory.bow || 0, color: "#8b4513", detail: "#f1c40f", max: 1 }, // ADICIONADO
-    { label: "SLOT VAZIO", value: 0, empty: true },
-    { label: "SLOT VAZIO", value: 0, empty: true },
-    { label: "SLOT VAZIO", value: 0, empty: true },
-    { label: "SLOT VAZIO", value: 0, empty: true },
-    { label: "SLOT VAZIO", value: 0, empty: true }
+    { label: "FLECHAS", value: player.arrows, color: "#34495e", detail: "#2c3e50", max: LIMITES.flechas }, 
+    { label: "PENAS", value: player.feather, color: "#ecf0f1", detail: "#bdc3c7", max: LIMITES.penas }, 
+    { label: "ARCO", value: player.inventory.bow || 0, color: "#8b4513", detail: "#f1c40f", max: 1 }, 
+    
+    // --- PREENCHIMENTO DOS SLOTS ANTIGAMENTE VAZIOS ---
+    { label: "LANÇA P.", value: player.inventory.spear_stone || 0, color: "#757575", detail: "#bdc3c7", max: LIMITES.ferramentas }, // Slot 16
+    { label: "MACHADO O.", value: player.inventory.axe_gold || 0, color: "#f1c40f", detail: "#fff", max: LIMITES.ferramentas },     // Slot 17
+    { label: "PICARETA O.", value: player.inventory.pickaxe_gold || 0, color: "#f1c40f", detail: "#fff", max: LIMITES.ferramentas }, // Slot 18
+    { label: "LANÇA O.", value: player.inventory.spear_gold || 0, color: "#f1c40f", detail: "#d4ac0d", max: LIMITES.ferramentas },   // Slot 19
+    { label: "FACA O.", value: player.inventory.knife_gold || 0, color: "#f1c40f", detail: "#fff", max: LIMITES.ferramentas }        // Slot 20
   ];
 
 
@@ -1902,24 +1893,26 @@ if (!res.empty) {
     else if (res.label === "FLECHAS") style = "arrow";    // <--- Novo
     else if (res.label === "PENAS") style = "feather";    // <--- Novo
     else if (res.label === "GRAVETO") style = "stick";    // <--- Novo
+    else if (res.label.includes("FACA")) style = "knife";
 
     if (style !== "") {
         ctx.save();
         ctx.translate(iconCenterX, iconCenterY);
         const offset = -15; 
-        const isStone = res.label.includes(" P."); 
-        const headColor = isStone ? "#7f8c8d" : "#a1887f";
+         const isStone = res.label.includes(" P."); 
+        const isGold = res.label.includes(" O."); 
+        const headColor = isGold ? "#f1c40f" : (isStone ? "#7f8c8d" : "#a1887f");
         const woodColor = "#5d4037";
 
         // DESENHOS EXISTENTES
         if (style === "spear") {
             ctx.fillStyle = woodColor;
             ctx.fillRect(offset, -2, 45, 4); 
-            ctx.fillStyle = "#3e2723"; 
+            ctx.fillStyle = headColor; // --- MUDADO DE "#3e2723" PARA "headColor" (Dinâmico) ---
             ctx.beginPath();
             ctx.moveTo(offset + 45, -6); ctx.lineTo(offset + 60, 0); ctx.lineTo(offset + 45, 6);
             ctx.fill();
-        } 
+        }
         else if (style === "torch") {
             ctx.fillStyle = woodColor;
             ctx.fillRect(offset, -3, 25, 6);
@@ -1954,6 +1947,25 @@ if (!res.empty) {
             ctx.fillStyle = woodColor; ctx.fillRect(offset + 40, -1, 10, 2);
             ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.beginPath();
             ctx.moveTo(offset + 50, 0); ctx.lineTo(offset + 55, 15); ctx.stroke();
+        }
+         else if (style === "knife") {
+            // Cabo de madeira
+            ctx.fillStyle = woodColor;
+            ctx.fillRect(offset, -1.5, 15, 3); 
+            
+            // Guarda de mão escura
+            ctx.fillStyle = "#2d2d2d";
+            ctx.fillRect(offset + 14, -5, 2.5, 10); 
+            
+            // Lâmina curva simétrica de ouro brilhante
+            ctx.fillStyle = headColor;
+            ctx.beginPath();
+            ctx.moveTo(offset + 16, -2);
+            ctx.lineTo(offset + 31, -2);
+            ctx.quadraticCurveTo(offset + 37, 0, offset + 31, 2); // Ponta centralizada
+            ctx.lineTo(offset + 16, 2);
+            ctx.closePath();
+            ctx.fill();
         }
 
         // --- NOVOS DESENHOS BASEADOS NO QUE VOCÊ PASSOU ---
@@ -2098,22 +2110,20 @@ function getCraftItemPos(index) {
 function checkCraftClick(mx, my) {
     if (!craftingOpen) return;
 
-    // 🔥 ADICIONE ESTA LINHA AQUI: Acorda o áudio no instante exato do clique físico
+
     if (ctxAudio && ctxAudio.state === 'suspended') {
         ctxAudio.resume();
     }
-    const items = Object.keys(recipes);
-    console.log("--- TESTE DE CLIQUE ---");
-    console.log("Mouse em:", Math.round(mx), Math.round(my));
+    
+    // Agora o clique usa EXATAMENTE as mesmas receitas do desenho
+    const displayKeys = getDisplayRecipes();
 
-    for (let i = 0; i < items.length; i++) {
+    for (let i = 0; i < displayKeys.length; i++) {
+
         const pos = getCraftItemPos(i);
-        
-        // Isso vai imprimir no console a área de cada botão
-        console.log(`Item ${i} (${items[i]}): X(${Math.round(pos.x)}-${Math.round(pos.x+pos.w)}) Y(${Math.round(pos.y)}-${Math.round(pos.y+pos.h)})`);
 
         if (mx >= pos.x && mx <= pos.x + pos.w && my >= pos.y && my <= pos.y + pos.h) {
-            tryCraft(items[i]);
+            tryCraft(displayKeys[i]);
             return;
         }
     }
@@ -2124,7 +2134,8 @@ function checkResources(key) {
     if ((r.wood || 0) > player.wood) return false;
     if ((r.stone || 0) > player.stone) return false;
     if ((r.sticks || 0) > player.sticks) return false;
-    if ((r.feather || 0) > player.feather) return false; // ADICIONADO
+    if ((r.feather || 0) > player.feather) return false;
+    if ((r.gold || 0) > player.gold) return false; // --- ADICIONADO VERIFICAÇÃO DE OURO ---
     return true;
 }
 function tryCraft(id) {
@@ -2132,7 +2143,10 @@ function tryCraft(id) {
   if (!r) return;
 
   // 1. Verificação de Limites para Ferramentas/Arco
-  const ferramentas = ["axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "fishing_rod", "bow"];
+ const ferramentas = [
+      "axe_wood", "pickaxe_wood", "axe_stone", "pickaxe_stone", "spear", "fishing_rod", "bow",
+      "spear_stone", "spear_gold", "axe_gold", "pickaxe_gold", "knife_gold", "torch"
+  ];
   if (ferramentas.includes(id) && player.inventory[id] >= 1) {
     console.log("Aviso: VOCÊ JÁ TEM ESTE ITEM!");
     tocarSom(SONS.erro);
@@ -2156,20 +2170,22 @@ if (id === "campfire" && player.inventory.campfire >= 5) {
     return;
   }
 
-  // 3. Verificação de Recursos (Dinâmica)
+// 3. Verificação de Recursos (Dinâmica com Ouro)
   const canCraft = (player.wood >= (r.wood || 0)) &&
                    (player.stone >= (r.stone || 0)) &&
                    (player.sticks >= (r.sticks || 0)) &&
-                   (player.feather >= (r.feather || 0));
+                   (player.feather >= (r.feather || 0)) &&
+                   (player.gold >= (r.gold || 0)); // --- ADICIONADO OURO ---
 
   if (canCraft) {
-    tocarSom(SONS.compra); // 🔊 SOM DE COMPRA / CRAFT CONCLUÍDO COM SUCESSO!
+    tocarSom(SONS.compra); 
     
-    // 4. Subtrai os recursos APENAS se passou em todos os testes acima
+    // Subtrai os recursos
     player.wood -= (r.wood || 0);
     player.stone -= (r.stone || 0);
     player.sticks -= (r.sticks || 0);
     player.feather -= (r.feather || 0);
+    player.gold -= (r.gold || 0); // --- ADICIONADO SUBTRAÇÃO DE OURO ---
     
     // 5. Entrega do Item
     if (id === "wood_convert") {
@@ -2225,15 +2241,14 @@ let jaTestouSorteNoPeriodo = false;
 
 function equiparItemPorIndice(index) {
     fecharAtaques();
-    // Mapeamos os índices conforme a ordem que você desenhou no drawFullscreenInventory
     switch(index) {
         case 4: // FOGUEIRA
             if (player.inventory.campfire > 0) {
-                placingCampfire = true; // Ativa o modo de colocar fogueira
-                inventoryOpen = false;  // Fecha o inventário para posicionar
+                placingCampfire = true;
+                inventoryOpen = false;
             }
             break;
-        case 5: // LANÇA
+        case 5: // LANÇA DE MADEIRA
             if (player.inventory.spear > 0) player.weapon = 5;
             break;
         case 6: // MACHADO MADEIRA
@@ -2248,37 +2263,47 @@ function equiparItemPorIndice(index) {
         case 9: // PICARETA PEDRA
             if (player.inventory.pickaxe_stone > 0) player.weapon = 4;
             break;
-            
         case 11: // TOCHA
-    if (player.inventory.torch > 0) {
-        if (player.weapon === 6) {
-            // Já está na mão? Vai pro acessório
-            player.accessory = "torch";
-            player.weapon = 0; 
-        } else {
-            // Estava guardada ou no acessório? Vem pra mão
-            player.weapon = 6;
-            player.accessory = null;
-        }
-    }
-    break;
-            
-            case 12: // VARA DE PESCA (Novo!)
+            if (player.inventory.torch > 0) {
+                if (player.weapon === 6) {
+                    player.accessory = "torch";
+                    player.weapon = 0; 
+                } else {
+                    player.weapon = 6;
+                    player.accessory = null;
+                }
+            }
+            break;
+        case 12: // VARA DE PESCA
             if (player.inventory.fishing_rod > 0) {
-                player.weapon = 7; // Índice 7 na lista 'weapons'
+                player.weapon = 7;
                 console.log("Vara equipada!");
             }
             break;
-//16-1=15 por algum motivo esse calculo da certo 
-            case 15: // Slot do Arco
-    if (player.inventory.bow > 0) {
-        player.weapon = 8; // ID 8 na lista 'weapons' é o Arco
-        console.log("Arco equipado!");
+        case 15: // ARCO
+            if (player.inventory.bow > 0) {
+                player.weapon = 8;
+                console.log("Arco equipado!");
+            }
+            break;
+            
+        // --- NOVAS ARMAS DE PEDRA E OURO ---
+        case 16: // LANÇA DE PEDRA
+            if (player.inventory.spear_stone > 0) player.weapon = 9;
+            break;
+        case 17: // MACHADO DE OURO
+            if (player.inventory.axe_gold > 0) player.weapon = 11;
+            break;
+        case 18: // PICARETA DE OURO
+            if (player.inventory.pickaxe_gold > 0) player.weapon = 12;
+            break;
+        case 19: // LANÇA DE OURO
+            if (player.inventory.spear_gold > 0) player.weapon = 10;
+            break;
+        case 20: // FACA DE OURO (Garante o dobro de carne!)
+            if (player.inventory.knife_gold > 0) player.weapon = 13;
+            break;
     }
-    break;
-
-    }
-    
 }
 // Localize onde você definiu o hintSystem e adicione/atualize estes pontos:
 const hintSystem = {
@@ -2630,9 +2655,9 @@ if (player.temp < 30 && !hintSystem.activeAlert) {
     }
   }
 
-  // Regeneração se estiver bem alimentado
+// Regeneração se estiver bem alimentado (travada no limite máximo)
   if(player.food > player.maxFood * 0.75 && player.hp < player.maxHp){
-    player.hp += 0.04 * dt;
+    player.hp = Math.min(player.maxHp, player.hp + 0.04 * dt);
   }
 
   // 2. Alerta de Fome
@@ -3060,8 +3085,18 @@ jaguars.forEach(j => {
     }
 
     // --- LIMITES DO MAPA (Mantido fora do IF) ---
-    j.x = Math.max(j.r, Math.min(MAP - j.r, j.x));
-    j.y = Math.max(j.r, Math.min(MAP - j.r, j.y));
+// Impede que a onça fique travada na borda do mapa
+    let batendoNaBordaJ = false;
+    if (j.x <= j.r) { j.x = j.r; batendoNaBordaJ = true; }
+    if (j.x >= MAP - j.r) { j.x = MAP - j.r; batendoNaBordaJ = true; }
+    if (j.y <= j.r) { j.y = j.r; batendoNaBordaJ = true; }
+    if (j.y >= MAP - j.r) { j.y = MAP - j.r; batendoNaBordaJ = true; }
+
+    if (batendoNaBordaJ) {
+        // Redireciona o ângulo de volta para o centro do mapa
+        j.angle = Math.atan2(MAP/2 - j.y, MAP/2 - j.x) + (Math.random() - 0.5) * 0.5;
+        j.timer = 3 + Math.random() * 5; // Reinicia o timer de passeio
+    }
 });
 
 // --- CONTROLE DE POPULAÇÃO E RESPAWN ---
@@ -3156,33 +3191,33 @@ if (tentandoAtacar && !player.attacking) {
             if (Math.hypot(hx - res.x, hy - res.y) > res.r + 15) return;
 
             // Madeira / Coqueiro
-            if (res.type === "tree" || res.type === "palm") {
-                if (w.style !== "axe") return;
+             if (res.type === "tree" || res.type === "palm") {
+            if (w.style !== "axe") return; // Apenas machado corta árvores!
+            
+            if (player.weapon === 1 && res.hp >= 300) {
+                console.log("Este machado é muito fraco para esta árvore!");
+                return; 
+            }
+
+            res.hp -= w.damage;
+            createParticles(hx, hy, res.type === "tree" ? "#6d4c41" : "#27ae60", 6);
+
+            if (res.hp <= 0) {
+                res.alive = false;
+                res.respawnTimer = 0;
                 
-                // Bloqueio de machado fraco
-                if (player.weapon === 1 && res.hp >= 300) {
-                    console.log("Este machado é muito fraco para esta árvore!");
-                    return; 
-                }
-
-                res.hp -= w.damage;
-                createParticles(hx, hy, res.type === "tree" ? "#6d4c41" : "#27ae60", 6);
-
-                if (res.hp <= 0) {
-                    res.alive = false;
-                    res.respawnTimer = 0;
-                    if (res.type === "tree") {
-                        player.wood = Math.min(LIMITES.recursos, player.wood + (res.yield || 1));
-                        player.sticks = Math.min(LIMITES.recursos, player.sticks + 2);
-                    } else { 
-                        player.wood = Math.min(LIMITES.recursos, player.wood + 2);
-                        player.sticks = Math.min(LIMITES.recursos, player.sticks + 1);
-                        player.food = Math.min(player.maxFood, player.food + 20);
-                        player.foodCooldown = 120;
-                        createParticles(res.x, res.y, "#ffffff", 12, 1.5);
-                    }
+                if (res.type === "tree") {
+                    player.wood = Math.min(LIMITES.recursos, player.wood + (res.yield || 1));
+                    player.sticks = Math.min(LIMITES.recursos, player.sticks + 2);
+                } else { 
+                    player.wood = Math.min(LIMITES.recursos, player.wood + 2);
+                    player.sticks = Math.min(LIMITES.recursos, player.sticks + 1);
+                    player.food = Math.min(player.maxFood, player.food + 20);
+                    player.foodCooldown = 120;
+                    createParticles(res.x, res.y, "#ffffff", 12, 1.5);
                 }
             }
+        }
 
             // Pedra / Ouro
             if (res.type === "stone" || res.type === "gold") {
@@ -3231,16 +3266,22 @@ if (tentandoAtacar && !player.attacking) {
             }
         });
 
-        birds.forEach(b => {
-            if (!b.active || !b.resting) return; // Só bate se estiver no chão
+// Abate de Pássaros com Faca de Ouro
+         birds.forEach(b => {
+            if (!b.active || !b.resting) return;
             if (Math.hypot(hx - b.x, hy - b.y) < b.r + 15) { 
                 b.hp -= w.damage; 
                 createParticles(b.x, b.y, "#ff0000", 8);
                 if (b.hp <= 0) {
                     b.active = false;
-                    player.food = Math.min(player.maxFood, player.food + (b.foodValue || 12));
+                    
+                    // Comida padrão (normal)
+                    player.food = Math.min(player.maxFood, player.food + 35);
                     player.foodCooldown = 180;
-                    let qtdPenas = Math.random() < 0.5 ? 8 : 10;
+                    
+                    // +50% de penas ganhas com a faca (multiplicador 1.5x)
+                    let multiplicador = (player.weapon === 13) ? 1.5 : 1.0;
+                    let qtdPenas = Math.round((Math.random() < 0.5 ? 8 : 10) * multiplicador);
                     player.feather = Math.min(LIMITES.penas, player.feather + qtdPenas);
                     console.log(`Pássaro abatido! Penas +${qtdPenas}`);
                 } else {
@@ -3251,8 +3292,10 @@ if (tentandoAtacar && !player.attacking) {
             }
         });
 
+        // Abate de Coelhos (Danos normais, sem bônus de comida da faca)
         animals.forEach(ani => {
             if (!ani.alive) return;
+            if (ani.isInHole) return;
             if (Math.hypot(hx - ani.x, hy - ani.y) < ani.r + 15) {
                 ani.hp -= w.damage; 
                 createParticles(hx, hy, "#fce4ec", 6); 
@@ -3304,7 +3347,7 @@ const checarAlvos = (lista, ehBichoVivo, tipo) => {
         if (!a.active) return;
         const estaAtivo = ehBichoVivo ? obj.alive : obj.active;
         if (!estaAtivo) return;
-
+        if (tipo === "animal" && obj.isInHole) return;
         const d = Math.hypot(a.x - obj.x, a.y - obj.y);
         const raioAcerto = (obj.r || 20) + 10;
 
@@ -3365,34 +3408,48 @@ animals.forEach(a => {
     if (dist < 300) {
       if (a.stamina < 100) a.stamina += 0.3;
       if (a.stamina >= 50) a.isExhausted = false;
-        // --- NOVO: TENTA ACHAR A TOCA MAIS PRÓXIMA ---
-        let minhaToca = rabbitHoles.find(h => Math.hypot(a.x - h.x, a.y - h.y) < 400);
 
-        if (minhaToca) {
-            // Se tem toca perto, o ângulo aponta para ela
-            a.angle = Math.atan2(minhaToca.y - a.y, minhaToca.x - a.x);
-            
-            // Se ele encostar na toca (distância < 10), ele entra
-            if (Math.hypot(a.x - minhaToca.x, a.y - minhaToca.y) < 10) {
-                a.isInHole = true; 
+        // --- APENAS O COELHO DONO SABE O CAMINHO PARA CORRER DIRETO PARA SUA TOCA ---
+        let foiParaToca = false;
+        if (a.myHole && rabbitHoles.includes(a.myHole)) {
+            let dH = Math.hypot(a.x - a.myHole.x, a.y - a.myHole.y);
+            if (dH < 400) { // Se a toca dele estiver no campo de visão (400px)
+                a.angle = Math.atan2(a.myHole.y - a.y, a.myHole.x - a.x);
+                foiParaToca = true;
             }
-        } else {
-            // Se não tem toca, foge do player como antes
+        }
+
+        if (!foiParaToca) {
+            // Se não for dono ou a toca dele estiver muito longe, foge correndo de costas para o jogador
             a.angle = Math.atan2(-dy, -dx); 
         }
 
-        // Só corre se tiver stamina e não estiver exausto
+        // --- ENTRADA ACIDENTAL (Qualquer coelho que relar em uma toca de perto pode entrar - limite de 2) ---
+        let tocaPerto = rabbitHoles.find(h => Math.hypot(a.x - h.x, a.y - h.y) < 12);
+        if (tocaPerto) {
+            // Conta quantos coelhos já estão escondidos dentro desta toca específica
+            let coelhosDentro = animals.filter(ani => ani.alive && ani.isInHole && Math.hypot(ani.x - tocaPerto.x, ani.y - tocaPerto.y) < 15).length;
+            
+            if (coelhosDentro < 2) {
+                a.x = tocaPerto.x; // Teleporta o coelho exatamente para o centro da toca
+                a.y = tocaPerto.y;
+                a.isInHole = true; 
+            }
+
+        }
+
+        // Sistema original de stamina e corrida do coelho
         if (a.stamina > 0 && !a.isExhausted) {
-            currentSpeed = player.speed * 1.5; // Corre 1.5x mais rápido
-            a.stamina -= 1.35; // Cansa rápido (o dobro do player)
+            currentSpeed = player.speed * 1.5; 
+            a.stamina -= 1.35; 
             if (a.stamina <= 0) a.isExhausted = true;
 
-            // Partículas de poeira/água ao correr
+
             if (Math.random() < 0.15) {
                 createParticles(a.x, a.y, inWaterAnimal ? "#a0d8ef" : "#d2b48c", 1, 0.3);
             }
         } else {
-            // FICOU CANSADO: Velocidade cai pela metade do andar normal
+
             currentSpeed = (player.speed * 0.90) * 0.5;
         }
     } else {
@@ -3474,35 +3531,65 @@ animals.forEach(a => {
     }
 
     // Limites de mapa
-    a.x = Math.max(a.r, Math.min(MAP - a.r, a.x));
-    a.y = Math.max(a.r, Math.min(MAP - a.r, a.y));
+ // Impede que o coelho fique preso na borda do mapa
+    let batendoNaBordaA = false;
+    if (a.x <= a.r) { a.x = a.r; batendoNaBordaA = true; }
+    if (a.x >= MAP - a.r) { a.x = MAP - a.r; batendoNaBordaA = true; }
+    if (a.y <= a.r) { a.y = a.r; batendoNaBordaA = true; }
+    if (a.y >= MAP - a.r) { a.y = MAP - a.r; batendoNaBordaA = true; }
+
+    if (batendoNaBordaA) {
+        // Aponta o ângulo de volta para o centro do mapa
+        a.angle = Math.atan2(MAP/2 - a.y, MAP/2 - a.x) + (Math.random() - 0.5) * 0.5;
+        a.timer = 3 + Math.random() * 4; // Reinicia o timer de rota de passeio
+    }
 });
 
 // --- 4. GERENCIAR TOCAS, RESPAWN E PROTEÇÃO ---
-  if (passouUmSegundo) {
+if (passouUmSegundo) {
       // Avança o tempo global do jogo
       if (typeof worldTime !== 'undefined') worldTime++;
-
+      // 1. Limpeza de Tocas de Coelhos (Sem o respawn antigo aninhado aqui dentro)
       rabbitHoles.forEach((h, i) => {
-          // Se o dono da toca estiver escondido nela, ela não some
+
           if (h.owner && h.owner.isInHole) return;
 
           h.life--;
-          
-          // Se a toca acabar, o coelho perde a referência dela
+
           if (h.life <= 0) {
               if (h.owner) h.owner.myHole = null;
               rabbitHoles.splice(i, 1);
           }
-
-          // RESPAWN: Se tiver menos de 20 vivos, chance de nascer um novo
-          let vivos = animals.filter(ani => ani.alive).length;
-          if (vivos < 20) {
-              if (Math.random() < 0.05) { 
-                  spawnAnimal(); 
-              }
-          }
       });
+
+// --- SISTEMA GLOBAL DE RESPAWNS (PROPORCIONAL E INTELIGENTE) ---
+      
+      // A) COELHOS (População inicial: 30. Ativa abaixo de 15 [50%])
+      let coelhosVivos = animals.filter(ani => ani.alive).length;
+      if (coelhosVivos < 15) { 
+          // Nasce 1 coelho por segundo para repovoar rapidamente
+          spawnAnimal(); 
+      }
+
+      // B) PÁSSAROS (População inicial: 200. Ativa abaixo de 100 [50%])
+      let passarosAtivos = birds.filter(b => b.active).length;
+      if (passarosAtivos < 100) {
+          // Pássaros andam em bando! Nascem 5 pássaros de uma vez só
+          for (let i = 0; i < 5; i++) {
+              spawnBird();
+          }
+      }
+
+      // C) ONÇAS (População inicial: 10. Ativa abaixo de 5 [50%])
+      let oncasVivas = jaguars.filter(j => j.alive).length;
+      if (oncasVivas < 5) {
+          // Onças são predadores letais e solitários. 
+          // Nasce apenas 1 por vez de forma lenta (15% de chance por segundo) para não sufocar o jogador
+          if (Math.random() < 0.15) {
+              spawnJaguar();
+              console.log("Uma nova onça solitária adentrou a mata...");
+          }
+      }
   }
 // --- LÓGICA DOS PASSARINHOS ---
 for (let i = 0; i < birds.length; i++) {
@@ -3553,8 +3640,18 @@ for (let i = 0; i < birds.length; i++) {
     }
 
     // Barreira do Mundo (Fora do if para garantir que nunca saia)
-    if (b.x < 50) b.x = 50; if (b.x > MAP - 50) b.x = MAP - 50;
-    if (b.y < 50) b.y = 50; if (b.y > MAP - 50) b.y = MAP - 50;
+// Impede que o pássaro fique preso flutuando na borda do mundo
+    let batendoNaBordaB = false;
+    if (b.x <= 50) { b.x = 50; batendoNaBordaB = true; }
+    if (b.x >= MAP - 50) { b.x = MAP - 50; batendoNaBordaB = true; }
+    if (b.y <= 50) { b.y = 50; batendoNaBordaB = true; }
+    if (b.y >= MAP - 50) { b.y = MAP - 50; batendoNaBordaB = true; }
+
+    if (batendoNaBordaB) {
+        // Altera a direção do voo apontando para o centro do mapa
+        b.angle = Math.atan2(MAP/2 - b.y, MAP/2 - b.x) + (Math.random() - 0.5) * 0.5;
+        b.timer = 3 + Math.random() * 5; 
+    }
 
     // Lógica de Morte
    if (b.hp <= 0 && b.active) {
@@ -3758,21 +3855,44 @@ function drawPlayer(ctxRef, x, y, angle, hidden){
   }
   if(w.style !== "hand") {
     // Definir cores: 3, 4 e 5 são de Pedra/Metal (Cinza)
-    const isStone = (player.weapon >= 3);
-    const headColor = isStone ? "#7f8c8d" : "#a1887f"; 
+// Define se a arma atual é de Pedra ou Ouro
+    const isStone = (player.weapon === 3 || player.weapon === 4 || player.weapon === 9);
+    const isGold = (player.weapon === 10 || player.weapon === 11 || player.weapon === 12 || player.weapon === 13);
+    
+    const headColor = isGold ? "#f1c40f" : (isStone ? "#7f8c8d" : "#a1887f"); 
     const woodColor = "#5d4037";
 
-    
+    // --- DESIGN DA FACA DE OURO CENTRALIZADO E MAIOR ---
+    if(w.style === "knife") {
+        // Cabo de madeira aumentado e perfeitamente centralizado em Y
+        ctxRef.fillStyle = woodColor;
+        ctxRef.fillRect(player.r + off, -1.5, 15, 3); 
+        
+        // Guarda de mão escura protetora em 3D centralizada
+        ctxRef.fillStyle = "#2d2d2d";
+        ctxRef.fillRect(player.r + off + 14, -5, 2.5, 10); 
+        
+        // Lâmina curva dourada robusta, simétrica e centralizada
+        ctxRef.fillStyle = headColor;
+        ctxRef.beginPath();
+        ctxRef.moveTo(player.r + off + 16, -2); // Linha superior
+        ctxRef.lineTo(player.r + off + 31, -2); 
+        ctxRef.quadraticCurveTo(player.r + off + 37, 0, player.r + off + 31, 2); // Ponta da faca centralizada em 0
+        ctxRef.lineTo(player.r + off + 16, 2); // Linha inferior
+        ctxRef.closePath();
+        ctxRef.fill();
+    }
+ // --- CORREÇÃO DA PONTA DA LANÇA EM JOGO (Dourada ou Pedra dependendo do tier) ---
     if(w.style === "spear") {
       ctxRef.fillStyle = woodColor;
       ctxRef.fillRect(player.r + off, -2, 60, 4); 
-      ctxRef.fillStyle = "#3e2723"; 
+      ctxRef.fillStyle = headColor; // --- MUDADO DE "#3e2723" PARA headColor (Conserta o bug!) ---
       ctxRef.beginPath();
       ctxRef.moveTo(player.r + 60 + off, -6);
       ctxRef.lineTo(player.r + 75 + off, 0);
       ctxRef.lineTo(player.r + 60 + off, 6);
       ctxRef.fill();
-    } 
+    }
        else if(w.style === "torch") {
     const off = player.attackProgress * 15;
     // Cabo
@@ -3967,22 +4087,11 @@ function drawCraftingMenu() {
     ctx.font = "bold 16px Arial";
     ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
     ctx.fillText("APERTE (C) PARA FECHAR", canvas.width / 2, 90);
-// 3. LÓGICA DE FILTRAGEM (Celular separa, PC mostra tudo)
-const allKeys = Object.keys(recipes);
-let displayKeys;
 
-if (isMobile) {
-    if (craftPage === 0) {
-        // PÁGINA 1: Ferramentas e básicos (ESCONDE vara, flecha e arco)
-        displayKeys = allKeys.filter(key => key !== "fishing_rod" && key !== "arrow" && key !== "bow");
-    } else {
-        // PÁGINA 2: Caça e Pesca (MOSTRA apenas vara, flecha e arco)
-        displayKeys = allKeys.filter(key => key === "fishing_rod" || key === "arrow" || key === "bow");
-    }
-} else {
-    displayKeys = allKeys; // PC mostra tudo
-}
-    // 4. CÁLCULO DA GRADE E DESENHO (Usando displayKeys!)
+    // 3. LÓGICA DE FILTRAGEM ALINHADA
+    const displayKeys = getDisplayRecipes();
+
+    // 4. CÁLCULO DA GRADE E DESENHO
     const totalW = (UI_CRAFT.cols * UI_CRAFT.cardW) + ((UI_CRAFT.cols - 1) * UI_CRAFT.gap);
     UI_CRAFT.startX = (canvas.width - totalW) / 2;
 
@@ -4010,22 +4119,23 @@ if (isMobile) {
         ctx.textAlign = "center";
         ctx.fillText(item.name.toUpperCase(), x + UI_CRAFT.cardW/2, y + 35);
 
-        // Custo (Abaixo da linha)
+        // Custo
         ctx.fillStyle = canAfford ? "#2ecc71" : "#e74c3c";
         ctx.font = "11px Arial";
         let custos = [];
 
-if (item.wood) custos.push(`W:${item.wood}`);
-if (item.stone) custos.push(`S:${item.stone}`);
-if (item.sticks) custos.push(`G:${item.sticks}`);
-if (item.feather) custos.push(`P:${item.feather}`); // Adiciona pena ao texto se houver custo
-
-let custoText = custos.join(" | "); 
-ctx.fillText(custoText, x + UI_CRAFT.cardW/2, y + 75);
+        if (item.wood) custos.push(`W:${item.wood}`);
+        if (item.stone) custos.push(`S:${item.stone}`);
+        if (item.sticks) custos.push(`G:${item.sticks}`);
+        if (item.feather) custos.push(`P:${item.feather}`);
+        if (item.gold) custos.push(`O:${item.gold}`);
+        let custoText = custos.join(" | "); 
+        ctx.fillText(custoText, x + UI_CRAFT.cardW/2, y + 75);
     });
-// 5. SETA DE NAVEGAÇÃO E BOTÃO SAIR (EXCLUSIVO MOBILE)
+
+    // 5. NAVEGAÇÃO MOBILE
     if (isMobile) {
-        // SETA DIREITA
+
         const arrowX = canvas.width - 80, arrowY = canvas.height / 2;
         ctx.fillStyle = "#3498db";
         ctx.beginPath();
@@ -4036,7 +4146,7 @@ ctx.fillText(custoText, x + UI_CRAFT.cardW/2, y + 75);
         }
         ctx.fill();
 
-        // BOTÃO FECHAR (Estilo Inventário: Meio Esquerda)
+
         const sw_close = 140, sh_close = 80, sx_close = 20, sy_close = canvas.height / 2 - 40;
         ctx.fillStyle = "#e74c3c";
         ctx.fillRect(sx_close, sy_close, sw_close, sh_close);
