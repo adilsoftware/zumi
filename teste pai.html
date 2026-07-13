@@ -633,32 +633,29 @@ if (isMobile && showCraftMenu) {
     return; // Se o craft está aberto e não clicou em nada, ignora o resto (chão/ataque)
 }
 
-    // --- B) SE O CRAFT ESTIVER FECHADO ---
+// --- B) SE O CRAFT ESTIVER FECHADO ---
 
-    // 1. Botão de Abrir Crafting (Verde no topo)
-    const bw = 160, bh = 70, bx = (canvas.width / 2) - (bw / 2), by = 15;
+    // 1. Botão de Abrir Crafting (Verde no topo centro-esquerda)
+    const bw = 150, bh = 70, bx = (canvas.width / 2) - 155, by = 15;
     if (tx > bx && tx < bx + bw && ty > by && ty < by + bh) {
-        craftingOpen = true;
+        if (Date.now() - lastMenuToggleTime >= MENU_TOGGLE_COOLDOWN) {
+            lastMenuToggleTime = Date.now();
+            craftingOpen = true;
+            fecharAtaques();
+        }
         continue;
     }
-     //novo lado tocou bateu 
-    if (tx >= canvas.width / 2) {
-        // Mudamos para touchAttack (a variável que o jogo espera)
-        touchAttack = true; 
-        
-        if (!touchAim.active) {
-            touchAim.active = true;
-            touchAim.id = t.identifier;
-            touchAim.startX = tx;
-            touchAim.startY = ty;
-        }
-    }
-// NOVO: Botão de Abrir ITENS (Azul no meio esquerda)
-        const bw_i = 140, bh_i = 70, bx_i = 20, by_i = canvas.height / 2 - 35;
-        if (tx > bx_i && tx < bx_i + bw_i && ty > by_i && ty < by_i + bh_i) {
+
+    // 2. Botão de Abrir ITENS (Azul no topo centro-direita)
+    const bw_i = 150, bh_i = 70, bx_i = (canvas.width / 2) + 5, by_i = 15;
+    if (tx > bx_i && tx < bx_i + bw_i && ty > by_i && ty < by_i + bh_i) {
+        if (Date.now() - lastMenuToggleTime >= MENU_TOGGLE_COOLDOWN) {
+            lastMenuToggleTime = Date.now();
             inventoryOpen = true;
-            continue;
+            fecharAtaques();
         }
+        continue;
+    }
         // --- LOGICA DE CONSTRUÇÃO (FOGUEIRA) ---
 if (placingCampfire) {
     // Se tocou na tela (e não era um botão de fechar/menu)
@@ -2289,11 +2286,13 @@ const hintSystem = {
     displayText: "",
     type: "tip", 
     opacity: 0,
-    timer: 0,
     charIndex: 0,
-    lastCharTime: 0,
-    nextCycleTime: Date.now() + 5000,
-    activeAlert: false, // Nova trava para não repetir alerta toda hora
+    
+    // --- CONTADORES DE TEMPO CONECTADOS AO JOGO ---
+    timerCount: 0,   // Segundos restantes (em frames)
+    typeTimer: 0,    // Velocidade de escrita (em frames)
+    cycleCount: 300, // Intervalo para nova dica (~5 segundos iniciais)
+    activeAlert: false,
 
     randomTips: [
         "DICA: Pegue gravetos no chão e depois fabrique ferramentas.",
@@ -2324,39 +2323,51 @@ const hintSystem = {
         "DICA: Creia em Jesus como único e suficiente salvador! se quiser sobreviver."
     ],
     show: function(txt, type = "tip") {
-        if (this.currentText === txt && this.opacity > 0) return; // Evita repetir o mesmo texto se já estiver na tela
+        if (this.currentText === txt && this.opacity > 0) return; 
         this.currentText = txt;
         this.displayText = "";
         this.charIndex = 0;
         this.type = type;
         this.opacity = 1;
-        this.timer = Date.now() + 9000;
+        this.typeTimer = 0;
+        
+        // 9 segundos convertidos em tempo de jogo (~540 frames)
+        this.timerCount = 540; 
         if (type === "alert") this.activeAlert = true;
     },
 
     update: function() {
-        let agora = Date.now();
-
-        // Efeito Letra por Letra
+        // 1. Escrita letra por letra (Utiliza o tempo de frames 'dt')
         if (this.charIndex < this.currentText.length) {
-            if (agora - this.lastCharTime > 40) { // Velocidade da digitação
+            this.typeTimer += 1 * dt;
+            if (this.typeTimer >= 2.4) { 
                 this.displayText += this.currentText[this.charIndex];
                 this.charIndex++;
-                this.lastCharTime = agora;
+                this.typeTimer = 0;
             }
         }
 
-        // Fade out
-        if (agora > this.timer && this.opacity > 0) {
-            this.opacity -= 0.02;
-            if (this.opacity <= 0) this.activeAlert = false;
+        // 2. Contagem para sumir (Utiliza o tempo de frames 'dt')
+        if (this.timerCount > 0) {
+            this.timerCount -= 1 * dt;
+        } else if (this.opacity > 0) {
+            this.opacity -= 0.02 * dt;
+            if (this.opacity <= 0) {
+                this.opacity = 0;
+                this.activeAlert = false;
+            }
         }
 
-        // Dicas Cíclicas (Lado esquerdo)
-        if (agora > this.nextCycleTime && this.opacity <= 0) {
-            let dicaAleatoria = this.randomTips[Math.floor(Math.random() * this.randomTips.length)];
-            this.show(dicaAleatoria, "tip");
-            this.nextCycleTime = agora + (Math.random() * 20000 + 25000);
+        // 3. Contagem para nova dica aleatória (Utiliza o tempo de frames 'dt')
+        if (this.opacity <= 0) {
+            if (this.cycleCount > 0) {
+                this.cycleCount -= 1 * dt;
+            } else {
+                let dicaAleatoria = this.randomTips[Math.floor(Math.random() * this.randomTips.length)];
+                this.show(dicaAleatoria, "tip");
+                // Define novo intervalo entre 25 a 45 segundos de jogo
+                this.cycleCount = 1500 + Math.random() * 1200;
+            }
         }
     }
 };
@@ -2647,12 +2658,23 @@ if (player.temp < 30 && !hintSystem.activeAlert) {
       if (flashSangue < 0) flashSangue = 0;
   }
 
-  if(player.hp <= 0 && !player.dead) {
-    player.hp = 0;
-    player.dead = true;
-    flashSangue = 0; // Desliga o flash ao morrer
-    document.getElementById("gameOver").style.display = "flex";
+if(player.hp <= 0 && !player.dead) {
+  player.hp = 0;
+  player.dead = true;
+  flashSangue = 0; // Desliga o flash ao morrer
+  
+  // --- SISTEMA DE RECORDE DE DIAS ---
+  let recorde = localStorage.getItem("zumi_record_dias") || 1;
+  if (dayCount > recorde) {
+      localStorage.setItem("zumi_record_dias", dayCount);
+      recorde = dayCount;
   }
+  
+  // Exibe a mensagem personalizada na tela de Game Over
+  document.getElementById("deathMsg").innerHTML = `Você sobreviveu por ${dayCount} dias!<br>Seu Recorde: ${recorde} dias.`;
+  
+  document.getElementById("gameOver").style.display = "flex";
+}
 // === CONTROLE DE STAMINA (APÓS UPDATE) ===
 if (player.stamina <= 0) {
   player.stamina = 0;
@@ -4029,15 +4051,22 @@ ctx.fillText(custoText, x + UI_CRAFT.cardW/2, y + 75);
     ctx.restore();
 }
 function drawMobileHUD() {
-    // 🔥 CORREÇÃO: Adicione "|| !isGameStarted" para sumir com o HUD e botões do menu
     if (!isMobile || !isGameStarted) return;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0); // Trava o HUD na tela do celular
 
+    // Coordenadas do player projetadas na tela
+    const sPX = player.x - camX();
+    const sPY = player.y - camY();
+
     // --- 📊 BARRAS (MAIS PARA A ESQUERDA) ---
+    ctx.save();
+    if (sPX < 250 && sPY < 120) {
+        ctx.globalAlpha = 0.25; // 🔥 Transparência se o player estiver embaixo das barras
+    }
     let barY = 25;
-    const barW = 180; // Tamanho bom para mobile
-    const sx = 20;    // Encostado na tela (20px de margem)
+    const barW = 180;
+    const sx = 20;
     
     const bars = [
         { name: "HP", color: "#e74c3c", val: player.hp, max: player.maxHp, icon: "❤️" },
@@ -4046,54 +4075,57 @@ function drawMobileHUD() {
     ];
 
     bars.forEach(bar => {
-        // Ícone e Nome
         ctx.fillStyle = "#fff"; ctx.font = "bold 14px Arial";
         ctx.textAlign = "left";
         ctx.fillText(`${bar.icon} ${bar.name}`, sx, barY + 12);
-        
-        // Fundo da barra
         ctx.fillStyle = "rgba(0,0,0,0.5)"; 
         ctx.fillRect(sx + 90, barY, barW, 14);
-        
-        // Preenchimento
         ctx.fillStyle = bar.color; 
         ctx.fillRect(sx + 90, barY, barW * (bar.val / bar.max), 14);
         barY += 28;
     });
+    ctx.restore();
 
-    // --- 🟢 BOTÃO DE CRAFTING (CENTRO) ---
-    const bw = 160, bh = 70, bx = (canvas.width / 2) - (bw / 2), by = 15;
+    // --- 🟢 BOTÕES DE MENU LADO A LADO ---
+    ctx.save();
+    // Transparência se o player estiver passando por trás dos botões do topo
+    if (sPX > canvas.width / 2 - 180 && sPX < canvas.width / 2 + 180 && sPY < 110) {
+        ctx.globalAlpha = 0.25;
+    }
+
+    // Botão Verde (CRAFTING)
+    const bw = 150, bh = 70, bx = (canvas.width / 2) - 155, by = 15;
     ctx.fillStyle = "#2ecc71"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3;
     ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh);
     ctx.fillStyle = "#fff"; ctx.font = "bold 18px Arial"; ctx.textAlign = "center";
     ctx.fillText("CRAFTING", bx + bw/2, by + bh/2 + 7);
-           //INVENTÁRIO 
-    const btnW = 140, btnH = 70;
-const btnX = 20; // Lado esquerdo da tela
-const btnY = canvas.height / 2 - 35; // Bem no meio da altura
-ctx.fillStyle = "#3498db"; // Azul
-ctx.fillRect(btnX, btnY, btnW, btnH);
-ctx.strokeStyle = "#fff";
-ctx.strokeRect(btnX, btnY, btnW, btnH);
 
-ctx.fillStyle = "#fff";
-ctx.font = "bold 18px Arial";
-ctx.textAlign = "center";
-ctx.fillText("ITENS", btnX + btnW / 2, btnY + btnH / 2 + 7);
+    // Botão Azul (ITENS)
+    const btnW = 150, btnH = 70, btnX = (canvas.width / 2) + 5, btnY = 15;
+    ctx.fillStyle = "#3498db"; ctx.fillRect(btnX, btnY, btnW, btnH);
+    ctx.strokeStyle = "#fff"; ctx.strokeRect(btnX, btnY, btnW, btnH);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 18px Arial"; ctx.textAlign = "center";
+    ctx.fillText("ITENS", btnX + btnW / 2, btnY + btnH / 2 + 7);
+    ctx.restore();
 
-    // --- 🔴 BOTÃO DE SAIR (SINCRONIZADO COM SEU TOUCHSTART) ---
+    // --- 🔴 BOTÃO DE SAIR MOBILE ---
     if (craftingOpen) {
         const sx_sair = bx + bw + 10; 
         const sw = 100, sh = 50; 
         ctx.fillStyle = "#e74c3c"; 
-        ctx.fillRect(sx_sair, by + 5, sw, sh); // by+5 para alinhar com o toque (sh=50)
+        ctx.fillRect(sx_sair, by + 5, sw, sh);
         ctx.strokeStyle = "#fff"; 
         ctx.strokeRect(sx_sair, by + 5, sw, sh);
         ctx.fillStyle = "#fff";
         ctx.font = "bold 16px Arial";
         ctx.fillText("SAIR", sx_sair + sw/2, by + 5 + sh/2 + 6);
     }
-    // --- 🗺️ MINIMAPA (IGUAL PC) ---
+
+    // --- 🗺️ MINIMAPA MOBILE ---
+    ctx.save();
+    if (sPX > canvas.width - 180 && sPY < 180) {
+        ctx.globalAlpha = 0.25; // 🔥 Transparência se o player estiver embaixo do minimapa
+    }
     const sz = 150, p = 15;
     const mx = canvas.width - sz - p, my = p;
     const sc = sz / MAP; 
@@ -4107,6 +4139,7 @@ ctx.fillText("ITENS", btnX + btnW / 2, btnY + btnH / 2 + 7);
     ctx.fillStyle = MOUNTAIN_COLOR;
     mountains.forEach(m => { ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, m.r*sc, 0, Math.PI*2); ctx.fill(); });
     ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 4, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
 
     ctx.restore();
 }
@@ -4165,7 +4198,7 @@ function drawAlgae(offsetX, offsetY) {
 }
 function drawHints() {
     if (!isGameStarted) return;
-    hintSystem.update();
+    
     if (hintSystem.opacity <= 0) return;
 
     ctx.save();
@@ -4173,39 +4206,65 @@ function drawHints() {
     ctx.globalAlpha = hintSystem.opacity;
     
     if (hintSystem.type === "alert") {
-        // --- ALERTA: SEMPRE NO MEIO ---
+        // --- ALERTA: SEMPRE NO MEIO DA TELA ---
         ctx.font = "bold 28px Arial";
         ctx.textAlign = "center";
         
-        // Sombra
         ctx.fillStyle = "black";
         ctx.fillText(hintSystem.displayText, canvas.width / 2 + 2, 152);
         
-        // Texto Piscante
         ctx.fillStyle = (Date.now() % 500 < 250) ? "#ff4444" : "#ffffff";
         ctx.fillText(hintSystem.displayText, canvas.width / 2, 150);
 
     } else {
-        // --- DICA: LADO ESQUERDO (Abaixo das Barras/Temperatura) ---
-        ctx.font = "bold 16px Arial";
+        // --- DICA: LADO ESQUERDO ---
+        ctx.font = "bold 14px Arial"; // Fonte levemente maior para melhor leitura
         ctx.textAlign = "left";
+        ctx.textBaseline = "top"; 
 
-        // Define o X e Y baseado no dispositivo
         let tipX = 20; 
-        let tipY = isMobile ? 250 : 320; // No mobile fica abaixo do medidor de temp (120) e botões. No PC abaixo da temp (260).
+        let tipY = isMobile ? 215 : 290; 
+        let maxWidth = 220; 
+        let lineHeight = 17; // Altura da linha levemente aumentada para acompanhar a fonte
 
-        // Fundo para facilitar leitura
-        let textWidth = ctx.measureText(hintSystem.displayText).width;
-        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-        ctx.roundRect(tipX - 5, tipY - 20, textWidth + 15, 30, 5);
+        // Divide o texto longo em linhas dinâmicas
+        let lines = wrapText(ctx, hintSystem.displayText, tipX, tipY, maxWidth, lineHeight);
+
+        // Desenha o fundo preto transparente proporcional à quantidade de linhas
+        let bgHeight = lines.length * lineHeight + 10;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.beginPath();
+        ctx.roundRect(tipX - 8, tipY - 5, maxWidth + 16, bgHeight, 6);
         ctx.fill();
 
-        // Cor da Dica (Amarelo claro para destacar do branco das barras)
+        // Desenha as linhas de texto quebradas
         ctx.fillStyle = "#f1c40f"; 
-        ctx.fillText(hintSystem.displayText, tipX, tipY);
+        for (let i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], tipX, tipY + (i * lineHeight));
+        }
     }
     
     ctx.restore();
+}
+// Função auxiliar para quebrar textos longos em várias linhas de forma automática
+function wrapText(context, text, x, y, maxWidth, lineHeight) {
+    let words = text.split(' ');
+    let line = '';
+    let lines = [];
+
+    for (let n = 0; n < words.length; n++) {
+        let testLine = line + words[n] + ' ';
+        let metrics = context.measureText(testLine);
+        let testWidth = metrics.width;
+        if (testWidth > maxWidth && n > 0) {
+            lines.push(line);
+            line = words[n] + ' ';
+        } else {
+            line = testLine;
+        }
+    }
+    lines.push(line);
+    return lines;
 }
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -5122,14 +5181,17 @@ particles.forEach((p, index) => {
     if (p.life <= 0) particles.splice(index, 1);
 });
   // --- UI MELHORADA (BARRAS GRANDES E ÍCONES TEXTURIZADOS) ---
-  if (isGameStarted && !player.dead && !isMobile) { 
-    ctx.save();
+if (isGameStarted && !player.dead && !isMobile) { 
+    ctx.save(); // --- SALVAMENTO 1 (Para todo o HUD do PC) ---
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-  if(!player.dead && !isMobile) {
-    ctx.save();
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
+
+    // --- DETECÇÃO DE PROXIMIDADE (Deixa transparente se o player estiver embaixo) ---
+    const sPX = player.x - camX();
+    const sPY = player.y - camY();
+    if (sPX < 240 && sPY < 270) {
+        ctx.globalAlpha = 0.25; 
+    }
 
     // 1. DESENHO DOS RECURSOS COM "TEXTURAS"
     const resourcesUI = [
@@ -5143,29 +5205,17 @@ particles.forEach((p, index) => {
       let x = 20;
       let y = 20 + (i * 28);
 
-      // Fundo do slot do recurso
       ctx.fillStyle = "rgba(0,0,0,0.6)";
       ctx.fillRect(x, y, 160, 24);
 
-      // --- DESENHO DOS ÍCONES ---
       if (res.label === "GRAVETO") {
         ctx.save();
-        // Move para o centro do espaço do ícone
         ctx.translate(x + 13, y + 12);
-        // Inclina para a esquerda (rotação negativa)
         ctx.rotate(-Math.PI / 4); 
-        
-        // Cor das bordas (o marrom mais escuro que você pediu)
         ctx.fillStyle = "#8b5a2b"; 
-        
-        // Desenha o retângulo: 
-        // Largura 6 (metade da madeira) e Altura 18 (compridinho)
-        // Centralizamos o desenho usando -3 e -9
         ctx.fillRect(-3, -9, 6, 18); 
-        
         ctx.restore();
       } else {
-        // Madeira, Pedra e Ouro continuam QUADRADOS
         ctx.fillStyle = res.color;
         ctx.fillRect(x + 5, y + 4, 16, 16);
         ctx.strokeStyle = res.detail;
@@ -5173,13 +5223,12 @@ particles.forEach((p, index) => {
         ctx.strokeRect(x + 5, y + 4, 16, 16);
       }
 
-      // Texto
       ctx.fillStyle = "#fff";
       ctx.font = "bold 13px Arial";
       ctx.fillText(`${res.label}: ${res.value}`, x + 30, y + 5);
     });
 
-    // 2. BARRAS DE STATUS (VOLTARAM PARA 200px)
+    // 2. BARRAS DE STATUS (HP, STAMINA, FOME)
     let barY = 140; 
     const bars = [
       { name: "VIDA", color: "#e74c3c", val: player.hp, max: player.maxHp, icon: "❤️" },
@@ -5188,30 +5237,31 @@ particles.forEach((p, index) => {
     ];
 
     bars.forEach(bar => {
-      // Nome e Ícone
       ctx.fillStyle = "#fff";
       ctx.font = "bold 12px Arial";
       ctx.fillText(`${bar.icon} ${bar.name}`, 20, barY - 2);
       
-      // Fundo da barra (200px de largura)
       ctx.fillStyle = "rgba(0,0,0,0.5)";
       ctx.fillRect(20, barY + 12, 200, 12); 
       
-      // Brilho/Preenchimento da barra
       ctx.fillStyle = bar.color;
       let currentWidth = 200 * (bar.val / bar.max);
       ctx.fillRect(20, barY + 12, Math.max(0, currentWidth), 12);
 
-      // Borda da barra para acabamento
       ctx.strokeStyle = "rgba(255,255,255,0.2)";
       ctx.strokeRect(20, barY + 12, 200, 12);
 
       barY += 35;
     });
 
-    ctx.restore();
-    // MINIMAPA
+    // --- MINIMAPA (PC) ---
     const sz=150, p=6, mx=canvas.width-sz-p, my=p, sc=sz/MAP;
+    ctx.save(); // --- SALVAMENTO 2 (Isola a opacidade apenas do minimapa) ---
+    
+    if (sPX > canvas.width - 180 && sPY < 180) {
+        ctx.globalAlpha = 0.25; 
+    }
+
     ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillRect(mx, my, sz, sz);
     ctx.fillStyle=SAND_COLOR; ctx.beginPath(); 
     ctx.fillRect(mx + rivers[0].x*sc, my + (rivers[0].y-SAND_WIDTH)*sc, rivers[0].w*sc, (rivers[0].h+SAND_WIDTH*2)*sc);
@@ -5223,9 +5273,10 @@ particles.forEach((p, index) => {
     mountains.forEach(m => { ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, m.r*sc, 0, Math.PI*2); ctx.fill(); });
     ctx.fillStyle="#fff";
     ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore(); // --- RESTAURAÇÃO 2 (Fecha o bloco do minimapa) ---
+    ctx.restore(); // --- RESTAURAÇÃO 1 (Fecha e limpa as configurações de todo o HUD do PC) ---
   }
-ctx.restore();
-}
 if (!player.dead) {
     drawHints();
   drawTemperatureUI();
@@ -5257,25 +5308,33 @@ if (!player.dead) {
     }
   }
 function drawTemperatureUI() {
-    // 🔥 TRAVA: Só desenha se o jogo estiver rodando
     if (!isGameStarted) return; 
 
     let x = 20;
-    let y = isMobile ? 125 : 260; // Mantive o valor que você tinha
-
+    let y = isMobile ? 145 : 260; // Define o Y correto para PC ou Mobile
     const w = 200, h = 18;
 
-    // Título
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 13px Arial";
-    ctx.textAlign = "left";
-    ctx.fillText("🌡️ MEDIDOR DE TEMPERATURA", x, y - 8);
+    ctx.save();
     
-    // Fundo
+    const sPX = player.x - camX();
+    const sPY = player.y - camY();
+    
+    // --- DETECÇÃO DINÂMICA DE TRANSPARÊNCIA (Funciona em PC e Celular) ---
+    if (sPX < (x + w + 30) && sPY > y - 30 && sPY < y + h + 20) {
+        ctx.globalAlpha = 0.25; // Aplica o efeito fantasma
+    }
+
+    // Título ajustado com mais espaçamento (y - 12) e fonte limpa
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 12px Arial";
+    ctx.textAlign = "left";
+    ctx.fillText("🌡️ MEDIDOR DE TEMPERATURA", x, y - 7);
+    
+    // Fundo da barra
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(x, y, w, h);
 
-    // Cor dinâmica
+    // Preenchimento de cor dinâmica
     const red = Math.floor((player.temp / 100) * 255);
     const blue = Math.floor(((100 - player.temp) / 100) * 255);
     ctx.fillStyle = `rgb(${red}, 100, ${blue})`;
@@ -5284,7 +5343,7 @@ function drawTemperatureUI() {
     ctx.strokeStyle = "rgba(255,255,255,0.3)";
     ctx.strokeRect(x, y, w, h);
 
-    // Efeito de Vinheta (Frio)
+    // Efeito de vinheta de gelo na tela
     if (player.temp < 50) {
         const opacidade = (50 - player.temp) / 50 * 0.5;
         const grad = ctx.createRadialGradient(
@@ -5296,6 +5355,7 @@ function drawTemperatureUI() {
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+    ctx.restore();
 }
 // 🔥 NOVO: Controla a renderização de névoas e a iluminação realista de amanhecer/anoitecer (20s)
 function drawAtmosphereEffects() {
