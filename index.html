@@ -208,9 +208,10 @@ button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #
 
 <!-- TELA DE GAME OVER (AGORA TOTALMENTE INDEPENDENTE) -->
 <div id="gameOver">
-  <h1 style="color:#ff4d4d; font-size:72px;">GAME OVER</h1>
+  <h1 id="gameOverTitle" style="color:#ff4d4d; font-size:72px;">GAME OVER</h1>
   <p id="deathMsg" style="font-size: 28px; font-weight: bold; color: #fff; margin-bottom: 20px; max-width: 600px;"></p>
-  <button onclick="location.reload()">Tentar Novamente</button>
+  <button id="bedRespawnBtn" onclick="renascerNaCama()" style="display:none; margin-bottom:14px; background:#8e44ad; color:white; border:none; border-radius:30px; padding:15px 40px; font-size:24px; font-weight:bold; cursor:pointer;">🛏️ Voltar para a Cama</button>
+  <button id="restartBtn" onclick="location.reload()">Tentar Novamente</button>
 </div>
 
 <!-- PAINEL DE CONFIGURAÇÕES (Transparente para enxergar o mapa) -->
@@ -807,6 +808,9 @@ if(isMobile){
       const tx = (t.clientX - rect.left) * scaleX;
       const ty = (t.clientY - rect.top) * scaleY;
 
+      // 🎨 Seletor de cor do Localizador aberto: o toque só vale para ele
+      if (corPicker.ativo) { tratarCliqueSeletorCor(tx, ty); continue; }
+
       // ⚙️ Botão de Ajustes (Topo Direito)
       const cfgX = canvas.width - 240, cfgY = 15, cfgW = 60, cfgH = 60;
       if (tx >= cfgX && tx <= cfgX + cfgW && ty >= cfgY && ty <= cfgY + cfgH) {
@@ -819,6 +823,13 @@ if(isMobile){
           }
           configPanel.style.display = "flex";
           tocarSom(SONS.selecionar);
+          continue;
+      }
+
+      // 🎣 Minigame de pesca: toque na metade direita (fora da hotbar) puxa a linha
+      if (!inventoryOpen && !craftingOpen && player.weapon === 7 && pescaGame.ativa &&
+          tx > canvas.width * 0.5 && ty < canvas.height - 95) {
+          pescaPuxar();
           continue;
       }
 
@@ -880,7 +891,7 @@ if(isMobile){
           const arrowX = canvas.width - 90;
           const arrowY = canvas.height / 2;
           if (Math.hypot(tx - arrowX, ty - arrowY) <= 50) {
-              craftPage = (craftPage === 0) ? 1 : 0;
+              craftPage = (craftPage + 1) % 3;
               tocarSom(SONS.selecionar);
               continue;
           }
@@ -1050,6 +1061,9 @@ canvas.addEventListener("touchend", e => {
                 if (placingStructure === "campfire" && isInRiver(posX, posY)) {
                     hintSystem.show("NÃO É POSSÍVEL ACENDER FOGUEIRA NA ÁGUA!", "alert");
                     tocarSom(SONS.erro);
+                } else if (ESTRUTURAS_BASE.includes(placingStructure) && isInRiver(posX, posY)) {
+                    hintSystem.show("NÃO É POSSÍVEL CONSTRUIR NA ÁGUA!", "alert");
+                    tocarSom(SONS.erro);
                 } else {
                     if (placingStructure === "campfire") {
     const novaFogueira = {
@@ -1084,6 +1098,8 @@ canvas.addEventListener("touchend", e => {
     };
     resources.push(novaCerca);
     SpatialGrid.insertStatic(novaCerca); // <--- ADICIONE ESTA LINHA
+} else if (ESTRUTURAS_BASE.includes(placingStructure)) {
+                        colocarEstruturaBase(placingStructure, posX, posY);
 }
 
                     gastarDoInventario(placingStructure, 1);
@@ -1104,7 +1120,7 @@ canvas.addEventListener("touchend", e => {
         }
         if (t.identifier === touchAim.id) {
             // LANÇAMENTO DE ANZOL POR TOQUE SECO NO CELULAR (AO SOLTAR O DEDO)
-            if (player.weapon === 7 && touchAim.fishingTargetX !== undefined) {
+            if (player.weapon === 7 && !isFishing && touchAim.fishingTargetX !== undefined) {
                 const duracaoToque = Date.now() - (touchAim.touchStartTime || 0);
                 if (duracaoToque < 350) { // Toque rápido: lança a linha!
                     const worldTouchX = touchAim.fishingTargetX + camX();
@@ -1365,6 +1381,9 @@ const UI_CRAFT = {
 
 // Como tem 2 colunas, só vão 8 itens grandes por vez no mobile!
 function getDisplayRecipes() {
+    if (craftPage === 2) {
+        return ["base_marker", "cabin", "bed"]; // 🏕️ Página da Base
+    }
     if (isMobile) {
         if (craftPage === 0) {
             return ["axe_wood", "pickaxe_wood", "spear", "campfire", "torch", "wood_convert", "wall_wood", "fishing_rod"];
@@ -1507,6 +1526,230 @@ let avisouAmanhecer = false;
 let isFishing = false;      // O jogador está com a linha na água?
 let fishTimer = 0;          // Quanto tempo falta para o peixe morder?
 let fishBite = false;       // O peixe já mordeu (as bolhas ficaram loucas)?
+
+// 🎣 MINIGAME DE PESCA COM TENSÃO
+// A tensão (0..1) cai sozinha e o peixe puxa a linha. Clicar/tocar no ritmo sobe a tensão.
+// Mantenha o marcador dentro da zona verde por ~1,7s para fisgar. Linha estourou, folgou ou demorou = peixe foge!
+const pescaGame = {
+    ativa: false,
+    t: 0,            // tempo do minigame (em frames)
+    tensao: 0.5,     // posição do marcador (0 = frouxo, 1 = estoura)
+    alvo: 0.5,       // centro da zona verde
+    largura: 0.24,   // largura da zona verde
+    prog: 0,         // progresso da fisgada (0..1)
+    fase: 0,         // variação aleatória do movimento do peixe
+    jerk: 0,         // contagem para o próximo tranco do peixe
+    folga: 0,        // tempo com a linha frouxa
+    limite: 540,     // tempo máximo (9s)
+    gpPrev: false,   // controle (gamepad): detecta o aperto do botão
+    avisou: false
+};
+
+function iniciarMinigamePesca() {
+    const g = pescaGame;
+    g.ativa = true;
+    g.t = 0;
+    g.prog = 0;
+    g.folga = 0;
+    g.fase = Math.random() * 6.28;
+    g.largura = 0.20 + Math.random() * 0.06;
+    g.alvo = 0.5;
+    g.tensao = 0.5;
+    g.jerk = 90 + Math.random() * 60;
+    g.gpPrev = true; // evita que o botão já pressionado conte como puxada
+    player.atkTimer = Math.max(player.atkTimer, 700); // garante que a linha não suma durante o minigame
+    createParticles(player.anzolDestX, player.anzolDestY, "#ffffff", 10, 1.4);
+    tocarSom(SONS.agua_anzol);
+    if (!g.avisou) {
+        g.avisou = true;
+        hintSystem.show(isMobile ? "O PEIXE MORDEU! Toque no ritmo para manter a barra na zona verde!"
+                                 : "O PEIXE MORDEU! Clique no ritmo para manter a barra na zona verde!", "alert");
+    }
+}
+
+// Cada clique/toque dá um puxão que sobe a tensão
+function pescaPuxar() {
+    const g = pescaGame;
+    if (!g.ativa) return;
+    g.tensao = Math.min(1.1, g.tensao + 0.12);
+    if (player.anzolDestX != null) createParticles(player.anzolDestX, player.anzolDestY, "rgba(255,255,255,0.8)", 2, 0.6);
+}
+
+function finalizarPesca(sucesso, mensagem) {
+    pescaGame.ativa = false;
+    if (sucesso) {
+        let preso = false;
+        fishes.forEach(f => {
+            if (f.presoNoAnzol && f.alive) {
+                f.alive = false;
+                f.presoNoAnzol = false;
+                preso = true;
+            }
+        });
+        const guardou = adicionarAoInventario("fish", 1);
+        if (guardou) {
+            createParticles(player.x, player.y, "#ffffff", 14, 1.2, null, false, true);
+            tocarSom(SONS.agua_anzol);
+            hintSystem.show("FISGOU! +1 Peixe", "tip");
+        } else {
+            tocarSom(SONS.erro);
+            hintSystem.show("INVENTÁRIO CHEIO! O peixe escapou.", "alert");
+        }
+        resetPesca(false);
+    } else {
+        resetPesca(true); // peixe assustado foge
+        tocarSom(SONS.erro);
+        screenShake = Math.max(screenShake, 4);
+        hintSystem.show(mensagem, "alert");
+    }
+}
+
+function atualizarMinigamePesca(dt) {
+    const g = pescaGame;
+    if (!g.ativa) return;
+    if (!isFishing || !fishBite) { g.ativa = false; return; }
+
+    // Gamepad: cada aperto do botão de ataque = um puxão
+    const gpAperto = (typeof gpState !== "undefined" && gpState && gpState.atacar) ? true : false;
+    if (gpAperto && !g.gpPrev) pescaPuxar();
+    g.gpPrev = gpAperto;
+
+    g.t += dt;
+
+    // A zona verde se move conforme o peixe se debate
+    g.alvo = 0.5 + 0.28 * Math.sin(g.t * 0.025 + g.fase) + 0.08 * Math.sin(g.t * 0.07 + g.fase * 2);
+
+    // Tensão cai sozinha + o peixe puxa
+    const puxao = 0.0035 * Math.sin(g.t * 0.09 + g.fase) + 0.0025 * Math.sin(g.t * 0.23 + g.fase * 2);
+    g.tensao += (puxao - 0.0065) * dt;
+
+    // Trancos repentinos do peixe (sobem a tensão de uma vez)
+    g.jerk -= dt;
+    if (g.jerk <= 0 && g.t > 90) {
+        g.tensao += 0.07;
+        g.jerk = 70 + Math.random() * 80;
+        if (player.anzolDestX != null) createParticles(player.anzolDestX, player.anzolDestY, "#ffffff", 4, 1.2);
+    }
+    if (g.tensao < -0.05) g.tensao = -0.05;
+
+    // Dentro da zona verde o progresso sobe; fora dela, desce
+    const dentro = Math.abs(g.tensao - g.alvo) <= g.largura / 2;
+    if (dentro) g.prog += dt / 100;
+    else g.prog = Math.max(0, g.prog - 0.6 * dt / 100);
+
+    if (g.prog >= 1) { finalizarPesca(true); return; }
+
+    // Falhas (com 40 frames de tolerância no começo)
+    if (g.t > 40) {
+        if (g.tensao >= 1) { finalizarPesca(false, "A linha arrebentou! O peixe fugiu."); return; }
+        if (g.tensao <= 0.02) g.folga += dt; else g.folga = Math.max(0, g.folga - dt);
+        if (g.folga > 45) { finalizarPesca(false, "A linha ficou frouxa! O peixe se soltou."); return; }
+    }
+    if (g.t > g.limite) { finalizarPesca(false, "Demorou demais! O peixe fugiu."); return; }
+}
+
+function drawMinigamePesca() {
+    const g = pescaGame;
+    if (!g.ativa || !isFishing || player.anzolDestX == null || player.dead) return;
+
+    const sx = player.anzolDestX - camX();
+    const sy = player.anzolDestY - camY();
+    const bw = 22, bh = 140;
+    let bx = sx + 40;
+    let by = sy - bh / 2 - 10;
+    bx = Math.max(16, Math.min(canvas.width - bw - 60, bx));
+    by = Math.max(40, Math.min(canvas.height - bh - 120, by));
+
+    const T = Math.max(0, Math.min(1, g.tensao));
+    const dentro = Math.abs(g.tensao - g.alvo) <= g.largura / 2;
+
+    ctx.save();
+
+    // Anel de progresso ao redor da boia
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(0,0,0,0.45)";
+    ctx.beginPath(); ctx.arc(sx, sy, 16, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = "#7CFC9A";
+    ctx.beginPath(); ctx.arc(sx, sy, 16, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * g.prog); ctx.stroke();
+
+    // Fundo da barra
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillRect(bx - 4, by - 4, bw + 8 + 14, bh + 8);
+
+    // Zonas de perigo (topo = estoura, base = frouxo)
+    ctx.fillStyle = "rgba(255,60,60,0.40)";
+    ctx.fillRect(bx, by, bw, bh * 0.08);
+    ctx.fillRect(bx, by + bh * 0.95, bw, bh * 0.05);
+
+    // Zona verde alvo
+    const topoAlvo = Math.max(0, Math.min(1, 1 - (g.alvo + g.largura / 2)));
+    const altAlvo = Math.min(g.largura, 1 - topoAlvo);
+    ctx.fillStyle = dentro ? "rgba(90,255,150,0.75)" : "rgba(90,255,150,0.45)";
+    ctx.fillRect(bx, by + topoAlvo * bh, bw, altAlvo * bh);
+
+    // Marcador de tensão
+    const my = by + (1 - T) * bh;
+    ctx.fillStyle = dentro ? "#ffffff" : "#ffd54f";
+    ctx.fillRect(bx - 5, my - 3, bw + 10, 6);
+
+    // Barra de progresso lateral
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx + bw + 5, by, 6, bh);
+    ctx.fillStyle = "#7CFC9A";
+    ctx.fillRect(bx + bw + 5, by + bh * (1 - g.prog), 6, bh * g.prog);
+
+    // Texto pulsante
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 14px 'Segoe UI', Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    const pulsa = Math.floor(Date.now() / 250) % 2 === 0;
+    ctx.fillText(pulsa ? (isMobile ? "TOQUE!" : "CLIQUE!") : "NO RITMO!", bx + bw / 2 + 6, by - 8);
+
+    ctx.restore();
+}
+
+// 🏹 Flecha batendo em obstáculo sólido (pedra, ouro, árvore, palmeira, cerca)
+function flechaBateuEmObstaculo(a) {
+    const passos = Math.max(1, Math.ceil(Math.hypot(a.vx, a.vy) / 8));
+    const sx = a.x - a.vx, sy = a.y - a.vy;
+    for (let p = 1; p <= passos; p++) {
+        const px = sx + a.vx * p / passos;
+        const py = sy + a.vy * p / passos;
+        const perto = SpatialGrid.getNearby(px, py);
+        for (let i = 0; i < perto.length; i++) {
+            const res = perto[i];
+            if (!res.alive) continue;
+            const tipo = res.type;
+            let raio;
+            if (tipo === "tree" || tipo === "palm") raio = (res.r || 30) * 0.55;       // só o tronco
+            else if (tipo === "stone" || tipo === "gold") raio = (res.r || 25) * 0.9;
+            else if (tipo === "wall_wood") raio = (res.r || 24);
+            else continue;
+            if (Math.hypot(px - res.x, py - res.y) < raio) {
+                a.active = false;
+                a.x = px; a.y = py;
+                if (tipo === "stone" || tipo === "gold") {
+                    createParticles(px, py, "#cfd8dc", 6, 1.4);
+                    createParticles(px, py, "#ffeb3b", 4, 1.8); // faíscas
+                    tocarSom(SONS.ferramenta_fraca);
+                } else if (tipo === "wall_wood") {
+                    res.hp -= a.damage || 15;
+                    createParticles(px, py, "#8d6e63", 6, 1.3);
+                    createParticles(px, py, "#ffeb3b", 3, 1.6);
+                    tocarSom(SONS.ferramenta_fraca);
+                    if (res.hp <= 0) destruirEstrutura(res);
+                } else {
+                    createParticles(px, py, tipo === "palm" ? "#27ae60" : "#6d4c41", 6, 1.2);
+                    createParticles(px, py, "#8d6e63", 3, 1.0);
+                }
+                return true;
+            }
+        }
+    }
+    return false;
+}
 let craftPage = 0; // 0 para itens básicos, 1 para itens avançados (pesca)
 const itemsPerPage = 5;
 let craftingOpen = false;
@@ -1567,6 +1810,8 @@ function getLimiteItem(id) {
     if (id === "arrow") return 30;
     if (id === "campfire") return 5;
     if (id === "wall_wood") return 20; // Empilha até 20 cercas por slot!
+    if (id === "base_marker") return 5;
+    if (id === "cabin" || id === "bed") return 3;
     return 50;
 }
 
@@ -1576,12 +1821,15 @@ let ultimoRonco = 0;
 let flashSangue = 0;
 const recipes = {
     
-  axe_wood: { name: "Machado de Madeira", wood: 3, sticks: 2, weaponIndex: 1 },
+  axe_wood: { name: "Machado de Madeira", wood: 0, sticks: 2, weaponIndex: 1 },
   pickaxe_wood: { name: "Picareta de Madeira", wood: 3, sticks: 3, weaponIndex: 2 },
   axe_stone: { name: "Machado de Pedra", wood: 3, stone: 3, sticks: 3, weaponIndex: 3 },
   pickaxe_stone: { name: "Picareta de Pedra", wood: 3, stone: 4, sticks: 2, weaponIndex: 4 },
   campfire: { name: "Fogueira", wood: 2, sticks: 10, isPlaceable: true },
   wall_wood: { name: "Cerca de Madeira", wood: 4, sticks: 4, isPlaceable: true },
+  base_marker: { name: "Localizador de Terreno", wood: 4, stone: 3, isPlaceable: true },
+  cabin: { name: "Cabana de Abrigo", wood: 14, sticks: 8, feather: 8, isPlaceable: true },
+  bed: { name: "Cama de Madeira", wood: 8, feather: 10, isPlaceable: true },
   spear: { name: "Lança", wood: 4, sticks: 2, weaponIndex: 5 },
   torch: { name: "Tocha", wood: 2, stone: 2, sticks: 1, weaponIndex: 6 },
   fishing_rod: { name: "Vara de Pesca", wood: 5, sticks: 1, weaponIndex: 7 }, // weaponIndex 7 (Vara) 
@@ -1700,6 +1948,254 @@ function aplicarModificadoresLua(z) {
   z.speed = z.speed * luaMult("vel");
 }
 
+// ===================== 🏕️ TRIO DE BASE: LOCALIZADOR + CABANA + CAMA =====================
+const ESTRUTURAS_BASE = ["base_marker", "cabin", "bed"];
+const ESTRUTURAS_ATRAVESSAVEIS = ["base_marker", "cabin", "bed"]; // o jogador e os bichos passam por cima (entrar na cabana!)
+const marcadoresBase = [];          // referências aos localizadores colocados (para o minimapa)
+let bedRespawnDisponivel = false;   // true enquanto a tela de morte com cama está aberta
+
+const CORES_MARCADOR = [
+    { nome: "Vermelho", cor: "#e74c3c" },
+    { nome: "Azul",     cor: "#3498db" },
+    { nome: "Amarelo",  cor: "#f1c40f" },
+    { nome: "Verde",    cor: "#2ecc71" },
+    { nome: "Roxo",     cor: "#9b59b6" }
+];
+const corPicker = { ativo: false, marker: null };
+
+// ---------- Desenhos (estilo .io, usados no mundo, no preview e nos ícones) ----------
+function desenharMarcadorBase(c, cor) {
+    const cc = cor || "#bdc3c7";
+    c.save();
+    c.fillStyle = "#5d4037";
+    c.beginPath(); c.ellipse(0, 12, 14, 6, 0, 0, Math.PI * 2); c.fill();
+    c.globalAlpha = 0.5;
+    c.strokeStyle = cc; c.lineWidth = 2;
+    c.beginPath(); c.arc(0, 10, 19, 0, Math.PI * 2); c.stroke();
+    c.globalAlpha = 1;
+    c.fillStyle = "#8d6e63";
+    c.fillRect(-2, -26, 4, 38);
+    c.fillStyle = cc;
+    c.beginPath(); c.moveTo(2, -26); c.lineTo(27, -18); c.lineTo(2, -10); c.closePath(); c.fill();
+    c.strokeStyle = "rgba(0,0,0,0.45)"; c.lineWidth = 1.5; c.stroke();
+    c.restore();
+}
+
+function desenharCabana(c) {
+    const w = 58, h = 46, base = h * 0.6;
+    c.save();
+    // lado esquerdo (escuro) e direito (claro)
+    c.fillStyle = "#8d6e63";
+    c.beginPath(); c.moveTo(0, -h); c.lineTo(-w, base); c.lineTo(0, base); c.closePath(); c.fill();
+    c.fillStyle = "#a1887f";
+    c.beginPath(); c.moveTo(0, -h); c.lineTo(w, base); c.lineTo(0, base); c.closePath(); c.fill();
+    // porta
+    c.fillStyle = "#3e2723";
+    c.beginPath(); c.moveTo(0, -h * 0.35); c.lineTo(-16, base); c.lineTo(16, base); c.closePath(); c.fill();
+    // contorno
+    c.strokeStyle = "#4e342e"; c.lineWidth = 3; c.lineJoin = "round";
+    c.beginPath(); c.moveTo(-w, base); c.lineTo(0, -h); c.lineTo(w, base); c.closePath(); c.stroke();
+    // costuras do tecido
+    c.strokeStyle = "rgba(62,39,35,0.55)"; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(0, -h); c.lineTo(-30, base); c.moveTo(0, -h); c.lineTo(30, base); c.stroke();
+    // bandeirinha no topo
+    c.fillStyle = "#5d4037"; c.fillRect(-1, -h - 14, 2, 14);
+    c.fillStyle = "#e74c3c";
+    c.beginPath(); c.moveTo(1, -h - 14); c.lineTo(15, -h - 9); c.lineTo(1, -h - 4); c.closePath(); c.fill();
+    c.restore();
+}
+
+function desenharCama(c) {
+    c.save();
+    c.fillStyle = "#6d4c41"; c.fillRect(-18, -28, 36, 56);
+    c.strokeStyle = "#3e2723"; c.lineWidth = 2; c.strokeRect(-18, -28, 36, 56);
+    c.fillStyle = "#ecf0f1"; c.fillRect(-14, -24, 28, 48);
+    c.fillStyle = "#ffffff"; c.fillRect(-11, -22, 22, 11);
+    c.strokeStyle = "#bdc3c7"; c.lineWidth = 1; c.strokeRect(-11, -22, 22, 11);
+    c.fillStyle = "#c0392b"; c.fillRect(-14, -6, 28, 30);
+    c.fillStyle = "#e74c3c"; c.fillRect(-14, -6, 28, 6);
+    c.strokeStyle = "#7b241c"; c.lineWidth = 1.5; c.strokeRect(-14, -6, 28, 30);
+    c.restore();
+}
+
+// ---------- Criação das estruturas ----------
+function camaAtiva() {
+    if (!player.respawnPoint) return null;
+    return resources.find(r => r.alive && r.type === "bed" && r.id === player.respawnPoint.bedId) || null;
+}
+
+function colocarEstruturaBase(tipo, x, y) {
+    const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+    let obj;
+    if (tipo === "base_marker") {
+        obj = { type: "base_marker", x, y, r: 14, hp: 100, maxHp: 100, alive: true, color: null, id };
+    } else if (tipo === "cabin") {
+        obj = { type: "cabin", x, y, r: 55, hp: 600, maxHp: 600, alive: true, id };
+    } else {
+        obj = { type: "bed", x, y, r: 26, hp: 250, maxHp: 250, alive: true, id };
+    }
+    resources.push(obj);
+    SpatialGrid.insertStatic(obj);
+
+    if (tipo === "base_marker") {
+        marcadoresBase.push(obj);
+        corPicker.ativo = true;      // abre o seletor de cores
+        corPicker.marker = obj;
+    } else if (tipo === "cabin") {
+        hintSystem.show("CABANA PRONTA! Dentro dela você se esconde dos zumbis e se aquece.", "tip");
+    } else {
+        // Só existe uma cama ativa: a antiga é desmontada
+        resources.forEach(r => {
+            if (r !== obj && r.alive && r.type === "bed") {
+                r.alive = false;
+                r.destroyedFx = true;
+                SpatialGrid.removeStatic(r);
+                createParticles(r.x, r.y, "#8d6e63", 8, 1.0);
+            }
+        });
+        player.respawnPoint = { x: obj.x, y: obj.y, bedId: obj.id };
+        hintSystem.show("CAMA POSICIONADA! Se você morrer, poderá renascer aqui.", "tip");
+    }
+    createParticles(x, y, "#8d6e63", 8, 1.0);
+    return obj;
+}
+
+// ---------- Seletor de cor do Localizador (pop-up centralizado) ----------
+function layoutSeletorCor() {
+    const w = Math.min(430, canvas.width - 30), h = 170;
+    const px = canvas.width / 2 - w / 2, py = canvas.height / 2 - h / 2;
+    const passo = Math.min(76, (w - 50) / 5);
+    const raio = Math.min(24, passo * 0.36);
+    return { w, h, px, py, passo, raio, cy: py + h - 55, cx0: canvas.width / 2 - passo * 2 };
+}
+
+function tratarCliqueSeletorCor(mx, my) {
+    if (!corPicker.ativo) return false;
+    const L = layoutSeletorCor();
+    for (let i = 0; i < CORES_MARCADOR.length; i++) {
+        const bx = L.cx0 + i * L.passo;
+        if (Math.hypot(mx - bx, my - L.cy) <= L.raio + 8) {
+            if (corPicker.marker) corPicker.marker.color = CORES_MARCADOR[i].cor;
+            corPicker.ativo = false;
+            corPicker.marker = null;
+            tocarSom(SONS.selecionar);
+            hintSystem.show("Localizador " + CORES_MARCADOR[i].nome + " marcado no minimapa!", "tip");
+            return true;
+        }
+    }
+    return true; // clique fora das bolinhas é ignorado (precisa escolher uma cor)
+}
+
+function drawSeletorCorMarker() {
+    if (!corPicker.ativo || player.dead) return;
+    const L = layoutSeletorCor();
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "rgba(10, 20, 15, 0.95)";
+    ctx.strokeStyle = "#2ecc71";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.roundRect(L.px, L.py, L.w, L.h, 18); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "bold 20px 'Segoe UI', Arial";
+    ctx.fillText("Escolha a cor do Localizador", canvas.width / 2, L.py + 36);
+    ctx.font = "14px 'Segoe UI', Arial";
+    ctx.fillStyle = "#bdc3c7";
+    ctx.fillText(isMobile ? "Toque em uma cor" : "Clique em uma cor", canvas.width / 2, L.py + 62);
+
+    let hover = -1;
+    if (!isMobile && typeof mouse !== "undefined") {
+        const rect = canvas.getBoundingClientRect();
+        const mx = (mouse.x - rect.left) * (canvas.width / rect.width);
+        const my = (mouse.y - rect.top) * (canvas.height / rect.height);
+        for (let i = 0; i < CORES_MARCADOR.length; i++) {
+            if (Math.hypot(mx - (L.cx0 + i * L.passo), my - L.cy) <= L.raio + 8) hover = i;
+        }
+    }
+    CORES_MARCADOR.forEach((c, i) => {
+        const bx = L.cx0 + i * L.passo;
+        ctx.fillStyle = c.cor;
+        ctx.beginPath(); ctx.arc(bx, L.cy, L.raio + (hover === i ? 4 : 0), 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = hover === i ? "#ffffff" : "rgba(255,255,255,0.5)";
+        ctx.lineWidth = hover === i ? 4 : 2;
+        ctx.stroke();
+    });
+    ctx.restore();
+}
+
+// ---------- Morte com cama: tela diferenciada + renascer ----------
+function prepararTelaDeMorte() {
+    const titulo = document.getElementById("gameOverTitle");
+    const btnCama = document.getElementById("bedRespawnBtn");
+    const btnNormal = document.getElementById("restartBtn");
+    const msg = document.getElementById("deathMsg");
+    if (camaAtiva()) {
+        bedRespawnDisponivel = true;
+        if (titulo) titulo.textContent = "VOCÊ MORREU!";
+        if (btnCama) btnCama.style.display = "inline-block";
+        if (btnNormal) btnNormal.textContent = "Recomeçar do zero";
+        if (msg) msg.innerHTML += "<br><br>🛏️ Sua cama ainda está de pé!<br><span style='font-size:20px;font-weight:normal;'>Volte para ela (Enter) ou recomece do zero.</span>";
+    } else {
+        bedRespawnDisponivel = false;
+        if (titulo) titulo.textContent = "GAME OVER";
+        if (btnCama) btnCama.style.display = "none";
+        if (btnNormal) btnNormal.textContent = "Tentar Novamente";
+    }
+}
+
+function renascerNaCama() {
+    if (!player.dead || !bedRespawnDisponivel) return;
+    const cama = camaAtiva();
+    if (!cama) { prepararTelaDeMorte(); return; } // a cama foi destruída: volta ao Game Over normal
+
+    player.dead = false;
+    player.hp = player.maxHp * 0.5;
+    player.food = Math.max(player.food, player.maxFood * 0.5);
+    player.temp = Math.max(player.temp, 50);
+    player.stamina = player.maxStamina;
+    player.exhausted = false;
+    player.burnTimer = 0;
+    player.knockVX = 0; player.knockVY = 0;
+    player.x = cama.x;
+    player.y = cama.y;
+
+    // Estado limpo: nada de menus abertos ou ataques pendurados
+    fecharAtaques();
+    placingStructure = null;
+    craftingOpen = false;
+    inventoryOpen = false;
+    corPicker.ativo = false;
+    resetPesca(false);
+
+    // Proteção de nascimento: zumbis e onças por perto são afastados
+    zombies.forEach(z => {
+        if (z.active && Math.hypot(z.x - cama.x, z.y - cama.y) < 350) { z.active = false; z.noExplode = true; }
+    });
+    jaguars.forEach(j => {
+        if (j.alive) {
+            const dj = Math.hypot(j.x - cama.x, j.y - cama.y);
+            if (dj < 350) {
+                const ang = Math.atan2(j.y - cama.y, j.x - cama.x);
+                j.x = Math.max(60, Math.min(MAP - 60, cama.x + Math.cos(ang) * 600));
+                j.y = Math.max(60, Math.min(MAP - 60, cama.y + Math.sin(ang) * 600));
+                j.estado = "vadiando";
+            }
+        }
+    });
+
+    bedRespawnDisponivel = false;
+    document.getElementById("gameOver").style.display = "none";
+    createParticles(cama.x, cama.y, "#ffffff", 14, 1.4);
+    tocarSom(SONS.compra);
+    hintSystem.show("VOCÊ RENASCEU NA SUA CAMA!", "tip");
+}
+// ===========================================================================
+
 // 🧱 Destrói cerca/fogueira com feedback visual/sonoro e tira da SpatialGrid
 function destruirEstrutura(res) {
   if (!res || res.destroyedFx) return;
@@ -1716,7 +2212,7 @@ function destruirEstrutura(res) {
       tocarSom(SONS.quebra_estrutura);
     }
     if (dp < 500) {
-      hintSystem.show(res.type === "campfire" ? "Sua fogueira foi destruída!" : "Uma cerca foi destruída!", "alert");
+      hintSystem.show(({ campfire: "Sua fogueira foi destruída!", cabin: "Sua cabana foi destruída!", bed: "Sua cama foi destruída!" })[res.type] || "Uma cerca foi destruída!", "alert");
     }
   }
 }
@@ -1763,7 +2259,7 @@ function explodirZumbi(z) {
     }
   });
   resources.forEach(res => {
-    if (!res.alive || (res.type !== "wall_wood" && res.type !== "campfire")) return;
+    if (!res.alive || (res.type !== "wall_wood" && res.type !== "campfire" && res.type !== "cabin" && res.type !== "bed")) return;
     if (Math.abs(res.x - z.x) > R || Math.abs(res.y - z.y) > R) return;
     const dr = Math.hypot(res.x - z.x, res.y - z.y);
     if (dr < R) {
@@ -2235,6 +2731,7 @@ document.getElementById("startBtn").onclick = () => {
     avisouAmanhecer = false;
     currentMoon = null; moonBannerTimer = 0; explosions = []; avisouBomber = false; avisouBrute = false;
     player.knockVX = 0; player.knockVY = 0;
+    player.respawnPoint = null; player.inCabin = false; corPicker.ativo = false; bedRespawnDisponivel = false;
     if (player) {
         player.hp = player.maxHp;
         player.food = player.maxFood;
@@ -2818,6 +3315,8 @@ function lerGamepad() {
 }
 
 onkeydown = e => {
+  // 🛏️ Tela de morte com cama: Enter volta para a cama
+  if (e.key === "Enter" && bedRespawnDisponivel && player.dead) { e.preventDefault(); renascerNaCama(); return; }
   // CORREÇÃO DO BUG: Se o jogo ainda não começou (câmera rodando no menu), ignora qualquer entrada do teclado!
   if (!isGameStarted) return;
 
@@ -3064,6 +3563,9 @@ canvas.addEventListener("mousedown", e => {
     const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top) * scaleY;
 
+    // 🎨 Seletor de cor do Localizador aberto: o clique só vale para ele
+    if (corPicker.ativo) { tratarCliqueSeletorCor(mx, my); return; }
+
     // 2. DEPOIS verificamos a Hotbar (para não dar erro de variável indefinida)
     if (my >= canvas.height - 95 && !craftingOpen && !inventoryOpen) {
         const slotSize = 75, gap = 12;
@@ -3163,6 +3665,13 @@ if (isGameStarted && !isMobile && !inventoryOpen && !craftingOpen) {
             return;
         }
 
+        // 🌊 Localizador, cabana e cama também não podem ser colocados na água
+        if (ESTRUTURAS_BASE.includes(placingStructure) && isInRiver(worldX, worldY)) {
+            hintSystem.show("NÃO É POSSÍVEL CONSTRUIR NA ÁGUA!", "alert");
+            tocarSom(SONS.erro);
+            return;
+        }
+
         // 🧲 ENCAIXE INTELIGENTE DA CERCA: se clicar perto de outra cerca, alinha certinho
         if (placingStructure === "wall_wood") {
             const cercaPerto = resources.find(r => r.alive && r.type === "wall_wood" && Math.hypot(worldX - r.x, worldY - r.y) < 48);
@@ -3180,7 +3689,7 @@ if (isGameStarted && !isMobile && !inventoryOpen && !craftingOpen) {
         }
 
         // Bloqueio para não nascer dentro de pedras ou árvores
-        const dentroDeMaterial = resources.some(r => r.alive && r.type !== "stick" && r.type !== "feather" && Math.hypot(worldX - r.x, worldY - r.y) < (r.r + 15));
+        const dentroDeMaterial = resources.some(r => r.alive && r.type !== "stick" && r.type !== "feather" && !ESTRUTURAS_ATRAVESSAVEIS.includes(r.type) && Math.hypot(worldX - r.x, worldY - r.y) < (r.r + 15));
         if (dentroDeMaterial) {
             hintSystem.show("ESPAÇO BLOQUEADO POR OUTRO OBJETO!", "alert");
             tocarSom(SONS.erro);
@@ -3221,6 +3730,8 @@ if (isGameStarted && !isMobile && !inventoryOpen && !craftingOpen) {
     };
     resources.push(novaCerca);
     SpatialGrid.insertStatic(novaCerca); // <--- ADICIONE ESTA LINHA
+} else if (ESTRUTURAS_BASE.includes(placingStructure)) {
+                colocarEstruturaBase(placingStructure, worldX, worldY);
 }
             gastarDoInventario(placingStructure, 1);
             tocarSom(SONS.fogueira_colocar);
@@ -3236,39 +3747,28 @@ if (isGameStarted && !isMobile && !inventoryOpen && !craftingOpen) {
         const worldMouseY = my + camY();
 
         if (weapons[player.weapon].style === "fishing_rod") {
-            // 🎣 SE O PEIXE JÁ MORDEU: O clique agora RECOLHE e pesca o peixe com sucesso!
-            if (isFishing && fishBite) {
-                let peixeCapturado = false;
-                fishes.forEach(f => {
-                    if (f.presoNoAnzol && f.alive) { 
-                        f.alive = false; 
-                        f.presoNoAnzol = false;
-                        peixeCapturado = true;
-                    }
-                });
+            // 🎣 Com a vara, o clique é tratado EXCLUSIVAMENTE pela pesca:
+            // nunca liga o ataque geral (mouse.down), então não há soco paralelo cancelando a linha.
+            mouse.down = false;
 
-                if (peixeCapturado) {
-                    adicionarAoInventario("fish", 1);
-                    createParticles(player.x, player.y, "#ffffff", 14, 1.2, null, false, true);
-                    tocarSom(SONS.agua_anzol);
-                }
-                resetPesca(false);
-                return;
-            }
+            // Minigame ativo: o clique puxa a linha no ritmo
+            if (pescaGame.ativa) { pescaPuxar(); return; }
+
+            // Linha já na água esperando o peixe: o clique não recasta nem cancela
+            if (isFishing || player.attacking) return;
 
             // LANÇAMENTO DA LINHA (Válido no Rio ou Beira da Areia)
             if (isInRiver(worldMouseX, worldMouseY) || isInSand(worldMouseX, worldMouseY)) {
                 const dx = worldMouseX - player.x;
                 const dy = worldMouseY - player.y;
                 const distClique = Math.hypot(dx, dy);
-                const maxRange = 250; 
+                const maxRange = 250;
                 const distFinal = Math.min(distClique, maxRange);
-                
+
                 player.anzolDestX = player.x + Math.cos(player.angle) * distFinal;
                 player.anzolDestY = player.y + Math.sin(player.angle) * distFinal;
-                
-                mouse.down = true; 
-                player.attacking = true; 
+
+                player.attacking = true;
                 player.atkTimer = weapons[player.weapon].speed;
                 tocarSom(SONS.agua_anzol);
             } else {
@@ -3344,6 +3844,9 @@ function drawFullscreenInventory() {
             sticks: "Gravetos recolhidos do chão. Base essencial de todas as receitas.",
             campfire: "Fogueira. Aquece o corpo no frio e afasta a escuridão da noite.",
             wall_wood: "Cerca de Madeira (400 HP). Bloqueia a passagem de monstros e predadores. [R para girar]",
+            base_marker: "Localizador de Terreno. Marca sua base no minimapa com a cor que você escolher.",
+            cabin: "Cabana de Abrigo (600 HP). Dentro dela você se esconde dos zumbis e da onça e se aquece do frio e da chuva.",
+            bed: "Cama de Madeira. Se você morrer, poderá renascer nela com 50% de vida e fome.",
             torch: "Tocha de fogo. Ilumina e aquece. Aperte 'F' para equipar no corpo e liberar as mãos.",
             spear: "Lança pontiaguda. Alcance longo excelente para manter distância dos zumbis.",
             spear_stone: "Lança de Pedra reforçada. Mais dano e resistência contra feras.",
@@ -3495,7 +3998,7 @@ function checkCraftClick(mx, my) {
     const arrowRadius = isMobile ? 25 : 45;
     
     if (Math.hypot(mx - arrowX, my - arrowY) <= arrowRadius) {
-        craftPage = (craftPage === 0) ? 1 : 0;
+        craftPage = (craftPage + 1) % 3;
         tocarSom(SONS.selecionar);
         return;
     }
@@ -3955,7 +4458,7 @@ if (!isGameStarted) {
     if (passouUmSegundo && isGameStarted && !player.dead) worldTime++;
     // 🧹 Cercas/fogueiras destruídas saem da lista (já foram tiradas da SpatialGrid)
     if (passouUmSegundo) {
-        resources = resources.filter(r => r.alive || (r.type !== "wall_wood" && r.type !== "campfire"));
+        resources = resources.filter(r => r.alive || (r.type !== "wall_wood" && r.type !== "campfire" && !ESTRUTURAS_BASE.includes(r.type)));
     }
 if (isGameStarted && !player.dead) {
     if (!isDay && musicaAtiva !== "night" && !transicionandoMusica) {
@@ -4011,6 +4514,20 @@ for (let i = 0; i < bushes.length; i++) {
       break; // Encontrou que você está escondido! Interrompe o loop na mesma hora!
     }
   }
+}
+
+// 🏕️ CABANA DE ABRIGO: dentro do raio dela o jogador fica escondido e protegido do clima
+player.inCabin = false;
+{
+    const perto = SpatialGrid.getNearby(player.x, player.y);
+    for (let ci = 0; ci < perto.length; ci++) {
+        const cab = perto[ci];
+        if (cab.type === "cabin" && cab.alive && Math.hypot(player.x - cab.x, player.y - cab.y) < 85) {
+            player.inCabin = true;
+            break;
+        }
+    }
+    if (player.inCabin) player.hidden = true;
 }
 
     // --- 2. TROCA DE CICLO (DIA <-> NOITE) ---
@@ -4316,10 +4833,21 @@ zombies.forEach(z => {
   let alvoX = player.x;
   let alvoY = player.y;
 
+  // 🏕️ Jogador dentro da cabana: zumbis normais perdem o alvo e vagam sem rumo
+  if (player.inCabin && z.type !== "blood") {
+      if (z.wanderTimer === undefined || z.wanderTimer <= 0) {
+          z.wanderAng = Math.random() * Math.PI * 2;
+          z.wanderTimer = 120 + Math.random() * 120;
+      }
+      z.wanderTimer -= 1 * dt;
+      alvoX = z.x + Math.cos(z.wanderAng) * 600;
+      alvoY = z.y + Math.sin(z.wanderAng) * 600;
+  }
+
   // Se for sabotador e o jogador não estiver colado nele, procura cerca ou fogueira próxima:
   if (z.isSaboteur && dist > 110) {
       const estruturasPerto = SpatialGrid.getNearby(z.x, z.y);
-      const alvoEstrutura = estruturasPerto.find(r => r.alive && (r.type === "wall_wood" || r.type === "campfire"));
+      const alvoEstrutura = estruturasPerto.find(r => r.alive && (r.type === "wall_wood" || r.type === "campfire" || r.type === "cabin" || r.type === "bed"));
       if (alvoEstrutura) {
           alvoX = alvoEstrutura.x;
           alvoY = alvoEstrutura.y;
@@ -4400,6 +4928,18 @@ let isBurning = isDay && !inWaterZombie && !solBloqueado;
   const obstaculosPerto = SpatialGrid.getNearby(z.x, z.y);
   obstaculosPerto.forEach(res => {
       if (!res.alive || res.type === "stick" || res.type === "feather") return;
+      if (ESTRUTURAS_ATRAVESSAVEIS.includes(res.type)) {
+          // Sem empurrão, mas zumbis sabotadores ainda destroem cabana e cama
+          if ((res.type === "cabin" || res.type === "bed") && z.isSaboteur && z.atkCooldown <= 0 &&
+              Math.hypot(z.x - res.x, z.y - res.y) < (res.r || 30) + z.r) {
+              z.attackProgress = 1.0;
+              z.atkCooldown = 55;
+              res.hp -= (z.type === "blood" ? 18 : z.type === "brute" ? 22 : z.type === "runner" ? 5 : 9);
+              createParticles(res.x, res.y, "#8d6e63", 4, 0.8);
+              if (res.hp <= 0) destruirEstrutura(res);
+          }
+          return;
+      }
       const rDx = z.x - res.x;
       const rDy = z.y - res.y;
       const rDist = Math.hypot(rDx, rDy);
@@ -4451,7 +4991,7 @@ let isBurning = isDay && !inWaterZombie && !solBloqueado;
   // 5.8 FUSÍVEL DO ZUMBI EXPLOSIVO
   if (z.type === "bomber" && !isBurning) {
       if (z.fuse === undefined) z.fuse = -1;
-      if (z.fuse < 0 && dist < 80) z.fuse = 55; // acende o pavio ao chegar perto
+      if (z.fuse < 0 && dist < 80 && !player.inCabin) z.fuse = 55; // acende o pavio ao chegar perto
       if (z.fuse >= 0) {
           z.fuse -= 1 * dt;
           if (z.fuse <= 0) { z.hp = 0; z.active = false; }
@@ -4459,7 +4999,7 @@ let isBurning = isDay && !inWaterZombie && !solBloqueado;
   }
 
   // 6. Dano no Jogador
-  if(z.type !== "bomber" && dist < player.r + z.r){
+  if(z.type !== "bomber" && !(player.inCabin && z.type !== "blood") && dist < player.r + z.r){
     if (z.atkCooldown <= 0) {
         z.attackProgress = 1.0; 
         player.hp -= (z.type === "blood") ? 12.0 : (z.type === "brute") ? 16.0 : (z.type === "runner") ? 3.5 : 5.0; 
@@ -4604,7 +5144,9 @@ if (passouUmSegundo) {
         seAquecendo = true;
     }
 
-    if (seAquecendo) {
+    if (player.inCabin) {
+        player.temp = Math.min(100, player.temp + 1.5); // 🏕️ Abrigo: imune ao frio/chuva e recupera aos poucos
+    } else if (seAquecendo) {
         player.temp = Math.min(100, player.temp + 3.0); // Aquece um pouco mais rápido perto do fogo
     } else if (seAquecendoFraco) {
         player.temp = Math.min(100, Math.max(8, player.temp + 0.4));
@@ -4706,6 +5248,7 @@ if(player.hp <= 0 && !player.dead) {
   // Exibe a mensagem personalizada na tela de Game Over
   document.getElementById("deathMsg").innerHTML = `Você sobreviveu por ${dayCount} dias!<br>Seu Recorde: ${recorde} dias.`;
   
+  prepararTelaDeMorte(); // 🛏️ Game Over diferenciado se houver cama viva
   document.getElementById("gameOver").style.display = "flex";
 }
 // === CONTROLE DE STAMINA (APÓS UPDATE) ===
@@ -4792,6 +5335,7 @@ const nearbyStuff = SpatialGrid.getNearby(player.x, player.y);
 
 nearbyStuff.forEach(res => {
     if (res.type === "stick" || res.type === "feather") return; // Itens de coleta não barram o player
+    if (ESTRUTURAS_ATRAVESSAVEIS.includes(res.type)) return;      // Cabana, cama e localizador: dá para entrar/passar
 
     const dx = player.x - res.x;
     const dy = player.y - (res.type === "palm" ? res.y + 10 : res.y);
@@ -4811,7 +5355,7 @@ nearbyStuff.forEach(res => {
 resources.filter(r => r.type === "campfire" && r.alive).forEach(fog => {
     // Checa apenas contra objetos próximos (economiza CPU)
     resources.forEach(obj => {
-        if (fog === obj || !obj.alive || obj.type === "stick") return;
+        if (fog === obj || !obj.alive || obj.type === "stick" || ESTRUTURAS_ATRAVESSAVEIS.includes(obj.type)) return;
         
         const dx = fog.x - obj.x;
         const dy = fog.y - obj.y;
@@ -5021,7 +5565,7 @@ jaguars.forEach(j => {
 
     // 2. REGRA DE VISÃO COM MATO
     // Ela te vê se: você NÃO está escondido OU se ela estiver colada (faro/dist < 80)
-    let podeVerPlayer = !player.hidden || distToPlayer < 80;
+    let podeVerPlayer = player.inCabin ? false : (!player.hidden || distToPlayer < 80);
 
     let moveSpeed = 0;
 
@@ -5099,6 +5643,7 @@ jaguars.forEach(j => {
     for (let oIdx = 0; oIdx < obstaculosOnca.length; oIdx++) {
         const res = obstaculosOnca[oIdx];
         if (!res.alive || res.type === "stick" || res.type === "feather") continue;
+        if (ESTRUTURAS_ATRAVESSAVEIS.includes(res.type)) continue;
         const rDx = j.x - res.x;
         const rDy = j.y - res.y;
         const colRadius = (res.type === "palm") ? 20 : (res.r || 20);
@@ -5513,6 +6058,9 @@ for (let i = arrows.length - 1; i >= 0; i--) {
     a.dist += Math.hypot(a.vx, a.vy);
 
     if (a.dist > a.maxDist) a.active = false;
+
+    // 🧱 Obstáculos sólidos (pedra, árvore, cerca) param a flecha
+    if (a.active) flechaBateuEmObstaculo(a);
 
     // Função de detecção universal
 const checarAlvos = (lista, ehBichoVivo, tipo) => {
@@ -5935,35 +6483,11 @@ if (player.attacking && weapons[player.weapon].style === "fishing_rod") {
             fishTimer--;
         } else {
             fishBite = true; // O peixe mordeu!
-
-            // 3. LÓGICA DA FISGADA (DETECÇÃO DE MOVIMENTO)
-            let moveuX = Math.abs(player.x - (player.oldX || player.x));
-            let moveuY = Math.abs(player.y - (player.oldY || player.y));
-
-            if (moveuX > 1.2 || moveuY > 1.2) { 
-
-                let peixeCapturado = false;
-                fishes.forEach(f => {
-                    if (f.presoNoAnzol && f.alive) { 
-                        f.alive = false; 
-                        f.presoNoAnzol = false;
-                        peixeCapturado = true;
-                    }
-                });
-
-                if (peixeCapturado) {
-                    adicionarAoInventario("fish", 1); // PEIXE ENTRA NA MOCHILA AQUI!
-                    createParticles(player.x, player.y, "#ffffff", 15, 1);
-                    console.log("Sucesso! Peixe pescado e guardado na mochila.");
-                }
-                
-                // Finaliza a pescaria após a tentativa de fisgada
-                isFishing = false;
-                fishBite = false;
-                player.attacking = false;
-                player.attackProgress = 0;
-            }
         }
+
+        // 🎣 Quando o peixe morde (pelo tempo ou pela isca), começa o minigame de tensão
+        if (fishBite && !pescaGame.ativa) iniciarMinigamePesca();
+        if (pescaGame.ativa) atualizarMinigamePesca(dt);
 
         // Feedback visual (bolhas)
         let chanceBolha = (fishBite) ? 0.8 : 0.15;
@@ -6110,6 +6634,15 @@ function drawItemPreview(ctx, x, y, key, scale = 1) {
         ctx.strokeRect(-18, -8, 36, 6);
         ctx.strokeRect(-18, 2, 36, 6);
     }
+    else if (key === "base_marker") {
+        ctx.save(); ctx.scale(0.8, 0.8); ctx.translate(-6, 0); desenharMarcadorBase(ctx, "#2ecc71"); ctx.restore();
+    }
+    else if (key === "cabin") {
+        ctx.save(); ctx.scale(0.5, 0.5); ctx.translate(0, 8); desenharCabana(ctx); ctx.restore();
+    }
+    else if (key === "bed") {
+        ctx.save(); ctx.scale(0.62, 0.62); desenharCama(ctx); ctx.restore();
+    }
     else if (key === "bow") {
         ctx.strokeStyle = "#8b4513"; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(0, 0, 15, -Math.PI/2, Math.PI/2); ctx.stroke();
@@ -6210,6 +6743,7 @@ function drawItemPreview(ctx, x, y, key, scale = 1) {
     ctx.restore();
 }
 function cancelarPescaria() {
+    pescaGame.ativa = false;
     isFishing = false;
     fishBite = false;
     player.attacking = false;
@@ -6224,6 +6758,7 @@ function cancelarPescaria() {
 }
 // --- FUNÇÃO AUXILIAR DE PESCA CORRIGIDA (DESTRAVA O ATAQUE IMEDIATAMENTE) ---
 function resetPesca(assustarPeixes) {
+    pescaGame.ativa = false;
     fishes.forEach(f => {
         if (f.presoNoAnzol) {
             f.presoNoAnzol = false;
@@ -6836,7 +7371,7 @@ function drawCraftingMenu() {
     ctx.fillStyle = "#2ecc71";
     ctx.beginPath(); ctx.arc(arrowX, arrowY, isMobile ? 25 : 36, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#fff"; ctx.font = `bold ${isMobile ? 20 : 28}px Arial`; ctx.textAlign = "center";
-    ctx.fillText(craftPage === 0 ? "→" : "←", arrowX, arrowY + (isMobile ? 7 : 10));
+    ctx.fillText(craftPage === 2 ? "←" : "→", arrowX, arrowY + (isMobile ? 7 : 10));
 
     ctx.restore();
 }
@@ -6988,6 +7523,12 @@ if (placingStructure === "wall_wood") {
     ctx.beginPath(); ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, circularRiver.r*sc, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = MOUNTAIN_COLOR;
     mountains.forEach(m => { ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, m.r*sc, 0, Math.PI*2); ctx.fill(); });
+    marcadoresBase.forEach(m => {
+        if (!m.alive || !m.color) return;
+        ctx.fillStyle = m.color;
+        ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, 4.5, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1; ctx.stroke();
+    });
     ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 4, 0, Math.PI*2); ctx.fill();
     ctx.restore();
 
@@ -7401,6 +7942,24 @@ flowers.forEach(f => {
         ctx.restore();
     }
 
+    // 🏕️ DESENHO DO TRIO DE BASE
+    if (res.type === "base_marker" || res.type === "cabin" || res.type === "bed") {
+        ctx.save();
+        ctx.translate(rx, ry);
+        if (res.type === "base_marker") desenharMarcadorBase(ctx, res.color);
+        else if (res.type === "cabin") desenharCabana(ctx);
+        else desenharCama(ctx);
+
+        if (res.type !== "base_marker" && res.hp < res.maxHp) {
+            const barW = 44, barH = 5, barY = (res.type === "cabin") ? -78 : -40;
+            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+            ctx.fillRect(-barW / 2, barY, barW, barH);
+            ctx.fillStyle = "#2ecc71";
+            ctx.fillRect(-barW / 2, barY, (res.hp / res.maxHp) * barW, barH);
+        }
+        ctx.restore();
+    }
+
     // 🌱 DESENHO DA PLANTAÇÃO (Enxada) - NOVO
     if (res.type === "plantacao") {
         ctx.save();
@@ -7576,6 +8135,15 @@ flowers.forEach(f => {
               });
           });
           
+          ctx.restore();
+      }
+
+      if (ESTRUTURAS_BASE.includes(placingStructure)) {
+          ctx.save();
+          ctx.translate(ghostX, ghostY);
+          if (placingStructure === "base_marker") desenharMarcadorBase(ctx, "#bdc3c7");
+          else if (placingStructure === "cabin") desenharCabana(ctx);
+          else desenharCama(ctx);
           ctx.restore();
       }
 
@@ -8477,6 +9045,7 @@ fireflies.forEach(f => {
     ctx.restore();
 });
 drawExplosoes();
+drawMinigamePesca();
 drawLuaIndicador();
 drawLuaBanner();
 if(isBloodMoon){
@@ -8717,6 +9286,12 @@ drawAtmosphereEffects();
     ctx.beginPath(); ctx.arc(mx + circularRiver.x*sc, my + circularRiver.y*sc, circularRiver.r*sc, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle=MOUNTAIN_COLOR;
     mountains.forEach(m => { ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, m.r*sc, 0, Math.PI*2); ctx.fill(); });
+    marcadoresBase.forEach(m => {
+        if (!m.alive || !m.color) return;
+        ctx.fillStyle = m.color;
+        ctx.beginPath(); ctx.arc(mx + m.x*sc, my + m.y*sc, 4, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1; ctx.stroke();
+    });
     ctx.fillStyle="#fff";
     ctx.beginPath(); ctx.arc(mx + player.x*sc, my + player.y*sc, 3, 0, Math.PI*2); ctx.fill();
 
@@ -8754,6 +9329,7 @@ if (!player.dead) {
     }
 }
     drawHotbar();
+    drawSeletorCorMarker();
     ctx.restore();
   }
 function drawHotbar() {
