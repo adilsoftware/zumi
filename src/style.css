@@ -1,0 +1,132 @@
+@media (max-height: 550px) {
+  #configPanel {
+    padding: 10px !important;
+    overflow-y: auto !important; /* Permite rolar se a tela for muito pequena */
+  }
+  #configPanel h2 {
+    font-size: 24px !important;
+    margin-bottom: 10px !important;
+  }
+  #configPanel > div {
+    padding: 15px 20px !important;
+    gap: 12px !important;
+    max-width: 400px !important;
+  }
+  #configPanel label {
+    font-size: 14px !important;
+  }
+  #configPanel select {
+    padding: 8px !important;
+    font-size: 14px !important;
+  }
+  #closeConfigBtn {
+    margin-top: 15px !important;
+    padding: 10px 35px !important;
+    font-size: 17px !important;
+  }
+}
+html,body{
+  margin:0; width:100%; height:100%;
+  overflow:hidden; background:#0b1220;
+  font-family:'Segoe UI', Arial, sans-serif;
+  touch-action: none;
+}
+
+canvas{display:block;}
+
+/* AJUSTE DO OVERLAY PARA FICAR LADO A LADO */
+#overlay, #gameOver {
+ position:fixed; inset:0; background:rgba(0,0,0,0);
+  color:white; display:flex; 
+  justify-content:center; align-items:center; 
+  flex-direction:row; /* Mudamos para linha para ter a esquerda e direita */
+  gap: 60px; /* Espaço entre as novidades e o título */
+  z-index:10; text-align:center; padding: 20px;
+}
+
+
+#gameOver { 
+  display: none; 
+  position: fixed; 
+  inset: 0; 
+  background: rgba(139, 0, 0, 0.95); 
+  color: white;
+  flex-direction: column; 
+  justify-content: center; 
+  align-items: center;
+  z-index: 999; /* Valor bem alto para ficar na frente do menu inicial */
+  text-align: center;
+}
+
+#container-central {
+  display: flex;
+  flex-direction: row; /* Mantém os painéis lado a lado */
+  gap: 60px;
+  /* O "escurinho" transparente: */
+  background: rgba(0, 0, 0, 0.6); 
+  padding: 40px;
+  border-radius: 20px;
+  /* Isso garante que ele não tente ocupar a tela toda */
+  max-width: 90vw; 
+}
+/* PAINEL DE NOVIDADES (ESQUERDA) */
+#news-panel {
+  text-align: left;
+  background: rgba(255,255,255,0.05);
+  padding: 25px;
+  border-left: 5px solid #2ecc71;
+  border-radius: 10px;
+  max-width: 350px;
+}
+.news-title { color: #2ecc71; font-size: 24px; margin-bottom: 15px; font-weight: bold; }
+.news-item { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; font-size: 16px; }
+.icon-box { 
+  font-size: 30px; background: rgba(0,0,0,0.3); 
+  width: 50px; height: 50px; display: flex; 
+  justify-content: center; align-items: center; border-radius: 8px;
+}
+
+/* PAINEL PRINCIPAL (DIREITA) */
+#main-panel { display: flex; flex-direction: column; align-items: center; }
+
+#instructions{
+  background: rgba(255,255,255,0.1);
+  padding: 20px; border-radius: 12px;
+  margin: 20px 0; font-size: 16px;
+  line-height: 1.6; max-width: 400px;
+}
+
+h1{ font-size: 80px; margin: 0; color: #2ecc71; text-shadow: 0 4px 15px rgba(46,204,113,0.4); }
+
+button{
+  padding: 18px 50px; font-size: 26px; cursor: pointer;
+  border: none; border-radius: 50px;
+  background: #2ecc71; color: white;
+  transition: 0.2s; font-weight: bold;
+}
+button:hover{ transform: scale(1.1); background: #27ae60; box-shadow: 0 0 20px #2ecc71; }
+/* 📱 ATIVA APENAS NO CELULAR (NÃO ALTERA NADA NO PC) */
+@media (max-width: 900px), (max-height: 550px) {
+  #container-central {
+    flex-direction: column !important;
+    gap: 12px !important;
+    padding: 15px 20px !important;
+    background: rgba(0, 0, 0, 0.35) !important; /* Translúcido no celular para ver o mapa se movendo */
+    max-height: 90vh;
+  }
+  #news-panel {
+    display: none !important; /* Esconde novidades no celular para não cobrir o jogo */
+  }
+  h1 {
+    font-size: 40px !important;
+  }
+  #instructions {
+    font-size: 13px !important;
+    margin: 8px 0 !important;
+    padding: 8px 15px !important;
+  }
+  button {
+    padding: 10px 25px !important;
+    font-size: 18px !important;
+  }
+}
