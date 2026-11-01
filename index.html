@@ -843,14 +843,28 @@ if(isMobile){
           }
 
          const centerX = canvas.width / 2;
-          const slotSize = 85; // Ajuste exato do mobile
-          const gap = 10;
-          const gridStartY = 85; // Ajuste exato do mobile
+          const Linv = getInvLayout();   // mesmo layout usado no desenho
+          const slotSize = Linv.S;
+          const gap = Linv.g;
+          const gridStartY = Linv.backY;
           const startX_M = centerX - (5 * (slotSize + gap)) / 2;
 
           let clicouSlot = false;
+
+          // Slots do Baú (se estiver aberto)
+          if (Linv.chestOn) {
+              for (let i = 0; i < 10; i++) {
+                  const cx = startX_M + (i % 5) * (slotSize + gap);
+                  const cy = Linv.chestY + Math.floor(i / 5) * (slotSize + gap);
+                  if (tx >= cx && tx <= cx + slotSize && ty >= cy && ty <= cy + slotSize) {
+                      handleChestSlotClick(i);
+                      clicouSlot = true;
+                      break;
+                  }
+              }
+          }
           // Slots da Mochila (7 ao 26)
-          for (let i = 0; i < 20; i++) {
+          for (let i = 0; i < 20 && !clicouSlot; i++) {
               let idx = i + 7;
               let sx = startX_M + (i % 5) * (slotSize + gap);
               let sy = gridStartY + Math.floor(i / 5) * (slotSize + gap);
@@ -969,6 +983,9 @@ if(isMobile){
               continue;
           }
       }
+
+      // 📦 Toque num baú próximo (sem estrutura na mão): abre o baú
+      if (tentarAbrirBau(tx + camX(), ty + camY())) continue;
 
       // Salva o momento e posição exata do toque
       touchBuildTap.startX = tx;
@@ -1382,7 +1399,7 @@ const UI_CRAFT = {
 // Como tem 2 colunas, só vão 8 itens grandes por vez no mobile!
 function getDisplayRecipes() {
     if (craftPage === 2) {
-        return ["base_marker", "cabin", "bed"]; // 🏕️ Página da Base
+        return ["base_marker", "cabin", "bed", "chest"]; // 🏕️ Página da Base
     }
     if (isMobile) {
         if (craftPage === 0) {
@@ -1447,6 +1464,8 @@ player.slots = new Array(27).fill(null);
 
 // Variáveis para o sistema de "Arrastar" itens:
 player.draggingItem = null;
+player.draggingFromChest = null;        // baú de onde o item arrastado saiu (se veio de um baú)
+player.draggingSourceChestIndex = null; // slot do baú de origem
 player.draggingSourceIndex = null;
 
 // --- SISTEMA DE INVENTÁRIO EM GRADE ---
@@ -1811,7 +1830,7 @@ function getLimiteItem(id) {
     if (id === "campfire") return 5;
     if (id === "wall_wood") return 20; // Empilha até 20 cercas por slot!
     if (id === "base_marker") return 5;
-    if (id === "cabin" || id === "bed") return 3;
+    if (id === "cabin" || id === "bed" || id === "chest") return 3;
     return 50;
 }
 
@@ -1830,6 +1849,7 @@ const recipes = {
   base_marker: { name: "Localizador de Terreno", wood: 4, stone: 3, isPlaceable: true },
   cabin: { name: "Cabana de Abrigo", wood: 14, sticks: 8, feather: 8, isPlaceable: true },
   bed: { name: "Cama de Madeira", wood: 8, feather: 10, isPlaceable: true },
+  chest: { name: "Baú de Madeira", wood: 10, sticks: 4, isPlaceable: true },
   spear: { name: "Lança", wood: 4, sticks: 2, weaponIndex: 5 },
   torch: { name: "Tocha", wood: 2, stone: 2, sticks: 1, weaponIndex: 6 },
   fishing_rod: { name: "Vara de Pesca", wood: 5, sticks: 1, weaponIndex: 7 }, // weaponIndex 7 (Vara) 
@@ -1949,8 +1969,8 @@ function aplicarModificadoresLua(z) {
 }
 
 // ===================== 🏕️ TRIO DE BASE: LOCALIZADOR + CABANA + CAMA =====================
-const ESTRUTURAS_BASE = ["base_marker", "cabin", "bed"];
-const ESTRUTURAS_ATRAVESSAVEIS = ["base_marker", "cabin", "bed"]; // o jogador e os bichos passam por cima (entrar na cabana!)
+const ESTRUTURAS_BASE = ["base_marker", "cabin", "bed", "chest"];
+const ESTRUTURAS_ATRAVESSAVEIS = ["base_marker", "cabin", "bed", "loot_bag"]; // o jogador e os bichos passam por cima (entrar na cabana!)
 const marcadoresBase = [];          // referências aos localizadores colocados (para o minimapa)
 let bedRespawnDisponivel = false;   // true enquanto a tela de morte com cama está aberta
 
@@ -2031,6 +2051,8 @@ function colocarEstruturaBase(tipo, x, y) {
         obj = { type: "base_marker", x, y, r: 14, hp: 100, maxHp: 100, alive: true, color: null, id };
     } else if (tipo === "cabin") {
         obj = { type: "cabin", x, y, r: 55, hp: 600, maxHp: 600, alive: true, id };
+    } else if (tipo === "chest") {
+        obj = { type: "chest", x, y, r: 24, hp: 400, maxHp: 400, alive: true, id, slots: new Array(10).fill(null) };
     } else {
         obj = { type: "bed", x, y, r: 26, hp: 250, maxHp: 250, alive: true, id };
     }
@@ -2043,6 +2065,8 @@ function colocarEstruturaBase(tipo, x, y) {
         corPicker.marker = obj;
     } else if (tipo === "cabin") {
         hintSystem.show("CABANA PRONTA! Dentro dela você se esconde dos zumbis e se aquece.", "tip");
+    } else if (tipo === "chest") {
+        hintSystem.show(isMobile ? "BAÚ PRONTO! Chegue perto e toque nele para abrir." : "BAÚ PRONTO! Chegue perto e clique nele para abrir.", "tip");
     } else {
         // Só existe uma cama ativa: a antiga é desmontada
         resources.forEach(r => {
@@ -2139,7 +2163,7 @@ function prepararTelaDeMorte() {
         if (titulo) titulo.textContent = "VOCÊ MORREU!";
         if (btnCama) btnCama.style.display = "inline-block";
         if (btnNormal) btnNormal.textContent = "Recomeçar do zero";
-        if (msg) msg.innerHTML += "<br><br>🛏️ Sua cama ainda está de pé!<br><span style='font-size:20px;font-weight:normal;'>Volte para ela (Enter) ou recomece do zero.</span>";
+        if (msg) msg.innerHTML += "<br><br>🛏️ Sua cama ainda está de pé!<br><span style='font-size:20px;font-weight:normal;'>Volte para ela (Enter / botão X do controle) ou recomece do zero.</span>";
     } else {
         bedRespawnDisponivel = false;
         if (titulo) titulo.textContent = "GAME OVER";
@@ -2196,12 +2220,345 @@ function renascerNaCama() {
 }
 // ===========================================================================
 
+// ===================== 📦 BAÚ DE ARMAZENAMENTO (CHEST) =====================
+let activeChest = null; // baú aberto no momento (null = nenhum)
+
+// Desenho do baú de madeira com fecho metálico (usado no mundo, no preview e nos ícones)
+function desenharBau(c) {
+    c.save();
+    c.translate(0, 2);
+    c.lineJoin = "round";
+    // corpo
+    c.fillStyle = "#8d5a2b";
+    c.fillRect(-22, -2, 44, 22);
+    // tampa arredondada
+    c.fillStyle = "#a8703a";
+    c.beginPath();
+    c.moveTo(-22, -2); c.lineTo(-22, -10);
+    c.quadraticCurveTo(0, -26, 22, -10);
+    c.lineTo(22, -2); c.closePath(); c.fill();
+    // tábuas
+    c.strokeStyle = "rgba(60,35,15,0.55)"; c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(-8, -2); c.lineTo(-8, 20);
+    c.moveTo(8, -2); c.lineTo(8, 20);
+    c.stroke();
+    // cintas metálicas
+    c.fillStyle = "#78909c";
+    c.fillRect(-18, -14, 5, 34);
+    c.fillRect(13, -14, 5, 34);
+    // contorno
+    c.strokeStyle = "#4e2c10"; c.lineWidth = 3;
+    c.beginPath();
+    c.moveTo(-22, 20); c.lineTo(-22, -10);
+    c.quadraticCurveTo(0, -26, 22, -10);
+    c.lineTo(22, 20); c.closePath(); c.stroke();
+    c.lineWidth = 2;
+    c.beginPath(); c.moveTo(-22, -2); c.lineTo(22, -2); c.stroke();
+    // fecho metálico
+    c.fillStyle = "#cfd8dc";
+    c.fillRect(-5, -7, 10, 12);
+    c.strokeStyle = "#455a64"; c.lineWidth = 1.5; c.strokeRect(-5, -7, 10, 12);
+    c.fillStyle = "#37474f";
+    c.beginPath(); c.arc(0, -1, 2, 0, Math.PI * 2); c.fill();
+    c.restore();
+}
+
+// Layout único da mochila (desenho + clique do PC + toque do mobile usam os mesmos números)
+function getInvLayout() {
+    if (!activeChest) {
+        const isWindowed = canvas.height < 750;
+        return { chestOn: false, S: 85, g: isMobile ? 10 : 15, backY: isMobile ? 85 : (isWindowed ? 115 : 155) };
+    }
+    // Com baú aberto: baú (2x5) em cima, mochila (4x5) embaixo, tudo cabendo acima da hotbar
+    const topo = 12;
+    const rotulos = 68; // título do baú + rótulo da mochila + espaços
+    const disponivel = canvas.height - 100 - topo;
+    let S = Math.floor((disponivel - rotulos) / 6.5);
+    S = Math.max(46, Math.min(85, S));
+    const g = Math.max(6, Math.round(S * 0.12));
+    const chestY = topo + 32;
+    const chestH = 2 * S + g;
+    return { chestOn: true, S, g, chestY, chestH, backLabelY: chestY + chestH + 22, backY: chestY + chestH + 36 };
+}
+
+function acharBauNoPonto(wx, wy) {
+    const perto = SpatialGrid.getNearby(wx, wy);
+    for (let i = 0; i < perto.length; i++) {
+        const r = perto[i];
+        if ((r.type === "chest" || r.type === "loot_bag") && r.alive && Math.hypot(wx - r.x, wy - r.y) <= r.r + 16) return r;
+    }
+    return null;
+}
+
+// Clique/toque no baú: abre se o jogador estiver a menos de 80px (e sem estrutura na mão para colocar)
+function tentarAbrirBau(wx, wy) {
+    if (placingStructure || craftingOpen || inventoryOpen || player.dead) return false;
+    const bau = acharBauNoPonto(wx, wy);
+    if (!bau) return false;
+    if (Math.hypot(player.x - bau.x, player.y - bau.y) >= 80) {
+        hintSystem.show("CHEGUE MAIS PERTO DO BAÚ!", "alert");
+        tocarSom(SONS.erro);
+        return true;
+    }
+    activeChest = bau;
+    inventoryOpen = true;
+    craftingOpen = false;
+    fecharAtaques();
+    tocarSom(SONS.selecionar);
+    return true;
+}
+
+// Mesmo sistema de arrastar/soltar da mochila (player.draggingItem), agora nos slots 0..9 do baú
+function handleChestSlotClick(slotIndex) {
+    const bau = activeChest;
+    if (!bau || !bau.alive) return;
+
+    // 1. MÃO VAZIA: pega o item do baú
+    if (player.draggingItem === null) {
+        if (bau.slots[slotIndex] !== null) {
+            player.draggingItem = bau.slots[slotIndex];
+            player.draggingSourceIndex = null;
+            player.draggingFromChest = bau;
+            player.draggingSourceChestIndex = slotIndex;
+            bau.slots[slotIndex] = null;
+            tocarSom(SONS.selecionar);
+        }
+        return;
+    }
+
+    // 2. MÃO COM ITEM: solta, empilha ou troca
+    const itemNaMao = player.draggingItem;
+    const itemNoSlot = bau.slots[slotIndex];
+    const maxStack = getLimiteItem(itemNaMao.id);
+
+    if (itemNoSlot === null) {
+        bau.slots[slotIndex] = itemNaMao;
+        player.draggingItem = null;
+        player.draggingSourceIndex = null;
+        player.draggingFromChest = null;
+    } else if (itemNoSlot.id === itemNaMao.id && maxStack > 1) {
+        const espaco = maxStack - itemNoSlot.count;
+        const transferir = Math.min(espaco, itemNaMao.count);
+        itemNoSlot.count += transferir;
+        itemNaMao.count -= transferir;
+        if (itemNaMao.count <= 0) {
+            player.draggingItem = null;
+            player.draggingSourceIndex = null;
+            player.draggingFromChest = null;
+        }
+    } else {
+        // Troca (swap): o item do baú vai para a mão
+        bau.slots[slotIndex] = itemNaMao;
+        player.draggingItem = itemNoSlot;
+        player.draggingSourceIndex = null;
+        player.draggingFromChest = bau;
+        player.draggingSourceChestIndex = slotIndex;
+    }
+    tocarSom(SONS.selecionar);
+
+    // Se a mão veio da hotbar, atualiza a arma equipada
+    const itemAtivo = player.slots[activeSlot];
+    player.weapon = getWeaponIndexFromKey(itemAtivo ? itemAtivo.id : "hand");
+}
+
+function desenharCaixaSlotBau(x, y, size, i) {
+    const bau = activeChest;
+    let item = bau.slots[i];
+    const isSelected = (player.draggingFromChest === bau && player.draggingSourceChestIndex === i);
+    if (isSelected && !item && player.draggingItem) item = player.draggingItem;
+
+    const hover = mouse.x > x && mouse.x < x + size && mouse.y > y && mouse.y < y + size;
+
+    ctx.save();
+    ctx.fillStyle = hover ? "rgba(255, 220, 160, 0.20)" : "rgba(255, 220, 160, 0.09)";
+    ctx.strokeStyle = "rgba(224, 184, 114, 0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    if (item) {
+        if (isSelected) ctx.globalAlpha = 0.35;
+        drawItemPreview(ctx, x + size / 2, y + size / 2, item.id, 1.1);
+        ctx.globalAlpha = 1.0;
+        if (item.count > 1) {
+            ctx.fillStyle = isSelected ? "rgba(255,255,255,0.4)" : "white";
+            ctx.font = "bold 14px Arial";
+            ctx.textAlign = "right";
+            ctx.fillText(item.count, x + size - 10, y + size - 10);
+        }
+    }
+    ctx.restore();
+}
+
+// Parte do desenho da mochila: o painel do baú (título + 10 slots em 2 linhas de 5)
+function desenharPainelBau(L, startX_M, centerX) {
+    const S = L.S, g = L.g;
+    const larguraGrade = 5 * (S + g) - g;
+    const px = centerX - (5 * (S + g)) / 2 - 14;
+    const pw = larguraGrade + 28;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(70, 45, 20, 0.45)";
+    ctx.strokeStyle = "#c8a165";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(px, L.chestY - 34, pw, L.chestH + 46, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#e0b872";
+    ctx.font = "bold 22px 'Arial Black', Arial";
+    ctx.fillText(activeChest.type === "loot_bag" ? "ITENS CAÍDOS" : "BAÚ DE MADEIRA", centerX, L.chestY - 10);
+
+    for (let i = 0; i < 10; i++) {
+        const x = startX_M + (i % 5) * (S + g);
+        const y = L.chestY + Math.floor(i / 5) * (S + g);
+        desenharCaixaSlotBau(x, y, S, i);
+    }
+
+    ctx.fillStyle = "#2ecc71";
+    ctx.font = "bold 18px 'Arial Black', Arial";
+    ctx.fillText("MOCHILA", centerX, L.backLabelY);
+    ctx.restore();
+}
+// ===========================================================================
+
+// ===================== 🎒 SACOLA DE ITENS CAÍDOS + 🎮 CURSOR DO CONTROLE =====================
+// Quando um baú com itens é destruído, o conteúdo cai numa sacola no chão.
+// A sacola abre com o mesmo painel do baú (clique/toque a menos de 80px) e some quando esvazia.
+function criarSacolaDeItens(x, y, slots) {
+    const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+    const copia = new Array(10).fill(null);
+    for (let i = 0; i < 10; i++) copia[i] = (slots && slots[i]) ? { id: slots[i].id, count: slots[i].count } : null;
+    const bag = { type: "loot_bag", x, y, r: 18, hp: 1, maxHp: 1, alive: true, id, slots: copia };
+    resources.push(bag);
+    SpatialGrid.insertStatic(bag);
+    return bag;
+}
+
+function removerSacola(bag) {
+    if (!bag || !bag.alive) return;
+    bag.alive = false;
+    bag.destroyedFx = true;
+    SpatialGrid.removeStatic(bag);
+    createParticles(bag.x, bag.y, "#bcaaa4", 6, 0.9);
+}
+
+function desenharSacola(c) {
+    c.save();
+    c.lineJoin = "round";
+    c.fillStyle = "#a1887f";
+    c.beginPath(); c.ellipse(0, 4, 17, 15, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "#5d4037"; c.lineWidth = 2.5; c.stroke();
+    // pescoço amarrado
+    c.fillStyle = "#8d6e63";
+    c.beginPath(); c.moveTo(-7, -8); c.lineTo(7, -8); c.lineTo(5, -14); c.lineTo(-5, -14); c.closePath(); c.fill();
+    c.stroke();
+    c.strokeStyle = "#f1c40f"; c.lineWidth = 2.5;
+    c.beginPath(); c.moveTo(-7, -9); c.lineTo(7, -9); c.stroke();
+    // remendo
+    c.fillStyle = "rgba(255,255,255,0.18)";
+    c.fillRect(-6, 2, 12, 8);
+    c.restore();
+}
+
+// Baú/sacola mais próximo (para o controle abrir sem mouse)
+function bauMaisProximo() {
+    const perto = SpatialGrid.getNearby(player.x, player.y);
+    let melhor = null, menor = 80;
+    for (let i = 0; i < perto.length; i++) {
+        const r = perto[i];
+        if ((r.type === "chest" || r.type === "loot_bag") && r.alive) {
+            const dd = Math.hypot(player.x - r.x, player.y - r.y);
+            if (dd < menor) { menor = dd; melhor = r; }
+        }
+    }
+    return melhor;
+}
+
+// 🎮 Navegação da mochila/baú com o controle: D-Pad move, X pega/solta, Círculo fecha
+const gpCursor = { row: 0, col: 0, pronto: false };
+
+function gpLinhasInventario() {
+    const rows = [];
+    if (activeChest) { rows.push({ reg: "chest", base: 0, n: 5 }); rows.push({ reg: "chest", base: 5, n: 5 }); }
+    for (let r = 0; r < 4; r++) rows.push({ reg: "back", base: 7 + r * 5, n: 5 });
+    rows.push({ reg: "hot", base: 0, n: 7 });
+    return rows;
+}
+
+function atualizarCursorGamepad() {
+    if (!gpState || !inventoryOpen) { gpCursor.pronto = false; return; }
+    const rows = gpLinhasInventario();
+    if (!gpCursor.pronto) { gpCursor.row = 0; gpCursor.col = 0; gpCursor.pronto = true; }
+    gpCursor.row = Math.min(gpCursor.row, rows.length - 1);
+
+    if (gpState.cima) gpCursor.row = Math.max(0, gpCursor.row - 1);
+    if (gpState.baixo) gpCursor.row = Math.min(rows.length - 1, gpCursor.row + 1);
+    const lin = rows[gpCursor.row];
+    if (gpState.esquerda) gpCursor.col = Math.max(0, gpCursor.col - 1);
+    if (gpState.direita) gpCursor.col = Math.min(lin.n - 1, gpCursor.col + 1);
+    gpCursor.col = Math.min(gpCursor.col, lin.n - 1);
+
+    if (gpState.confirmar) {
+        const slot = lin.base + gpCursor.col;
+        if (lin.reg === "chest") handleChestSlotClick(slot);
+        else handleSlotMovement(slot);
+    }
+    if (gpState.voltar) {
+        fecharInventario();
+        tocarSom(SONS.selecionar);
+    }
+}
+
+function drawCursorGamepad() {
+    if (!gpState || !inventoryOpen || !gpCursor.pronto) return;
+    const rows = gpLinhasInventario();
+    const lin = rows[Math.min(gpCursor.row, rows.length - 1)];
+    const L = getInvLayout();
+    const S = L.S, g = L.g;
+    const startX_M = canvas.width / 2 - (5 * (S + g)) / 2;
+    let x, y, s;
+    if (lin.reg === "hot") {
+        const hs = 70, hg = 12, tw = (7 * hs) + (6 * hg);
+        s = hs;
+        x = (canvas.width - tw) / 2 + gpCursor.col * (hs + hg);
+        y = canvas.height - 95;
+    } else {
+        s = S;
+        x = startX_M + gpCursor.col * (S + g);
+        if (lin.reg === "chest") {
+            y = L.chestY + gpCursor.row * (S + g);
+        } else {
+            y = L.backY + (gpCursor.row - (L.chestOn ? 2 : 0)) * (S + g);
+        }
+    }
+    ctx.save();
+    ctx.strokeStyle = "#f1c40f";
+    ctx.lineWidth = 4;
+    ctx.shadowColor = "#f1c40f";
+    ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.roundRect(x - 3, y - 3, s + 6, s + 6, 14); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("D-Pad: mover   X: pegar/soltar   O: fechar", canvas.width / 2, canvas.height - 108);
+    ctx.restore();
+}
+// ===========================================================================
+
 // 🧱 Destrói cerca/fogueira com feedback visual/sonoro e tira da SpatialGrid
 function destruirEstrutura(res) {
   if (!res || res.destroyedFx) return;
   res.destroyedFx = true;
   res.alive = false;
   SpatialGrid.removeStatic(res);
+  if (res.type === "chest" && res.slots && res.slots.some(s => s)) criarSacolaDeItens(res.x, res.y, res.slots); // 🎒 itens caem no chão
   createParticles(res.x, res.y, res.type === "campfire" ? "#e67e22" : "#8d6e63", 14, 1.6);
   createParticles(res.x, res.y, "#5d4037", 10, 1.2);
   if (res.type === "campfire") createParticles(res.x, res.y, "#9e9e9e", 8, 0.8); // cinzas
@@ -2212,7 +2569,7 @@ function destruirEstrutura(res) {
       tocarSom(SONS.quebra_estrutura);
     }
     if (dp < 500) {
-      hintSystem.show(({ campfire: "Sua fogueira foi destruída!", cabin: "Sua cabana foi destruída!", bed: "Sua cama foi destruída!" })[res.type] || "Uma cerca foi destruída!", "alert");
+      hintSystem.show(({ campfire: "Sua fogueira foi destruída!", cabin: "Sua cabana foi destruída!", bed: "Sua cama foi destruída!", chest: (res.slots && res.slots.some(s => s)) ? "Seu baú foi destruído! Os itens caíram no chão." : "Seu baú foi destruído!" })[res.type] || "Uma cerca foi destruída!", "alert");
     }
   }
 }
@@ -2259,7 +2616,7 @@ function explodirZumbi(z) {
     }
   });
   resources.forEach(res => {
-    if (!res.alive || (res.type !== "wall_wood" && res.type !== "campfire" && res.type !== "cabin" && res.type !== "bed")) return;
+    if (!res.alive || (res.type !== "wall_wood" && res.type !== "campfire" && res.type !== "cabin" && res.type !== "bed" && res.type !== "chest")) return;
     if (Math.abs(res.x - z.x) > R || Math.abs(res.y - z.y) > R) return;
     const dr = Math.hypot(res.x - z.x, res.y - z.y);
     if (dr < R) {
@@ -3305,6 +3662,12 @@ function lerGamepad() {
         moveX, moveY, aimX, aimY,
         atacar: botoes[7] || botoes[0],   // R2/RT (gatilho) ou X/Cross
         abrirMochila: apertouAgora(3),    // Triângulo/Y
+        cima: apertouAgora(12),           // D-Pad (navegação da mochila/baú)
+        baixo: apertouAgora(13),
+        esquerda: apertouAgora(14),
+        direita: apertouAgora(15),
+        confirmar: apertouAgora(0),       // X/Cross/A: pegar/soltar item (e voltar à cama na tela de morte)
+        voltar: apertouAgora(1),          // Círculo/B: fecha a mochila
         abrirCrafting: apertouAgora(9),   // Options/Start
         slotAnterior: apertouAgora(4),    // L1/LB
         proximoSlot: apertouAgora(5)      // R1/RB
@@ -3618,13 +3981,26 @@ if (isGameStarted && !isMobile && !inventoryOpen && !craftingOpen) {
     }
 
     if (inventoryOpen) {
-        const slotSize = 85;
-        const gap = 15;
+        const Linv = getInvLayout();   // mesmo layout usado no desenho
+        const slotSize = Linv.S;
+        const gap = Linv.g;
         const centerX = canvas.width / 2;
-        const gridStartY = (canvas.height < 750) ? 115 : 155; // <- EXATAMENTE IGUAL AO DESENHO!
+        const gridStartY = Linv.backY;
+
+        // 0. Detectar cliques nos slots do Baú (se estiver aberto)
+        const startX_M = centerX - (5 * (slotSize + gap)) / 2;
+        if (Linv.chestOn) {
+            for (let i = 0; i < 10; i++) {
+                const cx = startX_M + (i % 5) * (slotSize + gap);
+                const cy = Linv.chestY + Math.floor(i / 5) * (slotSize + gap);
+                if (mx >= cx && mx <= cx + slotSize && my >= cy && my <= cy + slotSize) {
+                    handleChestSlotClick(i);
+                    return;
+                }
+            }
+        }
 
         // 1. Detectar cliques na Mochila (Grid 4x5)
-        const startX_M = centerX - (5 * (slotSize + gap)) / 2;
         for (let i = 0; i < 20; i++) {
             let idx = i + 7;
             let x = startX_M + (i % 5) * (slotSize + gap);
@@ -3651,6 +4027,9 @@ if (isGameStarted && !isMobile && !inventoryOpen && !craftingOpen) {
         return; 
     }
     
+    // 📦 Clique num baú próximo (sem estrutura na mão): abre o baú
+    if (tentarAbrirBau(mx + camX(), my + camY())) return;
+
     // 1. Lógica de colocar fogueira no chão:
     const temFogueira = player.slots.some(s => s && s.id === "campfire");
 // COLOCAÇÃO UNIVERSAL DE CONSTRUÇÕES NO PC COM BLOQUEIO DE ÁGUA E ENCAIXE
@@ -3794,18 +4173,21 @@ function drawFullscreenInventory() {
     
     // --- LÓGICA DE TAMANHO DINÂMICO (PC vs MOBILE) ---
     const isWindowed = canvas.height < 750;
-    const slotSize = 85;
-    const gap = isMobile ? 10 : 15;
-    const gridStartY = isMobile ? 85 : (isWindowed ? 115 : 155);
+    const L = getInvLayout(); // com baú aberto o layout muda (baú em cima, mochila embaixo)
+    const slotSize = L.S;
+    const gap = L.g;
+    const gridStartY = L.backY;
 
     // TÍTULO
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#2ecc71";
-    ctx.font = isMobile ? "bold 40px 'Arial Black'" : "bold 56px 'Arial Black'";
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = "#2ecc71";
-    ctx.fillText("MOCHILA", centerX, isMobile ? 55 : (isWindowed ? 68 : 85));
-    ctx.shadowBlur = 0;
+    if (!L.chestOn) {
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#2ecc71";
+        ctx.font = isMobile ? "bold 40px 'Arial Black'" : "bold 56px 'Arial Black'";
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#2ecc71";
+        ctx.fillText("MOCHILA", centerX, isMobile ? 55 : (isWindowed ? 68 : 85));
+        ctx.shadowBlur = 0;
+    }
 
     // Grade da Mochila (4x5 - Slots 7 ao 26)
     const startX_M = centerX - (5 * (slotSize + gap)) / 2;
@@ -3815,6 +4197,9 @@ function drawFullscreenInventory() {
         let y = gridStartY + Math.floor(i / 5) * (slotSize + gap);
         desenharCaixaSlot(x, y, slotSize, idx);
     }
+
+    // 📦 Painel do baú (10 slots em 2 linhas de 5)
+    if (L.chestOn) desenharPainelBau(L, startX_M, centerX);
 
     // Item sendo arrastado flutuando no mouse (SÓ APARECE NO PC)
     if (player.draggingItem && !isMobile) {
@@ -3847,6 +4232,7 @@ function drawFullscreenInventory() {
             base_marker: "Localizador de Terreno. Marca sua base no minimapa com a cor que você escolher.",
             cabin: "Cabana de Abrigo (600 HP). Dentro dela você se esconde dos zumbis e da onça e se aquece do frio e da chuva.",
             bed: "Cama de Madeira. Se você morrer, poderá renascer nela com 50% de vida e fome.",
+            chest: "Baú de Madeira (400 HP). Guarda até 10 slots de itens. Chegue perto e clique/toque nele para abrir.",
             torch: "Tocha de fogo. Ilumina e aquece. Aperte 'F' para equipar no corpo e liberar as mãos.",
             spear: "Lança pontiaguda. Alcance longo excelente para manter distância dos zumbis.",
             spear_stone: "Lança de Pedra reforçada. Mais dano e resistência contra feras.",
@@ -3886,6 +4272,14 @@ function drawFullscreenInventory() {
             }
         }
 
+        if (L.chestOn) {
+            for (let ci = 0; ci < 10; ci++) {
+                const cx = startX_M + (ci % 5) * (slotSize + gap);
+                const cy = L.chestY + Math.floor(ci / 5) * (slotSize + gap);
+                if (mouse.x >= cx && mouse.x <= cx + slotSize && mouse.y >= cy && mouse.y <= cy + slotSize) itemHover = activeChest.slots[ci];
+            }
+        }
+
         if (itemHover && descricoes[itemHover.id]) {
             const txt = descricoes[itemHover.id];
             ctx.font = "bold 13px Arial";
@@ -3911,6 +4305,7 @@ function drawFullscreenInventory() {
             wrapText(ctx, txt, boxX + 12, boxY + 36, 265, 14);
         }
     }
+    drawCursorGamepad();
     ctx.restore();
 }
 
@@ -4396,10 +4791,18 @@ function update(){
 
     // 🎮 CONTROLE (PC/PS4) - NOVO: lê o estado do controle uma vez por frame
     gpState = lerGamepad();
+    // 🛏️ Tela de morte com cama: botão X do controle volta para a cama
+    if (gpState && player.dead && bedRespawnDisponivel && gpState.confirmar) renascerNaCama();
     if (gpState && isGameStarted && !player.dead) {
         if (gpState.abrirMochila) {
-            inventoryOpen = !inventoryOpen;
-            if (inventoryOpen) craftingOpen = false;
+            if (inventoryOpen) {
+                fecharInventario(); // devolve item arrastado e fecha o baú junto
+            } else {
+                inventoryOpen = true;
+                craftingOpen = false;
+                const bauPerto = placingStructure ? null : bauMaisProximo(); // 📦 perto de um baú, o Triângulo abre ele
+                if (bauPerto) activeChest = bauPerto;
+            }
             tocarSom(SONS.selecionar);
         }
         if (gpState.abrirCrafting) {
@@ -4458,7 +4861,7 @@ if (!isGameStarted) {
     if (passouUmSegundo && isGameStarted && !player.dead) worldTime++;
     // 🧹 Cercas/fogueiras destruídas saem da lista (já foram tiradas da SpatialGrid)
     if (passouUmSegundo) {
-        resources = resources.filter(r => r.alive || (r.type !== "wall_wood" && r.type !== "campfire" && !ESTRUTURAS_BASE.includes(r.type)));
+        resources = resources.filter(r => r.alive || (r.type !== "wall_wood" && r.type !== "campfire" && r.type !== "loot_bag" && !ESTRUTURAS_BASE.includes(r.type)));
     }
 if (isGameStarted && !player.dead) {
     if (!isDay && musicaAtiva !== "night" && !transicionandoMusica) {
@@ -4504,6 +4907,25 @@ if (isGameStarted && !player.dead) {
     }};
 // 🔒 Trava a simulação fora de partida (menu) ou após a morte: nada de dano/IA/entidades rodando à toa
 if (!isGameStarted || player.dead) return;
+
+// 📦 Baú aberto: fecha sozinho se você se afastar, se ele for destruído ou se a mochila fechar
+if (activeChest) {
+    const distBau = Math.hypot(player.x - activeChest.x, player.y - activeChest.y);
+    if (!activeChest.alive || distBau > 110) {
+        devolverItemArrastado();
+        activeChest = null;
+        inventoryOpen = false;
+    } else if (!inventoryOpen) {
+        devolverItemArrastado();
+        activeChest = null;
+    } else if (activeChest.type === "loot_bag" && player.draggingItem === null && activeChest.slots.every(s => s === null)) {
+        // 🎒 Sacola esvaziada: some e fecha o painel
+        removerSacola(activeChest);
+        activeChest = null;
+        inventoryOpen = false;
+    }
+}
+atualizarCursorGamepad(); // 🎮 navegação da mochila/baú com o controle
 player.hidden = false;
 for (let i = 0; i < bushes.length; i++) {
   const b = bushes[i];
@@ -4794,7 +5216,7 @@ function cuspidorTemVisaoLivre(origX, origY, alvoX, alvoY) {
         const perto = SpatialGrid.getNearby(px, py);
         for (const r of perto) {
             if (!r.alive) continue;
-            const ehObstaculo = r.type === "tree" || r.type === "palm" || r.type === "stone" || r.type === "gold" || r.type === "wall_wood" || r.type === "campfire";
+            const ehObstaculo = r.type === "tree" || r.type === "palm" || r.type === "stone" || r.type === "gold" || r.type === "wall_wood" || r.type === "campfire" || r.type === "chest";
             if (ehObstaculo && Math.hypot(px - r.x, py - r.y) < (r.r || 20)) {
                 return false;
             }
@@ -4847,7 +5269,7 @@ zombies.forEach(z => {
   // Se for sabotador e o jogador não estiver colado nele, procura cerca ou fogueira próxima:
   if (z.isSaboteur && dist > 110) {
       const estruturasPerto = SpatialGrid.getNearby(z.x, z.y);
-      const alvoEstrutura = estruturasPerto.find(r => r.alive && (r.type === "wall_wood" || r.type === "campfire" || r.type === "cabin" || r.type === "bed"));
+      const alvoEstrutura = estruturasPerto.find(r => r.alive && (r.type === "wall_wood" || r.type === "campfire" || r.type === "cabin" || r.type === "bed" || r.type === "chest"));
       if (alvoEstrutura) {
           alvoX = alvoEstrutura.x;
           alvoY = alvoEstrutura.y;
@@ -4953,7 +5375,7 @@ let isBurning = isDay && !inWaterZombie && !solBloqueado;
           z.y += Math.sin(angleCol) * overlap;
 
           // Ataca cercas e fogueiras bloqueando o caminho
-          if ((res.type === "wall_wood" || res.type === "campfire") && z.atkCooldown <= 0) {
+          if ((res.type === "wall_wood" || res.type === "campfire" || res.type === "chest") && z.atkCooldown <= 0) {
               if (dist > 70) {
                   z.attackProgress = 1.0;
                   z.atkCooldown = 55;
@@ -5771,7 +6193,7 @@ if (gpState && Math.hypot(gpState.aimX, gpState.aimY) > 0.15) {
 }
 
 // --- 3. SISTEMA DE ATAQUE UNIFICADO ---
-const tentandoAtacar = (!isMobile && mouse.down) || (isMobile && touchAttack) || (gpState && gpState.atacar);
+const tentandoAtacar = (!isMobile && mouse.down) || (isMobile && touchAttack) || (gpState && gpState.atacar && !inventoryOpen && !craftingOpen);
 
 // --- DISPARO DO ARCO COM FLECHAS DA MOCHILA ---
 const totalFlechas = contarFlechas(); // Sincroniza em tempo real!
@@ -6634,6 +7056,9 @@ function drawItemPreview(ctx, x, y, key, scale = 1) {
         ctx.strokeRect(-18, -8, 36, 6);
         ctx.strokeRect(-18, 2, 36, 6);
     }
+    else if (key === "chest") {
+        ctx.save(); ctx.scale(0.95, 0.95); desenharBau(ctx); ctx.restore();
+    }
     else if (key === "base_marker") {
         ctx.save(); ctx.scale(0.8, 0.8); ctx.translate(-6, 0); desenharMarcadorBase(ctx, "#2ecc71"); ctx.restore();
     }
@@ -6778,8 +7203,20 @@ function resetPesca(assustarPeixes) {
 }
 function devolverItemArrastado() {
     if (player.draggingItem !== null) {
+        // 📦 Item que veio de um baú volta para o baú (slot de origem, ou qualquer slot livre dele)
+        if (player.draggingFromChest && player.draggingFromChest.alive) {
+            const bauOrigem = player.draggingFromChest;
+            const iOrigem = player.draggingSourceChestIndex;
+            if (iOrigem !== null && bauOrigem.slots[iOrigem] === null) {
+                bauOrigem.slots[iOrigem] = player.draggingItem;
+            } else {
+                const livre = bauOrigem.slots.indexOf(null);
+                if (livre !== -1) bauOrigem.slots[livre] = player.draggingItem;
+                else adicionarAoInventario(player.draggingItem.id, player.draggingItem.count);
+            }
+        }
         // Se o slot de onde saiu estiver livre, devolve para ele:
-        if (player.draggingSourceIndex !== null && player.slots[player.draggingSourceIndex] === null) {
+        else if (player.draggingSourceIndex !== null && player.slots[player.draggingSourceIndex] === null) {
             player.slots[player.draggingSourceIndex] = player.draggingItem;
         } else {
             // Se o slot foi ocupado por uma troca, guarda no primeiro slot livre da mochila:
@@ -6787,10 +7224,13 @@ function devolverItemArrastado() {
         }
         player.draggingItem = null;
         player.draggingSourceIndex = null;
+        player.draggingFromChest = null;
+        player.draggingSourceChestIndex = null;
     }
 }
 
 function handleSlotMovement(index) {
+    player.draggingFromChest = null; // qualquer interação com a mochila/hotbar encerra a "origem baú"
     // 1. MÃO ESTÁ VAZIA: pega o item do slot
     if (player.draggingItem === null) {
         if (player.slots[index] !== null) {
@@ -6846,6 +7286,7 @@ function fecharInventario() {
         devolverItemArrastado(); // Devolve o item pro slot antes de fechar!
         inventoryOpen = false;
     }
+    activeChest = null; // 📦 fechar a mochila (botão FECHAR ou tecla E) também fecha o baú
 }
 function drawExplosoes() {
     for (let i = 0; i < explosions.length; i++) {
@@ -7960,6 +8401,44 @@ flowers.forEach(f => {
         ctx.restore();
     }
 
+    // 📦 DESENHO DO BAÚ
+    if (res.type === "chest") {
+        ctx.save();
+        ctx.translate(rx, ry);
+        desenharBau(ctx);
+
+        if (res.hp < res.maxHp) {
+            const barW = 44, barH = 5, barY = -34;
+            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+            ctx.fillRect(-barW / 2, barY, barW, barH);
+            ctx.fillStyle = "#2ecc71";
+            ctx.fillRect(-barW / 2, barY, (res.hp / res.maxHp) * barW, barH);
+        }
+
+        // Aviso "abrir" quando o jogador está perto o bastante
+        if (!inventoryOpen && !placingStructure && Math.hypot(player.x - res.x, player.y - res.y) < 80) {
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 12px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(isMobile ? "TOQUE" : "CLIQUE", 0, -40);
+        }
+        ctx.restore();
+    }
+
+    // 🎒 DESENHO DA SACOLA DE ITENS CAÍDOS
+    if (res.type === "loot_bag") {
+        ctx.save();
+        ctx.translate(rx, ry);
+        desenharSacola(ctx);
+        if (!inventoryOpen && !placingStructure && Math.hypot(player.x - res.x, player.y - res.y) < 80) {
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 12px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(isMobile ? "TOQUE" : "CLIQUE", 0, -24);
+        }
+        ctx.restore();
+    }
+
     // 🌱 DESENHO DA PLANTAÇÃO (Enxada) - NOVO
     if (res.type === "plantacao") {
         ctx.save();
@@ -8143,6 +8622,7 @@ flowers.forEach(f => {
           ctx.translate(ghostX, ghostY);
           if (placingStructure === "base_marker") desenharMarcadorBase(ctx, "#bdc3c7");
           else if (placingStructure === "cabin") desenharCabana(ctx);
+          else if (placingStructure === "chest") desenharBau(ctx);
           else desenharCama(ctx);
           ctx.restore();
       }
